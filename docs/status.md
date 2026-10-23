@@ -41,6 +41,6 @@ _Last updated: 2026-10-23_
 
 See the "Unverified / to test" table in [research.md](research.md). The most relevant to the next milestones:
 
-- Does locally muting a user leave their stream audio playing? (User says yes; test in milestone 4.)
+- The recorder isolates voice by self-deafening (streams still play); AFK timeout/bot must exempt it.
 - The controller must set the stream volume slider to 100% (it defaults to 50%).
 - The `--no-sandbox` info bar in Chrome; it matters for video (milestone 6).

@@ -147,7 +147,8 @@ These need care:
 
 ### Isolating stream audio from voice chat
 
-- v1: the recorder self-mutes, but must **not** deafen, because deafening also silences streams. The controller sets each member's user volume to 0% (or locally mutes them) when they join. Discord remembers this per user, per account. **Verified in milestone 2:** with the streamer's user volume at 0%, none of their voice reached the capture, even with the stream paused.
+- **The recorder joins self-muted and self-deafened.** Deafen silences voice chat but not Go Live stream audio (confirmed by the user, 2026-10-23). It's one toggle that covers everyone, including people who join later, with no per-user settings, and it shows everyone that the recorder isn't listening to voice.
+- **Fallback:** if deafen ever stops passing stream audio, set each member's user volume to 0% instead. That's verified by capture in milestone 2, and Discord remembers it per user, per account.
 - **Stream volume defaults to 50%** in the web client (a separate slider on the stream tile). The controller must set it to **100%** every time it opens a stream; at 50% the capture is about 6 dB quieter. Don't go above 100%, because that can clip inside Discord's mixer.
 - Chrome mixes all of Discord's audio into **one** PulseAudio sink input, so voice and stream can't be separated at the PulseAudio level. Isolation has to happen inside Discord.
 - Later, if v1 leaks voice audio: inject a page script that hooks `RTCPeerConnection` and takes the audio track only from the Go Live connection, then records it through an AudioWorklet. This is more fragile, but isolation is perfect.
@@ -322,4 +323,7 @@ The recorder account's password is **not** stored. Log in once by hand through n
 3. Invite it with the `bot` and `applications.commands` scopes and these permissions: `View Channels`, plus `Send Messages` if `ANNOUNCE_SETS=true`. It must be able to see every voice channel you might record.
 4. Create the recorder user account. Give it `View Channel` + `Connect` on those channels, put its user ID in `RECORDER_USER_ID`, and log in once through noVNC.
 5. Optional: in Server Settings → Integrations → the bot, limit `/record` to the roles or channels you want.
-6. If the server has an AFK channel with a short timeout, make sure the recorder won't be moved during a long event (see research.md).
+6. **AFK:** the recorder sits muted and deafened for hours, which is exactly what AFK handling targets.
+   - Discord's own AFK timeout (Server Settings → Overview → Inactive Timeout): set it to the maximum, or have no inactive channel during events.
+   - Any **AFK bot** on the server: exclude the recorder account, by its user ID or an exempt role.
+   - The controller still treats being moved out of the channel as a disconnect and rejoins (see "Flow for one set").
