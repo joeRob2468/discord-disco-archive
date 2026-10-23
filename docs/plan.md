@@ -2,7 +2,7 @@
 
 Record each DJ's Go Live stream during a Discord disco as its own audio file (and optionally video), loudness-normalised and named after the DJ.
 
-Status: **milestone 1**. The workspace has been scaffolded; the container smoke test is next. See [research.md](research.md) for the facts behind each decision and the things still to verify.
+Progress is tracked in [status.md](status.md). See [research.md](research.md) for the facts behind each decision and the things still to verify.
 
 ## Goals
 
@@ -42,7 +42,7 @@ Discord's bot API cannot watch Go Live streams, so capture is done by a **real D
 │  controller (TypeScript)                                         │
 │    ├─ Playwright → Chromium (headed, on Xvfb :99)                │
 │    │     discord.com, logged in as recorder account, in voice    │
-│    │     self-muted, every member's voice volume at 0%           │
+│    │     self-muted and self-deafened (voice off, stream on)     │
 │    │     clicks "Watch Stream" for the DJ who went live          │
 │    │                                                             │
 │    ├─ ffmpeg: pulse recorder.monitor     → <set>.wav             │
@@ -133,12 +133,12 @@ Edge cases the controller must handle:
 
 The project uses TypeScript on Node 24 in a pnpm workspace, run with `tsx`, so there's no build step. The layout and conventions are in [development.md](development.md), and each package has its own README.
 
-| Package         | Path              | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@dsr/recorder` | `apps/recorder/`  | Container 1. Bot (`src/bot/`: `Guilds` + `GuildVoiceStates` intents, `/record`, stream start/end for the active channel). Sessions (`src/session/`: state machine, target channel, pre-flight checks, `state.json`). Browser (`src/browser/`: Playwright persistent context, joining or leaving voice via `discord.com/channels/<guild>/<channel>`, muting members, opening streams, spotting logouts). Capture (`src/capture/`). Pipeline (`src/pipeline/`: post-processing). `src/main.ts` wires these together. |
-| `@dsr/archive`  | `apps/archive/`   | Container 2. Hono web app that reads the recordings volume read-only.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `@dsr/core`     | `packages/core/`  | `session.json` and `state.json` schemas (the contract between the apps), file layout and naming, atomic JSON files, env parsing, logger.                                                                                                                                                                                                                                                                                                                                                                           |
-| `@dsr/media`    | `packages/media/` | ffmpeg runner, two-pass loudnorm, export encodes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Package         | Path              | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@dsr/recorder` | `apps/recorder/`  | Container 1. Bot (`src/bot/`: `Guilds` + `GuildVoiceStates` intents, `/record`, stream start/end for the active channel). Sessions (`src/session/`: state machine, target channel, pre-flight checks, `state.json`). Browser (`src/browser/`: Playwright persistent context, joining or leaving voice via `discord.com/channels/<guild>/<channel>`, self-mute and deafen, opening streams and setting their volume, spotting logouts). Capture (`src/capture/`). Pipeline (`src/pipeline/`: post-processing). `src/main.ts` wires these together. |
+| `@dsr/archive`  | `apps/archive/`   | Container 2. Hono web app that reads the recordings volume read-only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `@dsr/core`     | `packages/core/`  | `session.json` and `state.json` schemas (the contract between the apps), file layout and naming, atomic JSON files, env parsing, logger.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `@dsr/media`    | `packages/media/` | ffmpeg runner, two-pass loudnorm, export encodes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 The bot and the controller run in **one Node process** (the recorder), which avoids inter-process messaging. The bot module exposes an `EventEmitter` that the session manager subscribes to.
 
@@ -183,7 +183,7 @@ Two layers:
    - Pass 1: `loudnorm=I=$TARGET_LUFS:TP=$TARGET_TP:LRA=$TARGET_LRA:print_format=json` to measure.
    - Pass 2: the same targets plus `measured_I`, `measured_TP`, `measured_LRA`, `measured_thresh` and `offset` from pass 1, with `linear=true`. Linear mode applies one gain change to the whole set, so the DJ's dynamics are kept. It falls back to dynamic mode only when the targets can't be met linearly, for example when the true-peak ceiling would be exceeded.
    - Defaults: `-14 LUFS`, `-1 dBTP`, LRA `11`. These targets are typical for streaming platforms and set the same perceived loudness for every mix.
-   - The leveled master is kept as FLAC. Exports (MP3 320 / Opus) come from the master.
+   - The leveled master is kept as FLAC. Exports (MP3 320 / AAC in M4A) come from the master.
 
 The raw capture is never deleted, so leveling can be re-run with different targets.
 
@@ -310,7 +310,7 @@ All settings live in `.env` (git-ignored). `.env.example` is committed with ever
 | `TARGET_LUFS`                | `-14`                         | Loudnorm integrated target.                                                            |
 | `TARGET_TP`                  | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                     |
 | `TARGET_LRA`                 | `11`                          | Loudnorm loudness range target.                                                        |
-| `EXPORT_FORMATS`             | `mp3`                         | Comma list: `mp3`, `opus`.                                                             |
+| `EXPORT_FORMATS`             | `mp3,m4a`                     | Comma list: `mp3`, `m4a`.                                                              |
 | `RESTART_GRACE_SECONDS`      | `60`                          | Stream restart within this window = same set.                                          |
 | `HANDOVER_SILENCE_SECONDS`   | `45`                          | Current stream silent this long while another is live → switch.                        |
 | `VNC_ENABLED`                | `true`                        | noVNC for login and debugging.                                                         |
