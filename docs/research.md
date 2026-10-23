@@ -91,6 +91,11 @@ Checked on the live server over SSH on 2026-10-23 (read-only):
 - ufw status couldn't be read (needs sudo).
 - Ubuntu 25.04 is an interim release, so check its support window. It doesn't block this project.
 
+### Recorder container (milestone 1, 2026-10-23)
+
+- The image's `pwuser` is UID 1001, and Ubuntu's `ubuntu` user holds 1000, so bind mounts owned by the host user (1000) weren't writable. **Fixed** with `PUID`/`PGID` build args that remove `ubuntu` and renumber `pwuser`. Checked: `/config` and `/recordings` are writable.
+- Installed in the image: Google Chrome 156.0.8078.47 (`playwright install chrome`), ffmpeg 6.1.1, Node 24.22.1.
+
 ## Unverified / to test
 
 | Question                                                                                       | Why it matters                                                                                                                                                                                    | How we'll check                                                                                                                     |
@@ -104,7 +109,6 @@ Checked on the live server over SSH on 2026-10-23 (read-only):
 | Does Discord flag Playwright-driven sessions (`navigator.webdriver`, captchas)?                | Risk to the recorder account and to reliability.                                                                                                                                                  | Watch during testing. Keep the automation minimal.                                                                                  |
 | Is the decrypted Go Live track reachable through an `RTCPeerConnection` hook?                  | Only matters for the optional perfect-isolation mode.                                                                                                                                             | Later, only if user volumes leak.                                                                                                   |
 | Does a command typed in a voice channel's text chat report that voice channel as `channel_id`? | Picking the target channel (plan.md → Commands).                                                                                                                                                  | Milestone 3.                                                                                                                        |
-| Does the image's `pwuser` UID match the host user that owns `recordings/` and `profile/`?      | Bind-mount write permissions on WSL and the server.                                                                                                                                               | Milestone 1: `docker compose run --rm recorder id`. If it doesn't match, add a `user:` override or fix ownership in the entrypoint. |
 | What time does the stream-end event arrive compared with the audio actually stopping?          | The tail end of a set could be cut.                                                                                                                                                               | Add `TAIL_PADDING_SECONDS` if needed; then trim silence in post-processing.                                                         |
 
 ## Rejected options

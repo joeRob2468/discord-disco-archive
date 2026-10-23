@@ -6,6 +6,9 @@ FROM mcr.microsoft.com/playwright:v1.64.1-noble
 
 # chrome (Google Chrome, amd64 only) or chromium (bundled with the image).
 ARG BROWSER_CHANNEL=chrome
+# UID/GID of the host user that owns the bind-mounted folders.
+ARG PUID=1000
+ARG PGID=1000
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -19,6 +22,13 @@ RUN if [ "$BROWSER_CHANNEL" = "chrome" ]; then \
     fi
 
 RUN corepack enable
+
+# Give the image's pwuser the host user's IDs so bind mounts are writable.
+# Ubuntu images ship an "ubuntu" user on 1000; remove it first.
+RUN (userdel -r ubuntu 2>/dev/null || true) \
+ && groupmod -o -g "$PGID" pwuser \
+ && usermod -o -u "$PUID" -g "$PGID" pwuser \
+ && chown -R pwuser:pwuser /home/pwuser
 
 WORKDIR /app
 
