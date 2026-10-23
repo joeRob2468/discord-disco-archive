@@ -5,7 +5,7 @@
   "description": "Web archive of recorded sessions, browsable by session and by streamer.",
   "type": "module",
   "scripts": {
-    "dev": "cd ../.. && node --env-file-if-exists=.env --watch --import tsx apps/archive/src/main.ts",
+    "dev": "cd ../.. && TSX_TSCONFIG_PATH=apps/archive/tsconfig.json node --env-file-if-exists=.env --watch --import tsx apps/archive/src/main.ts",
     "start": "node --import tsx src/main.ts",
     "typecheck": "tsc -p ."
   },
