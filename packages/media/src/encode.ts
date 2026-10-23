@@ -4,7 +4,7 @@
  */
 import type { TrimRange } from './analyze.ts';
 import { runFfmpeg, type RunOptions } from './ffmpeg.ts';
-import { normalizeFilter, type LoudnessMeasurement, type LoudnessTargets } from './loudnorm.ts';
+import { levelFilter, type LoudnessMeasurement, type LoudnessTargets } from './loudnorm.ts';
 
 export interface Tags {
   title?: string;
@@ -27,7 +27,7 @@ export interface MasterOptions extends RunOptions {
   trim?: TrimRange;
 }
 
-/** Pass 2: apply loudnorm to the raw capture and write a 24-bit FLAC master. */
+/** Pass 2: level the raw capture (gain + true-peak limiter) into a 24-bit FLAC master. */
 export function encodeMaster(
   input: string,
   output: string,
@@ -44,8 +44,8 @@ export function encodeMaster(
       ...trimArgs,
       '-i', input,
       '-vn',
-      '-af', normalizeFilter(targets, measured),
-      // loudnorm upsamples internally; bring it back to the capture rate.
+      '-af', levelFilter(targets, measured),
+      // The limiter runs oversampled; bring it back to the capture rate.
       '-ar', SAMPLE_RATE,
       '-c:a', 'flac', '-sample_fmt', 's32', '-compression_level', '8',
       ...metadataArgs(tags),

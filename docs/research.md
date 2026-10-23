@@ -153,6 +153,8 @@ Run with `reprocess.ts` on the milestone 4 test recordings (8 sets, 1.5 s to 146
 - **ffmpeg's last progress `time=` lags the input by about 3 s with loudnorm** (its lookahead), so the duration comes from the input's `Duration:` line. Using `time=` cut the last 3 s off every master.
 - **Trimming works:** a set with 45 s of trailing silence (the silence-handover test) went from 190.5 s to 145.8 s, and one with 2 s of leading silence lost those. `-ss`/`-to` as input options seek exactly in PCM WAV.
 - Speed: a 111 s set took about 10 s in total (analysis, master, MP3, M4A).
+- **Decision: pass 2 is a fixed gain plus an oversampled true-peak limiter** (`volume`, `aresample=192000`, `alimiter` with `level=false:latency=true`, ceiling 0.3 dB under the target). On the same 8 sets: masters at −14.0 to −14.4 LUFS (limiting costs up to 0.4 LU on peaky sets), true peak −1.3 dBTP or lower. MP3 320 and AAC 256 exports measured the same loudness; on the most heavily limited set their true peak rose to −0.6/−0.7 dBTP (normal lossy overshoot, still under 0).
+- **Why one recording lost audio and the other didn't (milestone 4):** Val Mason streamed from the Discord desktop client and 🎃 from the web client. Only the desktop-client stream lost ~6% under the WSL2 clock drift.
 
 ## Unverified / to test
 

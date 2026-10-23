@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeFilter, parseMeasurement, SilentInputError } from './loudnorm.ts';
+import { levelFilter, parseMeasurement, SilentInputError } from './loudnorm.ts';
 
 const targets = { integrated: -14, truePeak: -1, range: 11 };
 
@@ -41,15 +41,11 @@ describe('parseMeasurement', () => {
   });
 });
 
-describe('normalizeFilter', () => {
-  it('passes the measurements back in linear mode', () => {
-    expect(normalizeFilter(targets, parseMeasurement(stderr))).toBe(
-      'loudnorm=I=-14.00:TP=-1.00:LRA=11.00:measured_I=-21.37:measured_TP=-3.02' +
-        ':measured_LRA=6.40:measured_thresh=-31.55:linear=true:print_format=summary',
+describe('levelFilter', () => {
+  it('applies one gain to the target, then limits true peaks under the ceiling', () => {
+    expect(levelFilter(targets, parseMeasurement(stderr))).toBe(
+      'volume=7.37dB,aresample=192000,' +
+        'alimiter=limit=0.8610:attack=1:release=100:level=false:latency=true',
     );
-  });
-
-  it('never passes the offset, which overshoots in the dynamic fallback', () => {
-    expect(normalizeFilter(targets, parseMeasurement(stderr))).not.toContain('offset=');
   });
 });
