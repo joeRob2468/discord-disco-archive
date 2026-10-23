@@ -42,5 +42,6 @@ _Last updated: 2026-10-23_
 See the "Unverified / to test" table in [research.md](research.md). The most relevant to the next milestones:
 
 - The recorder isolates voice by self-deafening (streams still play); AFK timeout/bot must exempt it.
+- Overlapping streams: one recorder plus handover rules (plan.md, "Which stream to record"); every switch is announced.
 - The controller must set the stream volume slider to 100% (it defaults to 50%).
 - The `--no-sandbox` info bar in Chrome; it matters for video (milestone 6).

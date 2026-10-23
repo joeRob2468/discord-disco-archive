@@ -66,7 +66,8 @@ These are guild slash commands, registered for `DISCORD_GUILD_ID` on startup. Gu
 | `/record start [channel] [title]` | Starts a session in the target voice channel. The recorder account joins it and every Go Live stream there is recorded until `/record stop`. |
 | `/record title <text>`            | Sets or changes the active session's title. The folder is renamed when the session ends.                                                     |
 | `/record stop`                    | Ends the session. Any set in progress is finalised and marked `partial`. The recorder leaves the channel.                                    |
-| `/record status`                  | Shows the active channel, who is being recorded right now, sets so far and the elapsed time.                                                 |
+| `/record switch <user>`           | Forces the recorder onto that user's stream (they must be live in the session's channel). The current set ends, and theirs starts.           |
+| `/record status`                  | Shows the active channel, who is being recorded, **who else is live** (and since when), sets so far, and the elapsed time.                   |
 
 **Choosing the target channel**, first match wins:
 
@@ -87,12 +88,30 @@ discord.js: `interaction.channel?.isVoiceBased()` for step 2, and `interaction.m
   - Command replies are public by default, so the channel sees "🔴 Recording started by @user. Go Live streams in this channel are being recorded." This doubles as the consent notice.
   - Errors are ephemeral.
   - The initial reply must be within 3 s, so `start` defers and then edits the reply once the recorder has joined. The interaction token lasts 15 min.
-- **Per-set notices** (`ANNOUNCE_SETS=true`): the bot posts "Now recording: DJ name" and "Finished: DJ name (1h02m)" in the channel's chat. This needs `Send Messages` in that channel. Interaction replies don't.
+- **Notices in the channel's chat** (`ANNOUNCE_SETS=true`, the default). These need `Send Messages` in that channel; interaction replies don't.
+  - "🔴 Now recording: DJ name" when a set starts.
+  - "✅ Finished: DJ name (1h02m)" when it ends.
+  - **Every stream switch** posts one message with the reason, e.g. "🔀 Switched from **A** to **B**: A stopped streaming", "…: A was silent for 45 s", or "…: requested by @mod".
 - **Bot or container restart with a session active:** the session is saved to `RECORDINGS_DIR/state.json` on start and cleared on stop. On boot, the bot resumes it and posts a notice that there was a gap.
+
+### Which stream to record (handover)
+
+One recorder can only watch one stream with clean audio. Chrome mixes everything it plays into one PulseAudio input, and a Discord account has a single voice connection. DJs often go live before the previous set ends (to set up or test), so the recorder follows these rules:
+
+1. **Stay on the current streamer** while they're live and audible. Other live streams are tracked but not opened.
+2. **When the current streamer stops streaming**, switch to the other live stream that **went live earliest** (normally the next DJ). If nobody else is live, wait for the next `streamStart`.
+3. **When the current stream is silent** for `HANDOVER_SILENCE_SECONDS` (default 45) **and someone else is live**, switch to them, using the same earliest-first order. This catches a DJ who finishes but forgets to end their stream. Their set ends at their last audio. The silence check runs on the live capture (audio level from ffmpeg). Silence with nobody else live never triggers a switch, since it may just be a quiet passage.
+4. **`/record switch <user>`** overrides the rules at any time.
+5. **Every switch** ends the current set (normal post-processing), starts the next, and posts a 🔀 notice with the reason.
+6. **Timestamps:** each set stores both `streamStartedAt` (when they went live) and `recordingStartedAt`. A set whose stream was already live when recording began is marked `partial` only if it had audio before the switch. Post-processing trims leading and trailing silence, so setup time and dead air don't end up in the files.
+
+**Known gap:** if B really starts playing while A is still audible (a deliberate overlap or b2b transition), B's first moments are missed until a switch. `/record switch` covers events where that matters.
+
+**Possible later upgrade (not planned): a recorder pool.** One recorder per concurrent stream, each with its own Discord account, Chrome profile and PulseAudio sink (`PULSE_SINK` per Chrome instance), would capture overlapping streams in full. The costs are more throwaway accounts (more ToS exposure) and about 1.5 GB RAM per Chrome. The controller should keep "which recorder watches which stream" behind one interface, so a pool can be added later without rework.
 
 ### Flow for one set
 
-1. The DJ starts Go Live in the session's channel.
+1. The DJ starts Go Live in the session's channel, and the handover rules pick them as the stream to record.
 2. The event bot gets `voiceStateUpdate` with `oldState.streaming === false` and `newState.streaming === true` for a member **in the session's channel** (events from other channels are ignored), then emits `streamStart { userId, displayName, at }`.
 3. The controller finds that member in the voice channel UI and opens their stream. Then it:
    - makes the stream full-screen (for video) and checks the stream volume is at 100%;
@@ -105,7 +124,7 @@ Edge cases the controller must handle:
 - **The DJ's stream drops and restarts mid-set.** Treat a restart by the same user within `RESTART_GRACE_SECONDS` as the same set. Record it as a new segment and join the segments in post-processing.
 - **The recorder gets disconnected** (network issue or AFK move). Rejoin the channel and resume watching if a stream is still live. Log the gap.
 - **Someone runs `/record stop` mid-set.** Finalise the file, mark it `partial`, and still post-process it.
-- **Two people stream at once.** Record the first. Log a warning for the second. Not supported in v1.
+- **Two or more people stream at once.** Handled by the [handover rules](#which-stream-to-record-handover).
 - **Login or captcha prompt.** Stop and alert. Never try to solve captchas or type credentials automatically.
 
 ## Components
@@ -291,6 +310,7 @@ All settings live in `.env` (git-ignored). `.env.example` is committed with ever
 | `TARGET_LRA`                 | `11`                          | Loudnorm loudness range target.                                                        |
 | `EXPORT_FORMATS`             | `mp3`                         | Comma list: `mp3`, `opus`.                                                             |
 | `RESTART_GRACE_SECONDS`      | `60`                          | Stream restart within this window = same set.                                          |
+| `HANDOVER_SILENCE_SECONDS`   | `45`                          | Current stream silent this long while another is live → switch.                        |
 | `VNC_ENABLED`                | `true`                        | noVNC for login and debugging.                                                         |
 | `VNC_PORT`                   | `6080`                        | Always bound to `127.0.0.1`.                                                           |
 | `VNC_PASSWORD`               | —                             | Secret. Required if VNC is enabled.                                                    |
@@ -308,8 +328,8 @@ The recorder account's password is **not** stored. Log in once by hand through n
 
 1. **Container smoke test:** Xvfb, PulseAudio and Chrome start. Discord loads in noVNC. A manual login persists across restarts. Playing a YouTube video produces audio in an ffmpeg capture of `recorder.monitor`.
 2. **Manual stream capture:** join the voice channel and watch a test stream by hand in noVNC. Confirm stream audio is captured and voice chat isn't (with user volumes at 0).
-3. **Event bot:** `/record start|stop|status` works and picks the right channel. Stream start/end for the session's channel is logged to the console.
-4. **Automated watch:** `/record start` makes the recorder join that channel. It opens each stream on `streamStart`, records until `streamEnd`, and leaves on `/record stop`.
+3. **Event bot:** `/record start|stop|status|switch|title` work and pick the right channel. Live streams in the session's channel are tracked (who is live, and since when), and start/end events are logged.
+4. **Automated watch:** `/record start` makes the recorder join that channel (muted and deafened). It follows the handover rules (stream ends, silence, `/record switch`), posts switch notices, and leaves on `/record stop`.
 5. **Post-processing:** loudnorm, exports, set list.
 6. **Video:** x11grab capture, full-screen stream and the matching video file.
 7. **Archive site:** browse by session and by streamer, players, downloads, `hidden` sets. Runs locally against test recordings.
