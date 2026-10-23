@@ -123,6 +123,21 @@ export function Player({ set }: { set: SetSummary }) {
   if (set.files.mp3) {
     return <audio controls preload="metadata" src={mediaUrl(set.id, 'mp3')} />;
   }
+  if (set.files.rawAudio) {
+    // Not leveled yet (or leveling failed): play the capture itself, so it's never locked away.
+    return (
+      <>
+        <audio controls preload="metadata" src={mediaUrl(set.id, 'raw')} />
+        <p class="muted small">
+          {set.status === 'recording'
+            ? 'Still recording: this is the raw capture so far.'
+            : set.status === 'failed'
+              ? 'Processing failed; this is the raw capture, not leveled.'
+              : 'Raw capture, not leveled yet; the leveled version replaces it once processing finishes.'}
+        </p>
+      </>
+    );
+  }
   return (
     <p class="muted">
       {set.status === 'failed' ? 'Processing failed; no playable file.' : 'Not ready to play yet.'}
@@ -136,13 +151,14 @@ export function Downloads({ set }: { set: SetSummary }) {
     ['master', 'FLAC'],
     ['m4a', 'AAC'],
     ['mp4', 'Video (MP4)'],
+    ['rawAudio', 'WAV (raw)'],
   ] as const;
   const available = formats.filter(([key]) => set.files[key] !== undefined);
   if (available.length === 0) return null;
   return (
     <div class="actions">
       {available.map(([key, label]) => (
-        <a class="button" href={mediaUrl(set.id, key, true)}>
+        <a class="button" href={mediaUrl(set.id, key === 'rawAudio' ? 'raw' : key, true)}>
           Download {label}
         </a>
       ))}

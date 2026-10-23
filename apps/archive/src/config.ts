@@ -18,7 +18,7 @@ const archiveSchema = z
     ARCHIVE_ADMIN_PASSWORD: optional(z.string().min(12)),
     ARCHIVE_SESSION_SECRET: optional(z.string().min(32)),
     /** Fallback full rescan interval; file watching handles most changes. */
-    ARCHIVE_SYNC_INTERVAL_SECONDS: withDefault(envInteger.min(10), '300'),
+    ARCHIVE_SYNC_INTERVAL_SECONDS: withDefault(envInteger.min(10), '60'),
   })
   .refine(
     (env) =>

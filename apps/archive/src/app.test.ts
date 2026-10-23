@@ -7,6 +7,8 @@ import { openMemoryDatabase, type Db } from './db/database.ts';
 import {
   createRecordings,
   DJ_A,
+  makeSession,
+  makeSet,
   standardFixture,
   type RecordingsFixture,
 } from './test/fixtures.ts';
@@ -103,6 +105,32 @@ describe('archive app', () => {
       expect(response.headers.get('content-disposition')).toContain(
         "filename*=UTF-8''Caf%C3%A9%20Sunrise%20-%20Halloween%20Disco%20(Nov%2014%2C%202026).mp3",
       );
+    });
+
+    it('plays and offers the raw capture until the leveled files exist', async () => {
+      await recordings.write(
+        'raw-only',
+        makeSession({
+          id: 'session-raw',
+          sets: [
+            makeSet({
+              id: 'set-raw',
+              userId: DJ_A,
+              status: 'processing',
+              files: { rawAudio: 'raw/set-raw.wav' },
+            }),
+          ],
+        }),
+        true,
+      );
+      await syncCatalog(db, recordings.dir);
+      const app = build();
+      const page = await (await app.request('/sets/set-raw')).text();
+      expect(page).toContain('src="/media/set-raw/raw"');
+      expect(page).toContain('not leveled yet');
+      expect(page).toContain('href="/media/set-raw/raw?download=1"');
+      const media = await app.request('/media/set-raw/raw');
+      expect(media.headers.get('content-type')).toBe('audio/wav');
     });
 
     it('404s for unknown formats and hidden sets', async () => {

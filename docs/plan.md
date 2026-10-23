@@ -312,42 +312,42 @@ There are two stores with separate owners:
 
 All settings live in `.env` (git-ignored). `.env.example` is committed with every key and safe placeholders. Docker Compose passes it with `env_file: .env`, and Node reads it with `--env-file`.
 
-| Key                             | Example                       | Notes                                                                                  |
-| ------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
-| `DISCORD_BOT_TOKEN`             | —                             | Event bot token. Secret.                                                               |
-| `DISCORD_GUILD_ID`              | `123…`                        | Server to register `/record` in.                                                       |
-| `RECORDER_USER_ID`              | `789…`                        | User ID of the recorder account, for the pre-flight permission check.                  |
-| `COMMAND_DEFAULT_PERMISSION`    | `ManageEvents`                | discord.js `PermissionFlagsBits` name used as `default_member_permissions`.            |
-| `ALLOWED_ROLE_IDS`              | (empty)                       | Optional comma list. If set, only these roles may use `/record`.                       |
-| `ANNOUNCE_SETS`                 | `true`                        | Post "Now recording" and "Finished" messages in the voice channel's chat.              |
-| `RECORD_VIDEO`                  | `false`                       | Also capture the screen with x11grab.                                                  |
-| `VIDEO_FPS`                     | `30`                          | Matches what most Go Live streams send.                                                |
-| `VIDEO_SIZE`                    | `1920x1080`                   | Xvfb screen and capture size.                                                          |
-| `RECORDINGS_DIR`                | `/recordings`                 | Path inside the containers.                                                            |
-| `RECORDINGS_HOST_DIR`           | `./data/recordings`           | Host path bind-mounted to `RECORDINGS_DIR` (see Storage layout).                       |
-| `APP_DATA_DIR`                  | `./docker-data`               | Host path for app state; `recorder/` and `archive/` are mounted at `/config`.          |
-| `RAW_RETENTION_DAYS`            | (empty)                       | Delete raw WAV/MKV this many days after leveling. Empty = keep.                        |
-| `TZ`                            | `America/Chicago`             | Session dates and file times.                                                          |
-| `PROFILE_DIR`                   | `/config/profile`             | Playwright user data dir (login session). Set by compose.                              |
-| `BROWSER_CHANNEL`               | `firefox`                     | `firefox` (stereo), `chrome` or `chromium` (mono stream audio).                        |
-| `STREAM_VOLUME`                 | `85`                          | Discord stream volume slider, 1–100. Below 100 leaves headroom against clipping.       |
-| `TARGET_LUFS`                   | `-14`                         | Loudnorm integrated target.                                                            |
-| `TARGET_TP`                     | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                     |
-| `TARGET_LRA`                    | `11`                          | Loudnorm loudness range target.                                                        |
-| `EXPORT_FORMATS`                | `mp3,m4a`                     | Comma list: `mp3`, `m4a`.                                                              |
-| `RESTART_GRACE_SECONDS`         | `60`                          | Stream restart within this window = same set.                                          |
-| `HANDOVER_SILENCE_SECONDS`      | `45`                          | Current stream silent this long while another is live → switch.                        |
-| `VNC_ENABLED`                   | `true`                        | noVNC for login and debugging.                                                         |
-| `VNC_PORT`                      | `6080`                        | Always bound to `127.0.0.1`.                                                           |
-| `VNC_PASSWORD`                  | —                             | Secret. Required if VNC is enabled.                                                    |
-| `ARCHIVE_PORT`                  | `3000`                        | Archive's internal HTTP port (Traefik targets it).                                     |
-| `ARCHIVE_PASSWORD`              | (empty)                       | Optional shared password for the archive. Empty = public. Quote it if it contains `#`. |
-| `ARCHIVE_ADMIN_PASSWORD`        | (empty)                       | Admin password (12+ chars) for editing. Empty = editing disabled.                      |
-| `ARCHIVE_SESSION_SECRET`        | —                             | Signs login cookies (32+ chars). Secret. Required if either password is set.           |
-| `ARCHIVE_DATA_DIR`              | `/config`                     | Where `archive.db` lives. Set by compose.                                              |
-| `ARCHIVE_SYNC_INTERVAL_SECONDS` | `300`                         | Full rescan interval.                                                                  |
-| `ARCHIVE_PUBLIC_URL`            | `https://archive.example.com` | Used for links in Discord messages and OAuth redirects.                                |
-| `DOMAIN`                        | `example.com`                 | Only for compose label interpolation on the server.                                    |
+| Key                             | Example                       | Notes                                                                                                   |
+| ------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `DISCORD_BOT_TOKEN`             | —                             | Event bot token. Secret.                                                                                |
+| `DISCORD_GUILD_ID`              | `123…`                        | Server to register `/record` in.                                                                        |
+| `RECORDER_USER_ID`              | `789…`                        | User ID of the recorder account, for the pre-flight permission check.                                   |
+| `COMMAND_DEFAULT_PERMISSION`    | `ManageEvents`                | discord.js `PermissionFlagsBits` name used as `default_member_permissions`.                             |
+| `ALLOWED_ROLE_IDS`              | (empty)                       | Optional comma list. If set, only these roles may use `/record`.                                        |
+| `ANNOUNCE_SETS`                 | `true`                        | Post "Now recording" and "Finished" messages in the voice channel's chat.                               |
+| `RECORD_VIDEO`                  | `false`                       | Also capture the screen with x11grab.                                                                   |
+| `VIDEO_FPS`                     | `30`                          | Matches what most Go Live streams send.                                                                 |
+| `VIDEO_SIZE`                    | `1920x1080`                   | Xvfb screen and capture size.                                                                           |
+| `RECORDINGS_DIR`                | `/recordings`                 | Path inside the containers.                                                                             |
+| `RECORDINGS_HOST_DIR`           | `./data/recordings`           | Host path bind-mounted to `RECORDINGS_DIR` (see Storage layout).                                        |
+| `APP_DATA_DIR`                  | `./docker-data`               | Host path for app state; `recorder/` and `archive/` are mounted at `/config`.                           |
+| `RAW_RETENTION_DAYS`            | (empty)                       | Delete raw WAV/MKV this many days after leveling. Empty = keep.                                         |
+| `TZ`                            | `America/Chicago`             | Session dates and file times.                                                                           |
+| `PROFILE_DIR`                   | `/config/profile`             | Playwright user data dir (login session). Set by compose.                                               |
+| `BROWSER_CHANNEL`               | `firefox`                     | `firefox` (stereo), `chrome` or `chromium` (mono stream audio).                                         |
+| `STREAM_VOLUME`                 | `85`                          | Discord stream volume slider, 1–100. Below 100 leaves headroom against clipping.                        |
+| `TARGET_LUFS`                   | `-14`                         | Loudnorm integrated target.                                                                             |
+| `TARGET_TP`                     | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                                      |
+| `TARGET_LRA`                    | `11`                          | Loudnorm loudness range target.                                                                         |
+| `EXPORT_FORMATS`                | `mp3,m4a`                     | Comma list: `mp3`, `m4a`.                                                                               |
+| `RESTART_GRACE_SECONDS`         | `60`                          | Stream restart within this window = same set.                                                           |
+| `HANDOVER_SILENCE_SECONDS`      | `45`                          | Current stream silent this long while another is live → switch.                                         |
+| `VNC_ENABLED`                   | `true`                        | noVNC for login and debugging.                                                                          |
+| `VNC_PORT`                      | `6080`                        | Always bound to `127.0.0.1`.                                                                            |
+| `VNC_PASSWORD`                  | —                             | Secret. Required if VNC is enabled.                                                                     |
+| `ARCHIVE_PORT`                  | `3000`                        | Archive's internal HTTP port (Traefik targets it).                                                      |
+| `ARCHIVE_PASSWORD`              | (empty)                       | Optional shared password for the archive. Empty = public. Quote it if it contains `#`.                  |
+| `ARCHIVE_ADMIN_PASSWORD`        | (empty)                       | Admin password (12+ chars) for editing. Empty = editing disabled.                                       |
+| `ARCHIVE_SESSION_SECRET`        | —                             | Signs login cookies (32+ chars). Secret. Required if either password is set.                            |
+| `ARCHIVE_DATA_DIR`              | `/config`                     | Where `archive.db` lives. Set by compose.                                                               |
+| `ARCHIVE_SYNC_INTERVAL_SECONDS` | `60`                          | Full rescan interval; the only update path when file events don't cross the bind mount (Docker on WSL). |
+| `ARCHIVE_PUBLIC_URL`            | `https://archive.example.com` | Used for links in Discord messages and OAuth redirects.                                                 |
+| `DOMAIN`                        | `example.com`                 | Only for compose label interpolation on the server.                                                     |
 
 Later, for Discord login: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (secret), and `ARCHIVE_ALLOWED_ROLE_IDS` (optional).
 
