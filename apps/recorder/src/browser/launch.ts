@@ -29,9 +29,10 @@ export async function launchBrowser(config: BrowserConfig): Promise<BrowserConte
     return firefox.launchPersistentContext(profileDirFor(config), {
       headless: false,
       ...OWN_SIGNAL_HANDLING,
-      // Playwright's Firefox ignores -width/-height (it opens "1920" as a URL), so size
-      // the page instead; Playwright fits the window to it.
-      viewport: { width, height },
+      // Kiosk mode: full screen with no toolbars, so the page fills the Xvfb screen
+      // exactly. (Playwright's Firefox ignores -width/-height; it opens "1920" as a URL.)
+      args: ['--kiosk'],
+      viewport: null,
       firefoxUserPrefs: {
         // Play stream audio without a click.
         'media.autoplay.default': 0,

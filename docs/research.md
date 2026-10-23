@@ -170,7 +170,7 @@ Run with `reprocess.ts` on the milestone 4 test recordings (8 sets, 1.5 s to 146
 - **Cause: Chromium downmixes Discord's Opus audio to mono** unless the SDP carries `stereo=1`, which Discord's doesn't. Reported for Discord specifically (Chrome and Edge mono; Firefox and the desktop app stereo): [Discord community](https://support.discord.com/hc/da/community/posts/23128064608151-Fix-stereo-audio-for-Chromium-based-browsers-perhaps-WebRTC-SDP-issue). Same behaviour elsewhere: [MediaMTX #2043](https://github.com/bluenviron/mediamtx/issues/2043). Upstream work to decode stereo without `stereo=1`: Chromium webrtc:42233792 ([W3C log](https://lists.w3.org/Archives/Public/public-webrtc-logs/2025Mar/0158.html)); Chrome 156 in our image still downmixes. Checked 2026-10-23.
 - **Patching the SDP in the page isn't viable:** a wrapped `RTCPeerConnection` ends up replaced by the native one, and `chrome://webrtc-internals` listed no connections for the Discord tab either.
 - **Firefox (Playwright's build, firefox-1555) records stereo:** the same left/right test gave side −27 to −39 dB with clearly alternating channels, and Firefox plays into PulseAudio at `float32le 2ch 48000Hz` (Chrome used 44.1 kHz, resampled by Pulse). Every `discord-web.ts` selector worked unchanged in Firefox.
-- **Playwright's Firefox ignores `-width`/`-height`** and opens "1920" as a URL; the window is sized through `viewport` instead.
+- **Playwright's Firefox ignores `-width`/`-height`** and opens "1920" as a URL. A 1920×1080 `viewport` doesn't fit either: the toolbars push the page's bottom (the settings gear) off the Xvfb screen. `--kiosk` (full screen, no toolbars) with `viewport: null` fills the screen exactly.
 
 ## Unverified / to test
 
