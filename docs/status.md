@@ -18,8 +18,8 @@ _Last updated: 2026-10-23_
 | —   | Workspace scaffolding | ✅ done              | pnpm monorepo, tooling, `pnpm check` green.                                                                                                                                                     |
 | —   | Storage layout        | ✅ done              | `/config` (app data) + `/recordings`; see plan.md "Storage layout".                                                                                                                             |
 | 1   | Container smoke test  | ✅ done              | Container starts cleanly. Chrome → PulseAudio → ffmpeg verified with a test tone. Recorder account logged in over noVNC; login survives restarts and container recreation.                      |
-| 2   | Manual stream capture | ⏳ next              | Join a voice channel and watch a test stream by hand in noVNC; check stream audio is captured and voice chat isn't.                                                                             |
-| 3   | Event bot (`/record`) | ⬜                   |                                                                                                                                                                                                 |
+| 2   | Manual stream capture | ✅ done              | Stream audio captured; with the streamer's user volume at 0%, no voice leaks (user confirmed by listening). Stream volume defaults to 50% and must be set to 100%. Details in research.md.      |
+| 3   | Event bot (`/record`) | ⏳ next              | Needs a bot application and token (plan.md, "Bot setup").                                                                                                                                       |
 | 4   | Automated watch       | ⬜                   |                                                                                                                                                                                                 |
 | 5   | Post-processing       | ⬜                   | `@dsr/media` loudnorm/encode helpers exist and are unit-tested, but have never run on real audio.                                                                                               |
 | 6   | Video                 | ⬜                   |                                                                                                                                                                                                 |
@@ -41,5 +41,6 @@ _Last updated: 2026-10-23_
 
 See the "Unverified / to test" table in [research.md](research.md). The most relevant to the next milestones:
 
-- Does Discord stream (WebRTC) audio reach the sink? (Milestone 2.)
+- Does locally muting a user leave their stream audio playing? (User says yes; test in milestone 4.)
+- The controller must set the stream volume slider to 100% (it defaults to 50%).
 - The `--no-sandbox` info bar in Chrome; it matters for video (milestone 6).

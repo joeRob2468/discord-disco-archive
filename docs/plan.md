@@ -147,7 +147,9 @@ These need care:
 
 ### Isolating stream audio from voice chat
 
-- v1: the recorder self-mutes, but must **not** deafen, because deafening also silences streams. The controller sets each member's user volume to 0% when they join. Discord remembers this per user, per account. The stream's own volume slider is separate and stays at 100%.
+- v1: the recorder self-mutes, but must **not** deafen, because deafening also silences streams. The controller sets each member's user volume to 0% (or locally mutes them) when they join. Discord remembers this per user, per account. **Verified in milestone 2:** with the streamer's user volume at 0%, none of their voice reached the capture, even with the stream paused.
+- **Stream volume defaults to 50%** in the web client (a separate slider on the stream tile). The controller must set it to **100%** every time it opens a stream; at 50% the capture is about 6 dB quieter. Don't go above 100%, because that can clip inside Discord's mixer.
+- Chrome mixes all of Discord's audio into **one** PulseAudio sink input, so voice and stream can't be separated at the PulseAudio level. Isolation has to happen inside Discord.
 - Later, if v1 leaks voice audio: inject a page script that hooks `RTCPeerConnection` and takes the audio track only from the Go Live connection, then records it through an AudioWorklet. This is more fragile, but isolation is perfect.
 
 ## Leveling
