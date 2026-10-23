@@ -21,7 +21,7 @@ _Last updated: 2026-10-23 (session 2)_
 | 2   | Manual stream capture | ✅ done              | Stream audio captured; with the streamer's user volume at 0%, no voice leaks (user confirmed by listening). Stream volume defaults to 50% and must be set to 100%. Details in research.md.                                                                                                    |
 | 3   | Event bot (`/record`) | ✅ done              | Tested in Discord: start/stop/status/switch/title, handover on stream end, 🔴/🔀/⏸️ announcements. The recorder account's own streams are ignored. Run with `pnpm --filter @dsr/recorder dev`.                                                                                                |
 | 4   | Automated watch       | 🧪 user testing      | `/record` drives the browser and capture: join muted and deafened, open streams by user ID, 85% volume, float32 WAV per set, `session.json`, handover on stream end and on 45 s of silence. Verified live on WSL. Dev-only issue: WSL2 clock drift drops about 6% of the audio (research.md). |
-| 5   | Post-processing       | 🚧 in progress       | Pipeline built and run on real recordings: trim, two-pass leveling to a FLAC master, MP3 + M4A, `ready`/`failed`, `setlist.csv`, `reprocess.ts`. Leveling: fixed gain + oversampled true-peak limiter; test sets at −14.0 to −14.4 LUFS, ≤ −1.3 dBTP.                                         |
+| 5   | Post-processing       | ✅ done              | After each set: trim ends, loudnorm measurement, fixed gain + oversampled true-peak limiter into a FLAC master, MP3 + M4A, `ready`/`failed`, `setlist.csv`. Verified live: sets processed within ~10 s of ending, all at −14.0 LUFS. `reprocess.ts` re-runs a session.                        |
 | 6   | Video                 | ⬜                   |                                                                                                                                                                                                                                                                                               |
 | 7   | Archive site          | 🧪 on `feat/archive` | Browse, search (FTS5), players, downloads, admin edits and hiding, activity log. 48 tests against fixtures; one local run against sample data. Not tested against real recordings or in Docker.                                                                                               |
 | 8   | Deploy to home server | ⬜                   |                                                                                                                                                                                                                                                                                               |
@@ -56,13 +56,13 @@ Before calling it done:
 
 Not in this milestone: restart grace and `state.json` resume (9), leveling and `setlist.csv` (5), video (6).
 
-## Milestone 5 (post-processing): in progress
+## Milestone 5 (post-processing): done
 
 Built: after each set the controller queues `processSet` (one at a time, in the background). It trims leading and trailing silence, levels it (loudnorm measurement, then fixed gain and a true-peak limiter) into a FLAC master, exports `EXPORT_FORMATS`, and marks the set `ready` (or `failed` with the reason). The session folder is renamed for a title change only after its encodes finish. On shutdown, encodes are aborted and the sets stay `processing`; `reprocess.ts` re-runs them. Results on the test recordings are in research.md.
 
 **Leveling (decided 2026-10-23):** one fixed gain to `TARGET_LUFS`, then an oversampled true-peak limiter, instead of loudnorm's pass 2, which compressed sets it couldn't level linearly. Every test set now lands within 0.4 LU of −14 LUFS.
 
-Not done yet: a live end-to-end run (sets processed straight after recording) and a check in the archive.
+Verified live on 2026-10-23 ("Set Test"): each set was processed about 10 s after it ended, the first while the next was recording; the session finished only after its last encode; masters and exports at −14.0 LUFS. Checking the files in the archive is part of milestone 7.
 
 ## Dev environment state (session 2)
 
