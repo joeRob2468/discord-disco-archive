@@ -117,11 +117,12 @@ export function Player({ set }: { set: SetSummary }) {
   if (set.files.mp4) {
     return <video controls preload="metadata" src={mediaUrl(set.id, 'mp4')} />;
   }
-  if (set.files.m4a) {
-    return <audio controls preload="metadata" src={mediaUrl(set.id, 'm4a')} />;
-  }
+  // MP3 first: LAME at 320 kbps sounds better than ffmpeg's built-in AAC encoder.
   if (set.files.mp3) {
     return <audio controls preload="metadata" src={mediaUrl(set.id, 'mp3')} />;
+  }
+  if (set.files.m4a) {
+    return <audio controls preload="metadata" src={mediaUrl(set.id, 'm4a')} />;
   }
   if (set.files.rawAudio) {
     // Not leveled yet (or leveling failed): play the capture itself, so it's never locked away.
