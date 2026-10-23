@@ -63,5 +63,6 @@ EXPOSE 6080
 # Run from the package so its dependencies (tsx, playwright) resolve; pnpm doesn't hoist.
 WORKDIR /app/apps/recorder
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-# Milestone 1: smoke test. Replaced by src/main.ts once the bot and controller exist.
-CMD ["node", "--import", "tsx", "src/smoke.ts"]
+# Bot, browser and capture in one process. `src/smoke.ts` (browser only) is still there
+# for logging in: docker compose run --rm --service-ports recorder node --import tsx src/smoke.ts
+CMD ["node", "--import", "tsx", "src/main.ts"]

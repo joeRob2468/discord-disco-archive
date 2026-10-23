@@ -58,11 +58,14 @@ const browserSchema = z
     PROFILE_DIR: withDefault(z.string().min(1), './docker-data/recorder/profile'),
     BROWSER_CHANNEL: withDefault(z.enum(['chrome', 'chromium']), 'chrome'),
     VIDEO_SIZE: withDefault(videoSizeSchema, '1920x1080'),
+    /** Discord's stream volume slider, in percent. Below 100 leaves headroom; leveling makes up the gain. */
+    STREAM_VOLUME: withDefault(envInteger.min(1).max(100), '85'),
   })
   .transform((env) => ({
     profileDir: env.PROFILE_DIR,
     channel: env.BROWSER_CHANNEL,
     windowSize: env.VIDEO_SIZE,
+    streamVolume: env.STREAM_VOLUME,
   }));
 
 const captureSchema = z
@@ -101,10 +104,12 @@ const sessionSchema = z
   .object({
     RECORDINGS_DIR: withDefault(z.string().min(1), './data/recordings'),
     RESTART_GRACE_SECONDS: withDefault(envInteger.min(0), '60'),
+    HANDOVER_SILENCE_SECONDS: withDefault(envInteger.min(5), '45'),
   })
   .transform((env) => ({
     recordingsDir: env.RECORDINGS_DIR,
     restartGraceMs: env.RESTART_GRACE_SECONDS * 1000,
+    handoverSilenceSeconds: env.HANDOVER_SILENCE_SECONDS,
   }));
 
 export type DiscordConfig = z.output<typeof discordSchema>;

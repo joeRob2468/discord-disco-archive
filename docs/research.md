@@ -131,6 +131,17 @@ Run with `probe.ts` in the recorder container against a live channel, with the u
 - **Discord remembers a stream mute** per streamer, for this account, across sessions. A muted stream records as silence (−91 dB mean, i.e. digital zero). While muted, the stream tile has a `button "Unmute"` in its overlay, which only shows on hover. The controller unmutes on every open.
 - **Level, 50% → 100%:** mean −50.8 and −49.2 dB at the default 50% (two runs), −32.6 dB (peak −19.8) at 100%. That's about +17 dB, not the +6 dB a linear slider would give, so Discord's slider is probably a perceptual curve. These were different moments of the same music, so treat the number as rough.
 
+### Automated watch (milestone 4, 2026-10-23)
+
+Tested live with `main.ts` in the container: `/record start`/`stop`, two accounts streaming.
+
+- **Works end to end:** join muted and deafened, open the target's stream by user ID, unmute, volume to `STREAM_VOLUME` (85), capture float32 WAV, hand over when the target stops streaming, hand over after 45 s of silence while someone else is live (`reason: silence`), leave on stop.
+- **Capture:** `-c:a pcm_f32le` placed _before_ `-f pulse -i` makes ffmpeg read float32 from PulseAudio (the demuxer default is s16). The WAV is `pcm_f32le` 48 kHz stereo. `silencedetect` in the same process logs `silence_start` once the silence has lasted `d` seconds, then `silence_end` when audio returns.
+- **Level at 85%:** set 1 measured −32.1 LUFS integrated, peak −21.7 dBFS (music from a browser tab).
+- **Discord's slider steps are fractional and uneven** (84.2, 84.99, 85.2), so the controller accepts ±0.5.
+- **WSL2 clock drift drops about 6% of the audio on the dev machine.** Captures held 15/16 of their wall time (111 of 119 s, 190.5 of 202.6 s), and `parec` lost the same share, so neither ffmpeg nor the capture command is at fault. Over a 30 s `sleep`, the Windows host measured 32.49 s, WSL real time 32.88 s and WSL **monotonic 30.25 s**. PulseAudio's null sink paces playback by the monotonic clock, so Chrome plays about 7% slow and WebRTC has to drop or squeeze the backlog. This is a WSL2 VM problem (often after the host sleeps); `wsl --shutdown` resets it. The home server is bare metal. The controller logs `audioSeconds` against `wallSeconds` for every set and warns at more than 1 s short.
+- **A display name made only of emoji** ("🎃") falls back to the user ID in file names; `session.json` keeps the display name.
+
 ## Unverified / to test
 
 | Question                                                                                       | Why it matters                                                                                                                                                    | How we'll check                                                                                                          |

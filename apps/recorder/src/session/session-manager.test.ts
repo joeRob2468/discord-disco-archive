@@ -53,6 +53,21 @@ describe('SessionManager', () => {
     });
   });
 
+  describe('session callbacks', () => {
+    it('reports the session start before the first target, and the end after the last', () => {
+      const events: string[] = [];
+      const withEvents = new SessionManager({
+        onSessionStart: () => events.push('start'),
+        onTargetChange: (change) => events.push(`target ${change.to?.displayName ?? '-'}`),
+        onSessionEnd: (session) => events.push(`end ${session.title ?? '-'}`),
+      });
+      withEvents.start(info, [A]);
+      withEvents.setTitle('Halloween');
+      withEvents.stop();
+      expect(events).toEqual(['start', 'target DJ A', 'target -', 'end Halloween']);
+    });
+  });
+
   describe('handover', () => {
     beforeEach(() => {
       manager.start(info, []);

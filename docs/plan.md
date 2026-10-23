@@ -102,7 +102,7 @@ One recorder can only watch one stream with clean audio. Chrome mixes everything
 
 1. **Stay on the current streamer** while they're live and audible. Other live streams are tracked but not opened.
 2. **When the current streamer stops streaming**, switch to the other live stream that **went live earliest** (normally the next DJ). If nobody else is live, wait for the next `streamStart`.
-3. **When the current stream is silent** for `HANDOVER_SILENCE_SECONDS` (default 45) **and someone else is live**, switch to them, using the same earliest-first order. This catches a DJ who finishes but forgets to end their stream. Their set ends at their last audio. The silence check runs on the live capture (audio level from ffmpeg). Silence with nobody else live never triggers a switch, since it may just be a quiet passage.
+3. **When the current stream is silent** for `HANDOVER_SILENCE_SECONDS` (default 45) **and someone else is live**, switch to them, using the same earliest-first order. This catches a DJ who finishes but forgets to end their stream. Their set ends at their last audio. The silence check runs on the live capture: `silencedetect` (below −60 dB) in the same ffmpeg process. Silence with nobody else live never triggers a switch, since it may just be a quiet passage.
 4. **`/record switch <user>`** overrides the rules at any time.
 5. **Every switch** ends the current set (normal post-processing), starts the next, and posts a 🔀 notice with the reason.
 6. **Timestamps:** each set stores both `streamStartedAt` (when they went live) and `recordingStartedAt`. A set whose stream was already live when recording began is marked `partial` only if it had audio before the switch. Post-processing trims leading and trailing silence, so setup time and dead air don't end up in the files.
@@ -170,7 +170,7 @@ These need care:
 
 - **The recorder joins self-muted and self-deafened.** Deafen silences voice chat but not Go Live stream audio (confirmed by the user, 2026-10-23). It's one toggle that covers everyone, including people who join later, with no per-user settings, and it shows everyone that the recorder isn't listening to voice.
 - **Fallback:** if deafen ever stops passing stream audio, set each member's user volume to 0% instead. That's verified by capture in milestone 2, and Discord remembers it per user, per account.
-- **Stream volume defaults to 50%** in the web client (the slider in the stream tile's context menu). The controller must set it to **100%** every time it opens a stream; at 50% the capture measured roughly 17 dB quieter (research.md, milestone 4). Don't go above 100%, because that can clip inside Discord's mixer.
+- **Stream volume defaults to 50%** in the web client (the slider in the stream tile's context menu). The controller sets it to `STREAM_VOLUME` (default **85%**) every time it opens a stream; at 50% the capture measured roughly 17 dB quieter (research.md, milestone 4). It stays below 100% for headroom, because Discord's mixer can clip and the user has had peaking problems before. The capture is float32 and leveling makes up the gain, so a lower capture level costs nothing.
 - **A stream mute is remembered** per streamer for the recorder account, and a muted stream records silence. The controller unmutes on every open, and never clicks the call view's `Control volume` button, which toggles that mute.
 - Chrome mixes all of Discord's audio into **one** PulseAudio sink input, so voice and stream can't be separated at the PulseAudio level. Isolation has to happen inside Discord.
 - Later, if v1 leaks voice audio: inject a page script that hooks `RTCPeerConnection` and takes the audio track only from the Go Live connection, then records it through an AudioWorklet. This is more fragile, but isolation is perfect.
@@ -308,6 +308,7 @@ All settings live in `.env` (git-ignored). `.env.example` is committed with ever
 | `TZ`                         | `America/Chicago`             | Session dates and file times.                                                          |
 | `PROFILE_DIR`                | `/config/profile`             | Playwright user data dir (login session). Set by compose.                              |
 | `BROWSER_CHANNEL`            | `chrome`                      | `chrome` or `chromium`.                                                                |
+| `STREAM_VOLUME`              | `85`                          | Discord stream volume slider, 1–100. Below 100 leaves headroom against clipping.       |
 | `TARGET_LUFS`                | `-14`                         | Loudnorm integrated target.                                                            |
 | `TARGET_TP`                  | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                     |
 | `TARGET_LRA`                 | `11`                          | Loudnorm loudness range target.                                                        |

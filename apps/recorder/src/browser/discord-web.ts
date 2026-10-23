@@ -167,6 +167,14 @@ export async function watchStream(page: Page, target: StreamTarget): Promise<voi
   }
 }
 
+/** Close the open stream, if any, so the next one doesn't play alongside it. */
+export async function stopWatching(page: Page): Promise<void> {
+  const button = selectors.stopWatchingButton(page);
+  if (!(await button.isVisible())) return;
+  await button.click();
+  await button.waitFor({ state: 'hidden', timeout: ACTION_TIMEOUT_MS });
+}
+
 /**
  * Unmute the target's stream if this account has it muted. Discord remembers a stream
  * mute per user across sessions, and a muted stream records as digital silence. While
@@ -197,26 +205,29 @@ export async function unmuteStream(page: Page, target: StreamTarget): Promise<bo
  * Discord's mixer (docs/plan.md, "Isolating stream audio from voice chat").
  */
 async function setSlider(slider: Locator, percent: number): Promise<number> {
+  // Discord's volume steps are fractional and uneven (84.2, 84.99…); within half a
+  // percent counts as there.
+  const tolerance = 0.5;
   const read = async (): Promise<number> => Number(await slider.getAttribute('aria-valuenow'));
   await slider.focus();
-  for (let step = 0; step < 200 && (await read()) < percent; step++) {
+  for (let step = 0; step < 200 && (await read()) < percent - tolerance; step++) {
     await slider.press('ArrowRight');
   }
-  for (let step = 0; step < 200 && (await read()) > percent; step++) {
+  for (let step = 0; step < 200 && (await read()) > percent + tolerance; step++) {
     await slider.press('ArrowLeft');
   }
-  return read();
+  return Math.round((await read()) * 10) / 10;
 }
 
 /**
- * Set the open stream's volume. It defaults to 50% on the viewer side, which halves
- * the captured level (docs/research.md, milestone 2). `watchStream` must have run.
+ * Set the open stream's volume (`STREAM_VOLUME`). Discord defaults it to 50%, which
+ * captures far quieter (docs/research.md, milestone 4). `watchStream` must have run.
  * Returns the value it ended on.
  */
 export async function setStreamVolume(
   page: Page,
   target: StreamTarget,
-  percent = 100,
+  percent: number,
 ): Promise<number> {
   try {
     // The stream tile shows twice while watching (main view and thumbnail strip).

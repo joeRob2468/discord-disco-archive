@@ -7,7 +7,7 @@
  *   probe.ts https://discord.com/channels/<guild>/<voice channel> <streamer user ID> ["display name"]
  *
  * Steps: open the channel, deafen and mute, join, open the stream, measure the level,
- * unmute the stream if this account has it muted, set its volume to 100%, measure again.
+ * unmute the stream if this account has it muted, set its volume to STREAM_VOLUME, measure again.
  * After each step it writes an aria snapshot, the page HTML and a screenshot to
  * `<config dir>/probe/<run>/`. It stops at the first failure and stays up for
  * inspection over noVNC; Ctrl+C leaves voice and exits.
@@ -105,11 +105,14 @@ const steps: [name: string, run: () => Promise<unknown>][] = [
   [
     '08-stream-volume',
     async () => {
-      const value = await setStreamVolume(page, args.target, 100);
+      const value = await setStreamVolume(page, args.target, browserConfig.streamVolume);
       logger.info({ value }, 'stream volume set');
     },
   ],
-  ['09-level-full-volume', () => measureLevel('stream volume 100%')],
+  [
+    '09-level-full-volume',
+    () => measureLevel(`stream volume ${String(browserConfig.streamVolume)}%`),
+  ],
 ];
 
 logger.info({ runDir, target: args.target }, 'probe starting');

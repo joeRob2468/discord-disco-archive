@@ -17,10 +17,16 @@ describe('loadConfig', () => {
       profileDir: './docker-data/recorder/profile',
       channel: 'chrome',
       windowSize: { width: 1920, height: 1080 },
+      streamVolume: 85,
     });
     expect(config.processing.targets).toEqual({ integrated: -14, truePeak: -1, range: 11 });
     expect(config.processing.exportFormats).toEqual(['mp3', 'm4a']);
     expect(config.session.restartGraceMs).toBe(60_000);
+    expect(config.session.handoverSilenceSeconds).toBe(45);
+  });
+
+  it('keeps the stream volume at or below 100%', () => {
+    expect(() => loadConfig({ ...required, STREAM_VOLUME: '120' })).toThrow(ConfigError);
   });
 
   it('accepts Everyone as no restriction', () => {

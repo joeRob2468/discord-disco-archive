@@ -1,8 +1,8 @@
 /**
  * The active recording session and the handover rules that decide whose stream is
  * recorded (docs/plan.md, "Which stream to record"). Pure state + decisions: Discord
- * events come in as method calls, and target changes go out through `onTargetChange`,
- * which the capture layer (milestone 4) will act on.
+ * events come in as method calls, and session and target changes go out through the
+ * `on*` callbacks, which the recording controller acts on.
  */
 import { StreamTracker, type LiveStream } from './stream-tracker.ts';
 
@@ -22,7 +22,7 @@ export type SwitchReason =
   | 'went-live'
   /** The previous target stopped streaming. */
   | 'stopped-streaming'
-  /** The previous target went silent while this user was live (milestone 4). */
+  /** The previous target went silent while this user was live. */
   | 'silence'
   /** `/record switch`. */
   | 'requested'
@@ -58,19 +58,27 @@ export type SwitchResult =
 
 export interface SessionManagerOptions {
   now?: () => Date;
+  /** Called before the first target is picked, so listeners can join first. */
+  onSessionStart?: (session: SessionInfo) => void;
   onTargetChange?: (change: TargetChange, session: SessionInfo) => void;
+  /** Called after the final `session-stopped` target change, with the final title. */
+  onSessionEnd?: (session: SessionInfo) => void;
 }
 
 export class SessionManager {
   readonly #now: () => Date;
+  readonly #onSessionStart: (session: SessionInfo) => void;
   readonly #onTargetChange: (change: TargetChange, session: SessionInfo) => void;
+  readonly #onSessionEnd: (session: SessionInfo) => void;
   readonly #tracker = new StreamTracker();
   #session: SessionInfo | undefined;
   #target: Target | undefined;
 
   constructor(options: SessionManagerOptions = {}) {
     this.#now = options.now ?? (() => new Date());
+    this.#onSessionStart = options.onSessionStart ?? (() => undefined);
     this.#onTargetChange = options.onTargetChange ?? (() => undefined);
+    this.#onSessionEnd = options.onSessionEnd ?? (() => undefined);
   }
 
   get active(): SessionInfo | undefined {
@@ -99,6 +107,7 @@ export class SessionManager {
     this.#session = { ...info, startedAt };
     this.#tracker.clear();
     for (const stream of liveNow) this.#tracker.start(stream.userId, stream.displayName, startedAt);
+    this.#onSessionStart(this.#session);
 
     const first = this.#tracker.earliest();
     if (first) this.#setTarget(first, 'already-live');
@@ -113,6 +122,7 @@ export class SessionManager {
     this.#session = undefined;
     this.#target = undefined;
     this.#tracker.clear();
+    this.#onSessionEnd(session);
     return session;
   }
 
@@ -145,7 +155,7 @@ export class SessionManager {
     this.#setTarget(next, 'stopped-streaming');
   }
 
-  /** Rule 3 (milestone 4): the current stream has been silent for the handover window. */
+  /** Rule 3: the current stream has been silent for the handover window. */
   targetSilent(): TargetChange | undefined {
     if (!this.#target) return undefined;
     const next = this.#tracker.earliest(this.#target.userId);
