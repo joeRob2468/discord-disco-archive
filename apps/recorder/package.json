@@ -5,7 +5,7 @@
   "description": "Discord bot + browser-driven Go Live capture. Writes recordings and session.json.",
   "type": "module",
   "scripts": {
-    "smoke": "node --env-file-if-exists=../../.env --import tsx src/smoke.ts",
+    "smoke": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/smoke.ts",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

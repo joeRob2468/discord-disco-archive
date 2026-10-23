@@ -2,7 +2,7 @@
 .git
 .env
 .env.*
-recordings
-profile
+docker-data
+data
 coverage
 docs

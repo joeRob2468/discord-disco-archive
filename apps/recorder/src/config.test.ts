@@ -14,7 +14,7 @@ describe('loadConfig', () => {
     const config = loadConfig(required);
     expect(config.discord.commandDefaultPermission).toBe(PermissionFlagsBits.ManageEvents);
     expect(config.browser).toEqual({
-      profileDir: './profile',
+      profileDir: './docker-data/recorder/profile',
       channel: 'chrome',
       windowSize: { width: 1920, height: 1080 },
     });

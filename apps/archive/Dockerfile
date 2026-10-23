@@ -13,7 +13,9 @@ RUN pnpm install --frozen-lockfile --prod --filter @dsr/archive...
 COPY packages/core/src packages/core/src
 COPY apps/archive/src apps/archive/src
 
+RUN mkdir -p /config && chown node:node /config
 USER node
-ENV RECORDINGS_DIR=/recordings
+ENV RECORDINGS_DIR=/recordings \
+    ARCHIVE_DATA_DIR=/config
 EXPOSE 3000
 CMD ["node", "--import", "tsx", "apps/archive/src/main.ts"]

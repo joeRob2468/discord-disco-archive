@@ -131,9 +131,9 @@ The bot and the controller run in **one Node process** (the recorder), which avo
   2. Start PulseAudio (`--exit-idle-time=-1`), load `module-null-sink sink_name=recorder format=float32le rate=48000 channels=2` and set it as the default sink. Also load a null source as the default mic, so Discord gets silence if it opens a mic.
   3. Optionally start `x11vnc` + noVNC on `VNC_PORT`.
   4. `exec` the command: `node --import tsx apps/recorder/src/main.ts`, or `smoke.ts` until milestone 4. Compose passes `.env` in with `env_file`.
-- Volumes:
-  - `./recordings` → output files.
-  - `./profile` → the Playwright `userDataDir`, so the recorder account stays logged in across restarts.
+- Volumes (see [Storage layout](#storage-layout)):
+  - `${APP_DATA_DIR}/recorder` → `/config`: the Playwright `userDataDir` (`/config/profile`), so the recorder account stays logged in across restarts.
+  - `${RECORDINGS_HOST_DIR}` → `/recordings`: session folders and media.
 
 ### Browser settings
 
@@ -219,16 +219,29 @@ How this project plugs in:
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `archive`  | Through Traefik, not a Cloudflare Tunnel (see below). Traefik labels: ``Host(`archive.${DOMAIN}`)``, `entrypoints=websecure`, plus a middleware depending on the access decision. Joins `media_network` as `external: true`. Needs a new Cloudflare CNAME `archive` → `media.${DOMAIN}` (DNS only) and a LAN DNS override entry. |
 | `recorder` | **Not exposed through Traefik.** noVNC binds to `127.0.0.1:${VNC_PORT}` only, and you reach it with `ssh -L 6080:localhost:6080 <server>`. Docker-published ports skip ufw on that server, so it must never publish on `0.0.0.0`.                                                                                                |
-| Recordings | A bind mount from a host path (`RECORDINGS_HOST_DIR`). Read-write for `recorder`, read-only for `archive`.                                                                                                                                                                                                                       |
+| Storage    | See [Storage layout](#storage-layout): app data under `docker_data`, recordings under `data/media`.                                                                                                                                                                                                                              |
 
 Server facts (checked over SSH on 2026-10-23; details in research.md):
 
 - **CPU:** x86_64 with 16 cores, so Google Chrome (`channel: 'chrome'`) is available.
 - **Memory:** 30 GiB RAM, about 19 GiB available, with swap already in use (5.6 of 8 GiB) because of the Minecraft server. Give `recorder` `mem_limit: 3g` and check during the first event.
-- **Disk:** the NVMe root has 746 GB free. `/mnt/media` has 1.5 TB free but is 79% full and holds the media library. Put recordings on the NVMe, under the project folder (`~/.services/discord-stream-recorder/recordings`), like the other stacks. Raw WAV is about 1.4 GB/h. Video at about 6 Mb/s is about 2.7 GB/h. Plan on about 5 GB per hour of video sets. `RAW_RETENTION_DAYS` is optional; empty means keep forever.
+- **Disk:** `/mnt/media` has 1.5 TB free (79% used) and holds the media stack's `docker_data/` and `data/`; this project follows the same layout. Raw WAV is about 1.4 GB/h. Video at about 6 Mb/s is about 2.7 GB/h. Plan on about 5 GB per hour of video sets. `RAW_RETENTION_DAYS` is optional; empty means keep forever. The NVMe root (746 GB free) is the fallback if the media disk fills up.
 - **Docker** 28.5.1 and Compose v2.40.1. `include:` and `env_file` work as planned.
 - **Time zone:** the host is `America/Chicago`. Set the same `TZ` in `.env` so folder dates match the local event date.
 - **Login on the server:** reuse the recorder `PROFILE_DIR` copied from the test machine, or log in again over the SSH-tunnelled noVNC.
+
+## Storage layout
+
+This mirrors the media stack on the home server: **app state** in `docker_data/<app>`, **actual files** in `data/`.
+
+| What       | Host path (`.env`)    | Local default       | Home server                                      | Container path                                                |
+| ---------- | --------------------- | ------------------- | ------------------------------------------------ | ------------------------------------------------------------- |
+| App data   | `APP_DATA_DIR`        | `./docker-data`     | `/mnt/media/docker_data/discord-stream-recorder` | `/config` (`recorder/` and `archive/` subfolders on the host) |
+| Recordings | `RECORDINGS_HOST_DIR` | `./data/recordings` | `/mnt/media/data/media/discord-sets`             | `/recordings` (read-only in `archive`)                        |
+
+- `recorder` `/config`: `profile/`, the Discord login (treat it like a password).
+- `archive` `/config`: reserved for the archive's own data.
+- Bind mounts rather than the media stack's `local-persist` volumes, so it also works on the dev machine without the plugin. The on-disk result is the same.
 
 ## Data storage: JSON manifests, not a database (for now)
 
@@ -264,10 +277,11 @@ All settings live in `.env` (git-ignored). `.env.example` is committed with ever
 | `VIDEO_FPS`                  | `30`                          | Matches what most Go Live streams send.                                                |
 | `VIDEO_SIZE`                 | `1920x1080`                   | Xvfb screen and capture size.                                                          |
 | `RECORDINGS_DIR`             | `/recordings`                 | Path inside the containers.                                                            |
-| `RECORDINGS_HOST_DIR`        | `./recordings`                | Host path bind-mounted to `RECORDINGS_DIR`.                                            |
+| `RECORDINGS_HOST_DIR`        | `./data/recordings`           | Host path bind-mounted to `RECORDINGS_DIR` (see Storage layout).                       |
+| `APP_DATA_DIR`               | `./docker-data`               | Host path for app state; `recorder/` and `archive/` are mounted at `/config`.          |
 | `RAW_RETENTION_DAYS`         | (empty)                       | Delete raw WAV/MKV this many days after leveling. Empty = keep.                        |
 | `TZ`                         | `America/Chicago`             | Session dates and file times.                                                          |
-| `PROFILE_DIR`                | `/profile`                    | Playwright user data dir (login session).                                              |
+| `PROFILE_DIR`                | `/config/profile`             | Playwright user data dir (login session). Set by compose.                              |
 | `BROWSER_CHANNEL`            | `chrome`                      | `chrome` or `chromium`.                                                                |
 | `TARGET_LUFS`                | `-14`                         | Loudnorm integrated target.                                                            |
 | `TARGET_TP`                  | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                     |

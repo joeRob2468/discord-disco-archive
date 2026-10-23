@@ -34,12 +34,12 @@ COPY packages/media/src packages/media/src
 COPY apps/recorder/src apps/recorder/src
 COPY --chmod=755 apps/recorder/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-RUN mkdir -p /recordings /profile && chown pwuser:pwuser /recordings /profile
+RUN mkdir -p /config /recordings && chown pwuser:pwuser /config /recordings
 USER pwuser
 ENV HOME=/home/pwuser \
     DISPLAY=:99 \
     RECORDINGS_DIR=/recordings \
-    PROFILE_DIR=/profile
+    PROFILE_DIR=/config/profile
 
 # noVNC (published on 127.0.0.1 only; see compose.yaml)
 EXPOSE 6080

@@ -1,5 +1,8 @@
 # Local / default deployment. On the home server, layer compose.server.yaml on top
 # (set COMPOSE_FILE=compose.yaml:compose.server.yaml in that machine's .env).
+#
+# Storage follows the home server's convention: app state under APP_DATA_DIR
+# (mounted at /config), recordings under RECORDINGS_HOST_DIR (mounted at /recordings).
 name: discord-stream-recorder
 
 services:
@@ -17,10 +20,10 @@ services:
     env_file: .env
     environment:
       RECORDINGS_DIR: /recordings
-      PROFILE_DIR: /profile
+      PROFILE_DIR: /config/profile
     volumes:
-      - ${RECORDINGS_HOST_DIR:-./recordings}:/recordings
-      - ${PROFILE_HOST_DIR:-./profile}:/profile
+      - ${APP_DATA_DIR:-./docker-data}/recorder:/config
+      - ${RECORDINGS_HOST_DIR:-./data/recordings}:/recordings
     ports:
       # Loopback only: Docker-published ports bypass host firewalls such as ufw.
       - 127.0.0.1:${VNC_PORT:-6080}:6080
@@ -34,8 +37,10 @@ services:
     env_file: .env
     environment:
       RECORDINGS_DIR: /recordings
+      ARCHIVE_DATA_DIR: /config
     volumes:
-      - ${RECORDINGS_HOST_DIR:-./recordings}:/recordings:ro
+      - ${APP_DATA_DIR:-./docker-data}/archive:/config
+      - ${RECORDINGS_HOST_DIR:-./data/recordings}:/recordings:ro
     ports:
       - 127.0.0.1:${ARCHIVE_PORT:-3000}:${ARCHIVE_PORT:-3000}
     healthcheck:

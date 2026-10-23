@@ -9,5 +9,5 @@ coverage/
 !.env.example
 
 # Runtime data (bind-mounted into containers)
-recordings/
-profile/
+/docker-data/
+/data/

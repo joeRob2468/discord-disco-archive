@@ -50,7 +50,7 @@ const discordSchema = z
 
 const browserSchema = z
   .object({
-    PROFILE_DIR: withDefault(z.string().min(1), './profile'),
+    PROFILE_DIR: withDefault(z.string().min(1), './docker-data/recorder/profile'),
     BROWSER_CHANNEL: withDefault(z.enum(['chrome', 'chromium']), 'chrome'),
     VIDEO_SIZE: withDefault(videoSizeSchema, '1920x1080'),
   })
@@ -94,7 +94,7 @@ const processingSchema = z
 
 const sessionSchema = z
   .object({
-    RECORDINGS_DIR: withDefault(z.string().min(1), './recordings'),
+    RECORDINGS_DIR: withDefault(z.string().min(1), './data/recordings'),
     RESTART_GRACE_SECONDS: withDefault(envInteger.min(0), '60'),
   })
   .transform((env) => ({
