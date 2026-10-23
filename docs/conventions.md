@@ -33,7 +33,7 @@ These are the rules for working in this repo, for people and coding agents alike
 - **Naming:** `camelCase` values, `PascalCase` types, classes and components, `SCREAMING_SNAKE_CASE` module constants, kebab-case file names (`json-file.ts`). zod schemas are `fooSchema`, with their type `Foo = z.infer<typeof fooSchema>`. SQL columns and tables are `snake_case`; map them to camelCase at the `Catalog` boundary.
 - **Comments:** a short module docblock saying _why_ the module exists, JSDoc on exported things whose purpose isn't obvious, and inline comments only for non-obvious reasons (a quirk, a workaround, a security check). Don't narrate the code.
 - **Functions** are small and pure where possible, taking dependencies as arguments (`createApp({ config, catalog })`, `new Catalog(db)`) rather than importing singletons.
-- **Views:** server-rendered `hono/jsx` and no client-side JS unless a feature needs it. All CSS is in `views/styles.ts`, with colours as CSS variables and light/dark via `prefers-color-scheme`.
+- **Views:** server-rendered `hono/jsx`, styled with **daisyUI 5 component classes on Tailwind CSS 4** (dark theme by default), built from `views/app.css` by the Tailwind CLI. Interactivity comes from **htmx** (forms, sorting and filtering, inline edits: routes return HTML fragments) and `hx-boost` navigation. The only hand-written client script is the audio player (`apps/archive/src/client/`), in TypeScript. No client-side framework.
 
 ## Testing
 

@@ -244,6 +244,18 @@ Titles and display names are converted to safe file names (lowercase, `a-z0-9-`)
 
 **Later ideas:** `/archive hide` in Discord, waveform previews, play counts, an RSS/podcast feed per streamer.
 
+### UI rewrite (decided 2026-10-23)
+
+The first UI was a plain server-rendered site. It's being rebuilt before deploy, on the same architecture (Hono, server-rendered `hono/jsx`, the `Catalog`, SQLite):
+
+- **Stack:** daisyUI 5 on Tailwind CSS 4 for components, dark theme by default with a light toggle. htmx for interactions, and `hx-boost` so navigation swaps the page body and the player keeps playing. One TypeScript client script for the player. (Alternatives considered: Web Awesome, still in 3.0 beta with Pro-only parts; React + Mantine, which would mean a client-side app on a JSON API.)
+- **Layout:** works on phones (navbar plus drawer), and a proper login page.
+- **Player:** a custom player bar with a queue: play a whole session in order, or all of a streamer's sets. MP3 by default, falling back to M4A and then the raw WAV.
+- **Tables with stats:** sessions, streamers and sets as sortable, filterable tables (via htmx): set counts, total time played, first and last played, durations.
+- **Admin panel:** rename streamers and edit set and session titles and tags (these routes already exist), hide sets, see failed and processing sets, storage use, and the activity log.
+
+Stages, each stopped for testing: (1) build setup, layout, theme, login; (2) the existing pages restyled as tables and cards; (3) the player and queue; (4) the admin panel and stats.
+
 ## Deployment (home server)
 
 Development and testing happen on the WSL2 machine. The real deployment is the home Ubuntu server, which already runs a Docker stack (in a separate repo) with:
