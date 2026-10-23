@@ -34,7 +34,7 @@ _Last updated: 2026-10-23 (session 2)_
 | `@dsr/core`     | Session/state schemas, naming, layout, atomic JSON, env parsing, logger                                                                                         | unit tests                                                                          |
 | `@dsr/media`    | `runFfmpeg`, `spawnFfmpeg` (stop with `q`, live stderr lines), live capture with `silencedetect`, level check, loudnorm measurement and filters, encode helpers | unit tests (parsing and filter strings only)                                        |
 | `@dsr/recorder` | Config sections, `launchBrowser`, `smoke.ts`, Docker image, entrypoint, minimal PulseAudio config; bot (`src/bot/`) and session logic (`src/session/`)          | unit tests; image built and run (milestone 1); bot connects and registers `/record` |
-| `@dsr/archive`  | Health check only (the full site is on `feat/archive`)                                                                                                          | unit test                                                                           |
+| `@dsr/archive`  | Browse, search (FTS5), players, downloads, admin edits and hiding, activity log; SQLite catalog synced from `session.json`                                      | unit tests; local run against real recordings                                       |
 | Deploy          | `compose.yaml`, `compose.server.yaml` (Traefik labels)                                                                                                          | not run                                                                             |
 
 ## Milestone 4 (automated watch): user testing
@@ -72,7 +72,7 @@ Verified live on 2026-10-23 ("Set Test"): each set was processed about 10 s afte
 - The bot application is "Recorder Bot" (private), invited with View Channels + Send Messages. Test server: the user's; test voice channel: "Test Room".
 - The server's inactive timeout is disabled. Any AFK bot still needs a recorder exemption before a real event.
 - Test captures from milestone 2: `data/recordings/_tests/`.
-- `feat/archive` branches from `9e6c284`; rebase it onto `main` at milestone 7. Its archive `dev` script also needed the root `tsx` fix, which `main` now has.
+- The archive runs locally with `pnpm --filter @dsr/archive dev` (http://localhost:3000) against `data/recordings`.
 
 ## Open questions blocking upcoming milestones
 
