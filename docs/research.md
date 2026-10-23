@@ -143,6 +143,17 @@ Tested live with `main.ts` in the container: `/record start`/`stop`, two account
 - **`/record switch` while both streams are live:** Stop Watching closes the current stream and the next one opens from the grid within about 1 s. Each set's loudness was distinct (−35.8, −33.4, −37.3 LUFS), with no sign of the two streams mixing. `partial` was set as designed: the already-live first set and the set cut off by `/record stop`.
 - **A display name made only of emoji** ("🎃") falls back to the user ID in file names; `session.json` keeps the display name.
 
+### Post-processing (milestone 5, 2026-10-23)
+
+Run with `reprocess.ts` on the milestone 4 test recordings (8 sets, 1.5 s to 146 s, captured at 85%).
+
+- **loudnorm only uses linear mode if `measured_LRA <= LRA` and `measured_TP + (I − measured_I) <= TP`**; otherwise it silently uses dynamic mode. pass 2's summary prints `Normalization Type`. One set with LRA 13.1 against the default target of 11 fell back.
+- **Don't pass `offset` (pass 1's `target_offset`) to pass 2.** Linear mode computes its own gain and ignores it, but dynamic mode applies it as extra gain: that set came out at −9.2 LUFS, peak −0.2, instead of −14. Without it, the same set measured −12.9.
+- **Results without `offset`:** linear sets landed at −14.0 LUFS exactly. Dynamic sets landed between −12.1 and −15.2 LUFS. Every true peak was −1.0 dBFS or lower.
+- **ffmpeg's last progress `time=` lags the input by about 3 s with loudnorm** (its lookahead), so the duration comes from the input's `Duration:` line. Using `time=` cut the last 3 s off every master.
+- **Trimming works:** a set with 45 s of trailing silence (the silence-handover test) went from 190.5 s to 145.8 s, and one with 2 s of leading silence lost those. `-ss`/`-to` as input options seek exactly in PCM WAV.
+- Speed: a 111 s set took about 10 s in total (analysis, master, MP3, M4A).
+
 ## Unverified / to test
 
 | Question                                                                                       | Why it matters                                                                                                                                                    | How we'll check                                                                                                          |

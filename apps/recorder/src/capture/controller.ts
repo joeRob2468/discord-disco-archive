@@ -1,7 +1,8 @@
 /**
  * Acts on the session manager's decisions: joins and leaves voice, opens the target's
- * stream, and runs one ffmpeg capture per set. When the capture reports a long
- * silence, it asks the session manager whether to hand over (rule 3).
+ * stream, and runs one ffmpeg capture per set, handing each finished set to
+ * post-processing. When the capture reports a long silence, it asks the session
+ * manager whether to hand over (rule 3).
  *
  * Browser steps are slow and must not interleave, so every event goes through one
  * queue and runs to completion before the next starts.
@@ -51,6 +52,8 @@ export interface ControllerDeps {
   config: ControllerConfig;
   /** Post a notice in a channel's chat. */
   notify: (channelId: string, content: string) => void;
+  /** Level and export a finished set; resolves when done, never rejects. */
+  postProcess: (record: SessionRecord, setId: string) => Promise<void>;
   logger: Logger;
   now?: () => Date;
 }
@@ -75,7 +78,12 @@ export class RecordingController {
   readonly #notify: (channelId: string, content: string) => void;
   readonly #logger: Logger;
   readonly #now: () => Date;
+  readonly #postProcess: (record: SessionRecord, setId: string) => Promise<void>;
   #queue: Promise<void> = Promise.resolve();
+  /** The current session's latest post-processing job. */
+  #processing: Promise<void> = Promise.resolve();
+  /** Sessions waiting for post-processing before they can be finished. */
+  readonly #finishing = new Set<Promise<void>>();
   #record: SessionRecord | undefined;
   #capture: ActiveCapture | undefined;
   #inVoice = false;
@@ -87,6 +95,7 @@ export class RecordingController {
     this.#notify = deps.notify;
     this.#logger = deps.logger;
     this.#now = deps.now ?? (() => new Date());
+    this.#postProcess = deps.postProcess;
   }
 
   sessionStarted(session: SessionInfo): void {
@@ -101,9 +110,13 @@ export class RecordingController {
     this.#enqueue('session end', () => this.#end(session));
   }
 
-  /** Resolves once every queued step, including any final set and leaving voice, is done. */
-  idle(): Promise<void> {
-    return this.#queue;
+  /**
+   * Resolves once every queued step (final set, leaving voice) is done and every ended
+   * session has been finished after its post-processing.
+   */
+  async idle(): Promise<void> {
+    await this.#queue;
+    await Promise.all(this.#finishing);
   }
 
   #enqueue(label: string, step: () => Promise<void>): void {
@@ -166,11 +179,26 @@ export class RecordingController {
   async #end(session: SessionInfo): Promise<void> {
     await this.#stopCapture(true);
     await this.#leave();
-    if (this.#record) {
-      await this.#record.finish(session, this.#now());
-      this.#logger.info({ dir: this.#record.paths.dir }, 'session finished');
-    }
+    const record = this.#record;
     this.#record = undefined;
+    if (!record) return;
+
+    // Finishing may rename the folder, so it waits for the session's encodes. Recording
+    // doesn't wait: a new session can start meanwhile.
+    const endedAt = this.#now();
+    const finishing = this.#processing
+      .then(() => record.finish(session, endedAt))
+      .then(
+        () => {
+          this.#logger.info({ dir: record.paths.dir }, 'session finished');
+        },
+        (error: unknown) => {
+          this.#logger.error({ err: error, dir: record.paths.dir }, 'could not finish session');
+        },
+      )
+      .finally(() => this.#finishing.delete(finishing));
+    this.#finishing.add(finishing);
+    this.#processing = Promise.resolve();
   }
 
   async #leave(): Promise<void> {
@@ -256,6 +284,9 @@ export class RecordingController {
     });
     this.#logger.info({ setId: capture.setId, partial }, 'capture stopped');
     await this.#checkDuration(capture);
+    if (error === undefined && this.#record) {
+      this.#processing = this.#postProcess(this.#record, capture.setId);
+    }
   }
 
   /** Compare the audio in the file with how long the capture ran, to catch dropped audio. */

@@ -19,11 +19,12 @@
 
 Per app:
 
-| Command                                                                            | What it does                                                                                                                                                                                                              |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm --filter @dsr/recorder smoke`                                                | Launch the browser with the persistent profile and open Discord, for logging in. Needs a display and PulseAudio, so run it in the container.                                                                              |
-| `pnpm --filter @dsr/recorder probe <voice channel URL> <user ID> ["display name"]` | Milestone 4 prototype: join the channel muted and deafened, open that person's stream, set its volume to 100% and measure the level. Saves page state per step to `docker-data/recorder/probe/`. Run it in the container. |
-| `pnpm --filter @dsr/archive dev`                                                   | Archive with `--watch`, run from the repo root with `./.env` if present. Data defaults to `./docker-data/archive` and `./data/recordings`.                                                                                |
+| Command                                                                            | What it does                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm --filter @dsr/recorder smoke`                                                | Launch the browser with the persistent profile and open Discord, for logging in. Needs a display and PulseAudio, so run it in the container.                                                                                            |
+| `pnpm --filter @dsr/recorder probe <voice channel URL> <user ID> ["display name"]` | Milestone 4 prototype: join the channel muted and deafened, open that person's stream, set its volume to 100% and measure the level. Saves page state per step to `docker-data/recorder/probe/`. Run it in the container.               |
+| `pnpm --filter @dsr/recorder reprocess <session folder> [--all]`                   | Re-run leveling and exports for a session (sets left `processing` or `failed`, or all). Needs ffmpeg, so run it in the container: `docker compose run --rm --no-deps recorder node --import tsx src/reprocess.ts /recordings/<folder>`. |
+| `pnpm --filter @dsr/archive dev`                                                   | Archive with `--watch`, run from the repo root with `./.env` if present. Data defaults to `./docker-data/archive` and `./data/recordings`.                                                                                              |
 
 ## Running in Docker
 

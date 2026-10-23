@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/main.ts",
     "probe": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/probe.ts",
+    "reprocess": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/reprocess.ts",
     "smoke": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/smoke.ts",
     "typecheck": "tsc -p ."
   },

@@ -2,6 +2,7 @@
  * Encodes run after a set finishes. The FLAC master is the leveled source of truth;
  * every other format is derived from it.
  */
+import type { TrimRange } from './analyze.ts';
 import { runFfmpeg, type RunOptions } from './ffmpeg.ts';
 import { normalizeFilter, type LoudnessMeasurement, type LoudnessTargets } from './loudnorm.ts';
 
@@ -21,6 +22,11 @@ function metadataArgs(tags: Tags): string[] {
   );
 }
 
+export interface MasterOptions extends RunOptions {
+  /** Keep only this part of the input (seconds), e.g. from `analyzeSet`. */
+  trim?: TrimRange;
+}
+
 /** Pass 2: apply loudnorm to the raw capture and write a 24-bit FLAC master. */
 export function encodeMaster(
   input: string,
@@ -28,11 +34,14 @@ export function encodeMaster(
   targets: LoudnessTargets,
   measured: LoudnessMeasurement,
   tags: Tags,
-  options?: RunOptions,
+  { trim, ...options }: MasterOptions = {},
 ): Promise<string> {
+  // As input options, -ss/-to seek exactly in PCM input.
+  const trimArgs = trim ? ['-ss', trim.start.toFixed(3), '-to', trim.end.toFixed(3)] : [];
   return runFfmpeg(
     // prettier-ignore
     [
+      ...trimArgs,
       '-i', input,
       '-vn',
       '-af', normalizeFilter(targets, measured),

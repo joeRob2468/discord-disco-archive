@@ -12,6 +12,8 @@ import { isLoggedOut } from './browser/discord-web.ts';
 import { DISCORD_APP_URL, launchBrowser } from './browser/launch.ts';
 import { RecordingController } from './capture/controller.ts';
 import { loadConfig } from './config.ts';
+import { processSet } from './pipeline/process-set.ts';
+import { Processor } from './pipeline/processor.ts';
 import { SessionManager } from './session/session-manager.ts';
 
 const logger = createLogger('recorder');
@@ -57,6 +59,8 @@ const sessions = new SessionManager({
   },
 });
 
+const processor = new Processor(logger.child({ module: 'processor' }));
+
 const controller = new RecordingController({
   page,
   sessions,
@@ -67,6 +71,13 @@ const controller = new RecordingController({
     handoverSilenceSeconds: config.session.handoverSilenceSeconds,
   },
   notify: post,
+  postProcess: (record, setId) =>
+    processor.enqueue(setId, (signal) =>
+      processSet(record, setId, config.processing, {
+        signal,
+        logger: logger.child({ module: 'pipeline' }),
+      }),
+    ),
   logger: logger.child({ module: 'controller' }),
 });
 
@@ -81,6 +92,8 @@ const shutdown = async (signal: string): Promise<void> => {
     // Finalises the current set (marked partial) and leaves voice, through the controller.
     sessions.stop();
   }
+  // Encodes can take minutes, so abort them; their sets stay "processing" for reprocess.ts.
+  processor.shutdown();
   await controller.idle();
   await client.destroy();
   await context.close();
