@@ -1,5 +1,17 @@
 # syntax=docker/dockerfile:1
 # Build from the repo root: docker build -f apps/archive/Dockerfile .
+
+# Stage 1: build the stylesheet (Tailwind + daisyUI are dev dependencies).
+FROM node:24-bookworm-slim AS css
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/core/package.json packages/core/
+COPY apps/archive/package.json apps/archive/
+RUN pnpm install --frozen-lockfile --filter @dsr/archive...
+COPY apps/archive/src apps/archive/src
+RUN pnpm --filter @dsr/archive build:css
+
 FROM node:24-bookworm-slim
 
 RUN corepack enable
@@ -15,6 +27,7 @@ COPY apps/archive/src apps/archive/src
 # tsx needs the archive's tsconfig for hono/jsx; it would otherwise compile JSX for React.
 COPY tsconfig.base.json ./
 COPY apps/archive/tsconfig.json apps/archive/
+COPY --from=css /app/apps/archive/dist apps/archive/dist
 
 RUN mkdir -p /config && chown node:node /config
 USER node

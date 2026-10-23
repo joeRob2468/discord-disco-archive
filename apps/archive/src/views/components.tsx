@@ -159,7 +159,12 @@ export function Downloads({ set }: { set: SetSummary }) {
   return (
     <div class="actions">
       {available.map(([key, label]) => (
-        <a class="button" href={mediaUrl(set.id, key === 'rawAudio' ? 'raw' : key, true)}>
+        // A real download, not an hx-boost page swap.
+        <a
+          class="button"
+          hx-boost="false"
+          href={mediaUrl(set.id, key === 'rawAudio' ? 'raw' : key, true)}
+        >
           Download {label}
         </a>
       ))}

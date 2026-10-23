@@ -1,4 +1,6 @@
 node_modules/
+# Built assets (e.g. the archive's CSS)
+dist/
 coverage/
 *.log
 *.tsbuildinfo

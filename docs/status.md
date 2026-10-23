@@ -66,7 +66,9 @@ Verified live on 2026-10-23 ("Set Test"): each set was processed about 10 s afte
 
 ## Next: archive UI rewrite (before deploy)
 
-daisyUI 5 + Tailwind 4 + htmx, on the existing server-rendered architecture; plan in plan.md, "UI rewrite". Stages: (1) build setup, layout, dark theme, login page; (2) pages as tables and cards; (3) player with queue (MP3 default); (4) admin panel and stats. Stage 1 is next. Deploy (milestone 8) comes after.
+daisyUI 5 + Tailwind 4 + htmx, on the existing server-rendered architecture; plan in plan.md, "UI rewrite". Stages: (1) build setup, layout, dark theme, login page; (2) pages as tables and cards; (3) player with queue (MP3 default); (4) admin panel and stats. Deploy (milestone 8) comes after.
+
+- **Stage 1 done (2026-10-23):** Tailwind 4.3 + daisyUI 5.7 built by the Tailwind CLI (`build:css`; `dev` watches it), htmx 2.0 with `hx-boost` (error pages swap in too), navbar with a phone drawer, dark default with a remembered light toggle, login card. The old page classes are mapped onto daisyUI in `app.css` until stage 2. Checked in Chromium at desktop and phone widths. Not yet: the archive Docker image (it now has a CSS build stage), and real passwords in `.env` (`ARCHIVE_ADMIN_PASSWORD` 12+ characters, `ARCHIVE_SESSION_SECRET` 32+).
 
 ## Browser: Firefox (2026-10-23)
 

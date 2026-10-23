@@ -366,24 +366,47 @@ export function LoginPage(props: { auth: AuthState; next: string; error?: string
   const { auth, next, error } = props;
   return (
     <Layout title="Log in" auth={auth}>
-      <h1>Log in</h1>
-      <form class="stack" method="post" action="/login">
-        <input type="hidden" name="next" value={next} />
-        <label>
-          Password
-          <input
-            type="password"
-            name="password"
-            required
-            autofocus
-            autocomplete="current-password"
-          />
-        </label>
-        {error && <p class="error">{error}</p>}
-        <div>
-          <button type="submit">Log in</button>
+      <div class="flex min-h-[60vh] items-center justify-center">
+        <div class="card bg-base-200 border-base-300 w-full max-w-sm border shadow-xl">
+          <form class="ui card-body gap-4" method="post" action="/login">
+            <div>
+              <h1 class="card-title text-2xl">Stream Archive</h1>
+              <p class="text-base-content/60 text-sm">Enter the password to continue.</p>
+            </div>
+            <input type="hidden" name="next" value={next} />
+            <label class="input w-full">
+              <svg
+                class="size-4 opacity-60"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="4" y="11" width="16" height="10" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              </svg>
+              <input
+                class="grow"
+                type="password"
+                name="password"
+                placeholder="Password"
+                aria-label="Password"
+                required
+                autofocus
+                autocomplete="current-password"
+              />
+            </label>
+            {error && (
+              <div role="alert" class="alert alert-error alert-soft text-sm">
+                {error}
+              </div>
+            )}
+            <button class="btn btn-primary w-full" type="submit">
+              Log in
+            </button>
+          </form>
         </div>
-      </form>
+      </div>
     </Layout>
   );
 }

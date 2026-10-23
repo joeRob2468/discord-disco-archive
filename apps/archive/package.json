@@ -5,7 +5,8 @@
   "description": "Web archive of recorded sessions, browsable by session and by streamer.",
   "type": "module",
   "scripts": {
-    "dev": "cd ../.. && TSX_TSCONFIG_PATH=apps/archive/tsconfig.json node --env-file-if-exists=.env --watch --import tsx apps/archive/src/main.ts",
+    "build:css": "tailwindcss -i src/views/app.css -o dist/app.css --minify",
+    "dev": "tailwindcss -i src/views/app.css -o dist/app.css --watch=always & cd ../.. && TSX_TSCONFIG_PATH=apps/archive/tsconfig.json node --env-file-if-exists=.env --watch --import tsx apps/archive/src/main.ts",
     "start": "node --import tsx src/main.ts",
     "typecheck": "tsc -p ."
   },
@@ -14,10 +15,14 @@
     "@hono/node-server": "^2.1.5",
     "better-sqlite3": "^13.0.3",
     "hono": "^4.13.13",
+    "htmx.org": "^2.0.11",
     "tsx": "^4.23.15",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0"
+    "@tailwindcss/cli": "^4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "daisyui": "^5.7.50",
+    "tailwindcss": "^4.3.3"
   }
 }

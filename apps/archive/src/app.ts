@@ -2,6 +2,9 @@
  * Builds the HTTP app from its dependencies. Kept separate from `main.ts` so tests can
  * call `app.request()` against an in-memory database without opening a port.
  */
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import type { Logger } from '@dsr/core';
 import { Hono } from 'hono';
 import { csrf } from 'hono/csrf';
@@ -14,7 +17,6 @@ import { adminRoutes } from './routes/admin.tsx';
 import { browseRoutes } from './routes/browse.tsx';
 import { mediaRoutes } from './routes/media.ts';
 import { sessionRoutes } from './routes/session.tsx';
-import { STYLESHEET } from './views/styles.ts';
 
 export interface AppDeps {
   config: ArchiveConfig;
@@ -23,7 +25,28 @@ export interface AppDeps {
 }
 
 /** Reachable without logging in, even when a viewer password is set. */
-const PUBLIC_PATHS = new Set(['/healthz', '/login', '/logout', '/assets/style.css']);
+const PUBLIC_PATHS = new Set([
+  '/healthz',
+  '/login',
+  '/logout',
+  '/assets/app.css',
+  '/assets/htmx.min.js',
+]);
+
+const require = createRequire(import.meta.url);
+/** Static assets: the Tailwind build output and htmx from node_modules. */
+const ASSETS = [
+  [
+    '/assets/app.css',
+    fileURLToPath(new URL('../dist/app.css', import.meta.url)),
+    'text/css; charset=utf-8',
+  ],
+  [
+    '/assets/htmx.min.js',
+    require.resolve('htmx.org/dist/htmx.min.js'),
+    'text/javascript; charset=utf-8',
+  ],
+] as const;
 
 export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
@@ -31,11 +54,18 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
-  app.get('/assets/style.css', (c) => {
-    c.header('Content-Type', 'text/css; charset=utf-8');
-    c.header('Cache-Control', 'public, max-age=3600');
-    return c.body(STYLESHEET);
-  });
+  for (const [route, file, type] of ASSETS) {
+    app.get(route, async (c) => {
+      c.header('Content-Type', type);
+      c.header('Cache-Control', 'public, max-age=300');
+      try {
+        return c.body(await readFile(file));
+      } catch {
+        // dist/app.css is missing until `pnpm --filter @dsr/archive build:css` has run.
+        return c.notFound();
+      }
+    });
+  }
 
   app.use(secureHeaders({ crossOriginEmbedderPolicy: false }));
   // Form posts must come from our own origin.
