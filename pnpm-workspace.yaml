@@ -5,3 +5,8 @@ packages:
 # pnpm 10 skips dependency build scripts unless allowed here.
 onlyBuiltDependencies:
   - esbuild
+
+# better-sqlite3 ships prebuilt N-API binaries for linux/macOS/windows x64+arm64;
+# its node-gyp fallback build is not needed.
+ignoredBuiltDependencies:
+  - better-sqlite3
