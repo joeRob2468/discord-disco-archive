@@ -19,10 +19,10 @@
 
 Per app:
 
-| Command                             | What it does                                                                                                                 |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm --filter @dsr/recorder smoke` | Launch the browser with the persistent profile and open Discord. Needs a display and PulseAudio, so run it in the container. |
-| `pnpm --filter @dsr/archive dev`    | Archive with `--watch`, reading `../../.env` if it exists.                                                                   |
+| Command                             | What it does                                                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm --filter @dsr/recorder smoke` | Launch the browser with the persistent profile and open Discord. Needs a display and PulseAudio, so run it in the container.               |
+| `pnpm --filter @dsr/archive dev`    | Archive with `--watch`, run from the repo root with `./.env` if present. Data defaults to `./docker-data/archive` and `./data/recordings`. |
 
 ## Running in Docker
 
@@ -36,22 +36,9 @@ noVNC is at `http://localhost:${VNC_PORT}/vnc.html`, bound to `127.0.0.1` only. 
 
 Logs are JSON (pino). To make them readable: `docker compose logs -f recorder | pnpm dlx pino-pretty`.
 
-## How the code is organised
+## Code organisation and style
 
-- **Apps own I/O; packages own logic.** `packages/*` export functions and schemas and do nothing at import time. `apps/*/src/main.ts` (or `smoke.ts`) is the composition root: it loads config, creates loggers and wires modules together.
-- **One config module per app** (`src/config.ts`), validated with zod through `@dsr/core`'s `parseEnv`, and split into sections so a module or script only needs its own keys. Nothing else reads `process.env`, except `LOG_LEVEL` in the logger.
-- **The on-disk format is the contract between apps.** `@dsr/core`'s `session.ts` defines `session.json` and `state.json`. Change those schemas deliberately: bump `SCHEMA_VERSION` and handle older files in the archive.
-- **Writes are atomic** (`writeJsonFileAtomic`), so the archive never reads a half-written `session.json`.
-- **ffmpeg knowledge lives in `@dsr/media`** (argument lists, filter strings, output parsing). The recorder decides _when_ to run things. `@dsr/media` decides _how_.
-
-## TypeScript conventions
-
-- **ESM only.** Relative imports include the `.ts` extension (`import { x } from './x.ts'`). Workspace packages export `./src/index.ts` directly, so nothing is built. `tsx` runs the code in dev and in the containers.
-- **`erasableSyntaxOnly`:** no `enum`, `namespace` or constructor parameter properties. That keeps the code runnable under Node's built-in type stripping if `tsx` is ever dropped.
-- **`verbatimModuleSyntax`:** use `import type` for types. ESLint enforces it.
-- **Strict mode** plus `noUncheckedIndexedAccess` and `noPropertyAccessFromIndexSignature`.
-- **TypeScript is pinned to 6.0.x** because typescript-eslint 8 supports `<6.1`. TS 7 (the native compiler) can come once typescript-eslint supports it.
-- **Tests sit next to the code** (`foo.ts` + `foo.test.ts`) and test pure logic. Anything that needs Discord, a browser or PulseAudio is checked manually against the milestones in plan.md.
+Architecture rules, TypeScript conventions, style, testing, security and git conventions are in [conventions.md](conventions.md).
 
 ## Adding a workspace package
 

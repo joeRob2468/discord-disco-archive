@@ -6,7 +6,7 @@ You start a session with `/record start` in a voice channel's chat. A Discord bo
 
 > **ToS:** driving a user account with Playwright counts as a "self-bot", which Discord forbids, and the account can be terminated. Use a throwaway recorder account. The bot account is a normal bot and is not at risk. Tell DJs and attendees they are being recorded.
 
-**Status:** milestone 1 (container smoke test). See [docs/plan.md](docs/plan.md#milestones).
+**Status:** see [docs/status.md](docs/status.md).
 
 ## Repository layout
 
@@ -44,4 +44,6 @@ See [docs/development.md](docs/development.md) for the full workflow, and [docs/
 
 - [docs/plan.md](docs/plan.md): goals, architecture, commands, archive, deployment, configuration, milestones
 - [docs/research.md](docs/research.md): confirmed facts with sources, open questions, rejected options
-- [docs/development.md](docs/development.md): setup, scripts, conventions, adding packages
+- [docs/status.md](docs/status.md): progress tracker, covering what's implemented and what's next
+- [docs/development.md](docs/development.md): setup, scripts, Docker workflow, adding packages
+- [docs/conventions.md](docs/conventions.md): architecture rules, code style, testing, security, git
