@@ -296,6 +296,8 @@ There are two stores with separate owners:
 1. **`session.json` (recorder → archive).** One per session folder, written atomically by the recorder, which is the only writer. It records _what was recorded_: sessions, sets, timings, files and recorded names. A session folder is self-describing, so it can be copied, moved or restored on its own.
 2. **`archive.db` (SQLite, owned by the archive).** It holds a mirror of every `session.json`, the archive's own data (edits, tags, streamer profiles, audit log) and the FTS5 search index.
 
+**Raw playback:** until a set has a leveled M4A or MP3 (still recording, processing, or failed), the player falls back to the raw WAV capture, labelled as not leveled, and a raw WAV download is always offered.
+
 **Sync:** at startup, on `session.json` changes (`fs.watch`, debounced 2 s), and as a full rescan every `ARCHIVE_SYNC_INTERVAL_SECONDS` in case file events don't cross the bind mount (Docker on WSL). Sync only writes the `recorded_*` and structural columns, never edit columns. Sessions or sets that vanish from disk are flagged `missing` (unlisted), not deleted, so their edits survive a folder being moved back.
 
 **Why SQLite (`better-sqlite3`):**
