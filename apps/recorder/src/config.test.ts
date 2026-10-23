@@ -23,6 +23,13 @@ describe('loadConfig', () => {
     expect(config.session.restartGraceMs).toBe(60_000);
   });
 
+  it('accepts Everyone as no restriction', () => {
+    expect(
+      loadConfig({ ...required, COMMAND_DEFAULT_PERMISSION: 'Everyone' }).discord
+        .commandDefaultPermission,
+    ).toBeNull();
+  });
+
   it('rejects an unknown permission name', () => {
     expect(() => loadConfig({ ...required, COMMAND_DEFAULT_PERMISSION: 'Nope' })).toThrow(
       ConfigError,

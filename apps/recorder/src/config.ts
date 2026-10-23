@@ -24,18 +24,23 @@ const videoSizeSchema = z
     return { width, height };
   });
 
-const permissionNameSchema = z
+/** `Everyone`, or a discord.js `PermissionFlagsBits` name such as `ManageEvents`. */
+const commandPermissionSchema = z
   .string()
-  .refine((name): name is keyof typeof PermissionFlagsBits => name in PermissionFlagsBits, {
-    message: 'Expected a discord.js PermissionFlagsBits name, e.g. ManageEvents',
-  });
+  .refine(
+    (name): name is 'Everyone' | keyof typeof PermissionFlagsBits =>
+      name === 'Everyone' || Object.hasOwn(PermissionFlagsBits, name),
+    { message: 'Expected Everyone or a discord.js PermissionFlagsBits name, e.g. ManageEvents' },
+  )
+  // null = no default restriction (Discord's default_member_permissions semantics).
+  .transform((name) => (name === 'Everyone' ? null : PermissionFlagsBits[name]));
 
 const discordSchema = z
   .object({
     DISCORD_BOT_TOKEN: z.string().min(1),
     DISCORD_GUILD_ID: snowflakeSchema,
     RECORDER_USER_ID: snowflakeSchema,
-    COMMAND_DEFAULT_PERMISSION: withDefault(permissionNameSchema, 'ManageEvents'),
+    COMMAND_DEFAULT_PERMISSION: withDefault(commandPermissionSchema, 'ManageEvents'),
     ALLOWED_ROLE_IDS: withDefault(envList.pipe(z.array(snowflakeSchema)), ''),
     ANNOUNCE_SETS: withDefault(envBoolean, 'true'),
   })
@@ -43,7 +48,7 @@ const discordSchema = z
     botToken: env.DISCORD_BOT_TOKEN,
     guildId: env.DISCORD_GUILD_ID,
     recorderUserId: env.RECORDER_USER_ID,
-    commandDefaultPermission: PermissionFlagsBits[env.COMMAND_DEFAULT_PERMISSION],
+    commandDefaultPermission: env.COMMAND_DEFAULT_PERMISSION,
     allowedRoleIds: env.ALLOWED_ROLE_IDS,
     announceSets: env.ANNOUNCE_SETS,
   }));
