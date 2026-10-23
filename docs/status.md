@@ -50,8 +50,8 @@ Run it with `docker compose up -d --build recorder`; `main.ts` (bot, browser and
 
 Before calling it done:
 
-- Restart WSL (`wsl --shutdown`) and check the "capture duration ok" log line: the missing ~6% should be gone.
-- `/record switch` and `/record title` (folder rename at the end) haven't been tried live yet.
+- `/record switch` (both directions, while both streams were live, plus the "already recording" and "not live" replies) and `/record title` (folder renamed at the end) verified live on 2026-10-23.
+- The ~6% missing audio on WSL is dev-only clock drift; restart WSL after the host sleeps (research.md). Not being chased further.
 - A logged-out browser is only caught at join time (posted in the channel), not as a pre-flight check in `/record start`.
 
 Not in this milestone: restart grace and `state.json` resume (9), leveling and `setlist.csv` (5), video (6).

@@ -140,6 +140,7 @@ Tested live with `main.ts` in the container: `/record start`/`stop`, two account
 - **Level at 85%:** set 1 measured −32.1 LUFS integrated, peak −21.7 dBFS (music from a browser tab).
 - **Discord's slider steps are fractional and uneven** (84.2, 84.99, 85.2), so the controller accepts ±0.5.
 - **WSL2 clock drift drops about 6% of the audio on the dev machine.** Captures held 15/16 of their wall time (111 of 119 s, 190.5 of 202.6 s), and `parec` lost the same share, so neither ffmpeg nor the capture command is at fault. Over a 30 s `sleep`, the Windows host measured 32.49 s, WSL real time 32.88 s and WSL **monotonic 30.25 s**. PulseAudio's null sink paces playback by the monotonic clock, so Chrome plays about 7% slow and WebRTC has to drop or squeeze the backlog. This is a WSL2 VM problem (often after the host sleeps); `wsl --shutdown` resets it. The home server is bare metal. The controller logs `audioSeconds` against `wallSeconds` for every set and warns at more than 1 s short.
+- **`/record switch` while both streams are live:** Stop Watching closes the current stream and the next one opens from the grid within about 1 s. Each set's loudness was distinct (−35.8, −33.4, −37.3 LUFS), with no sign of the two streams mixing. `partial` was set as designed: the already-live first set and the set cut off by `/record stop`.
 - **A display name made only of emoji** ("🎃") falls back to the user ID in file names; `session.json` keeps the display name.
 
 ## Unverified / to test
