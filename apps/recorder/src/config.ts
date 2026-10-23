@@ -122,6 +122,7 @@ export interface RecorderConfig {
 }
 
 export const loadBrowserConfig = (env = process.env): BrowserConfig => parseEnv(browserSchema, env);
+export const loadCaptureConfig = (env = process.env): CaptureConfig => parseEnv(captureSchema, env);
 
 export function loadConfig(env = process.env): RecorderConfig {
   return {

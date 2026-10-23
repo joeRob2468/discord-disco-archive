@@ -116,7 +116,7 @@ One recorder can only watch one stream with clean audio. Chrome mixes everything
 1. The DJ starts Go Live in the session's channel, and the handover rules pick them as the stream to record.
 2. The event bot gets `voiceStateUpdate` with `oldState.streaming === false` and `newState.streaming === true` for a member **in the session's channel** (events from other channels are ignored), then emits `streamStart { userId, displayName, at }`.
 3. The controller finds that member in the voice channel UI and opens their stream. Then it:
-   - makes the stream full-screen (for video) and checks the stream volume is at 100%;
+   - unmutes the stream if this account has it muted (Discord remembers that), sets the stream volume to 100%, and makes it full-screen (for video);
    - starts ffmpeg on the PulseAudio monitor. With video on, a **single** ffmpeg process takes both `x11grab` and `pulse` and writes one MKV (H.264 `veryfast` + `pcm_f32le`). One process keeps audio and video in sync, and MKV survives a crash mid-set.
 4. The DJ stops streaming, so the bot emits `streamEnd`. The controller stops ffmpeg cleanly, sending `q` on stdin so the file is finalised.
 5. Post-processing runs on the finished file (see [Leveling](#leveling)) and appends a line to the set list.
@@ -170,7 +170,8 @@ These need care:
 
 - **The recorder joins self-muted and self-deafened.** Deafen silences voice chat but not Go Live stream audio (confirmed by the user, 2026-10-23). It's one toggle that covers everyone, including people who join later, with no per-user settings, and it shows everyone that the recorder isn't listening to voice.
 - **Fallback:** if deafen ever stops passing stream audio, set each member's user volume to 0% instead. That's verified by capture in milestone 2, and Discord remembers it per user, per account.
-- **Stream volume defaults to 50%** in the web client (a separate slider on the stream tile). The controller must set it to **100%** every time it opens a stream; at 50% the capture is about 6 dB quieter. Don't go above 100%, because that can clip inside Discord's mixer.
+- **Stream volume defaults to 50%** in the web client (the slider in the stream tile's context menu). The controller must set it to **100%** every time it opens a stream; at 50% the capture measured roughly 17 dB quieter (research.md, milestone 4). Don't go above 100%, because that can clip inside Discord's mixer.
+- **A stream mute is remembered** per streamer for the recorder account, and a muted stream records silence. The controller unmutes on every open, and never clicks the call view's `Control volume` button, which toggles that mute.
 - Chrome mixes all of Discord's audio into **one** PulseAudio sink input, so voice and stream can't be separated at the PulseAudio level. Isolation has to happen inside Discord.
 - Later, if v1 leaks voice audio: inject a page script that hooks `RTCPeerConnection` and takes the audio track only from the Go Live connection, then records it through an AudioWorklet. This is more fragile, but isolation is perfect.
 

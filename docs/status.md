@@ -2,7 +2,7 @@
 
 Progress tracker: what exists, where it lives, what's been verified, and what's next. Update it with every milestone. The design is in [plan.md](plan.md#milestones).
 
-_Last updated: 2026-10-23 (end of session 1)_
+_Last updated: 2026-10-23 (session 2)_
 
 ## Branches
 
@@ -13,19 +13,19 @@ _Last updated: 2026-10-23 (end of session 1)_
 
 ## Milestones
 
-| #   | Milestone             | State                | Notes                                                                                                                                                                                           |
-| --- | --------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| —   | Workspace scaffolding | ✅ done              | pnpm monorepo, tooling, `pnpm check` green.                                                                                                                                                     |
-| —   | Storage layout        | ✅ done              | `/config` (app data) + `/recordings`; see plan.md "Storage layout".                                                                                                                             |
-| 1   | Container smoke test  | ✅ done              | Container starts cleanly. Chrome → PulseAudio → ffmpeg verified with a test tone. Recorder account logged in over noVNC; login survives restarts and container recreation.                      |
-| 2   | Manual stream capture | ✅ done              | Stream audio captured; with the streamer's user volume at 0%, no voice leaks (user confirmed by listening). Stream volume defaults to 50% and must be set to 100%. Details in research.md.      |
-| 3   | Event bot (`/record`) | ✅ done              | Tested in Discord: start/stop/status/switch/title, handover on stream end, 🔴/🔀/⏸️ announcements. The recorder account's own streams are ignored. Run with `pnpm --filter @dsr/recorder dev`.  |
-| 4   | Automated watch       | ⏳ next              | Wire the browser (join muted and deafened, open the target's stream, stream volume 100%) and ffmpeg capture to target changes; silence handover; run main.ts in the container.                  |
-| 5   | Post-processing       | ⬜                   | `@dsr/media` loudnorm/encode helpers exist and are unit-tested, but have never run on real audio.                                                                                               |
-| 6   | Video                 | ⬜                   |                                                                                                                                                                                                 |
-| 7   | Archive site          | 🧪 on `feat/archive` | Browse, search (FTS5), players, downloads, admin edits and hiding, activity log. 48 tests against fixtures; one local run against sample data. Not tested against real recordings or in Docker. |
-| 8   | Deploy to home server | ⬜                   |                                                                                                                                                                                                 |
-| 9   | Hardening             | ⬜                   |                                                                                                                                                                                                 |
+| #   | Milestone             | State                | Notes                                                                                                                                                                                                                               |
+| --- | --------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| —   | Workspace scaffolding | ✅ done              | pnpm monorepo, tooling, `pnpm check` green.                                                                                                                                                                                         |
+| —   | Storage layout        | ✅ done              | `/config` (app data) + `/recordings`; see plan.md "Storage layout".                                                                                                                                                                 |
+| 1   | Container smoke test  | ✅ done              | Container starts cleanly. Chrome → PulseAudio → ffmpeg verified with a test tone. Recorder account logged in over noVNC; login survives restarts and container recreation.                                                          |
+| 2   | Manual stream capture | ✅ done              | Stream audio captured; with the streamer's user volume at 0%, no voice leaks (user confirmed by listening). Stream volume defaults to 50% and must be set to 100%. Details in research.md.                                          |
+| 3   | Event bot (`/record`) | ✅ done              | Tested in Discord: start/stop/status/switch/title, handover on stream end, 🔴/🔀/⏸️ announcements. The recorder account's own streams are ignored. Run with `pnpm --filter @dsr/recorder dev`.                                      |
+| 4   | Automated watch       | 🚧 in progress       | **Discord UI prototype done** (`discord-web.ts` + `probe.ts`): join muted and deafened, open a stream by user ID, unmute, volume 100%, level check. Verified live. Next: wire to `/record` in `main.ts`, capture, silence handover. |
+| 5   | Post-processing       | ⬜                   | `@dsr/media` loudnorm/encode helpers exist and are unit-tested, but have never run on real audio.                                                                                                                                   |
+| 6   | Video                 | ⬜                   |                                                                                                                                                                                                                                     |
+| 7   | Archive site          | 🧪 on `feat/archive` | Browse, search (FTS5), players, downloads, admin edits and hiding, activity log. 48 tests against fixtures; one local run against sample data. Not tested against real recordings or in Docker.                                     |
+| 8   | Deploy to home server | ⬜                   |                                                                                                                                                                                                                                     |
+| 9   | Hardening             | ⬜                   |                                                                                                                                                                                                                                     |
 
 ## Implemented on `main`
 
@@ -40,6 +40,12 @@ _Last updated: 2026-10-23 (end of session 1)_
 ## Next: milestone 4 (automated watch)
 
 Agreed approach. **Prototype the Discord UI automation first**, against a live test channel with the user streaming, before writing the full controller.
+
+**Prototype: done and verified (2026-10-23).** `src/browser/discord-web.ts` holds every selector, and `src/probe.ts` runs the steps against a live channel and saves page state after each (see development.md). The seventh run passed all steps; findings are in research.md, "Discord web client automation". What the controller needs from it:
+
+- Pass the session's channel ID and the target's **user ID**; tiles are matched by user ID, so display names and usernames don't matter.
+- Call `unmuteStream` before `setStreamVolume` every time a stream opens. Discord remembers a stream mute per streamer.
+- Run the probe in the container without a rebuild by bind-mounting `apps/recorder/src` and `packages/media/src` (command in development.md).
 
 1. **One process:** `main.ts` runs the bot and the browser together in the recorder container, replacing `smoke.ts` as the container `CMD`. The bot currently runs on the WSL host via `pnpm --filter @dsr/recorder dev`.
 2. **Join on `/record start`:** open `discord.com/channels/<guild>/<channel>`, join voice, self-mute and **self-deafen** (deafen keeps stream audio). If it fails, report in the channel.
