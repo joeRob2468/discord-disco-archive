@@ -65,12 +65,28 @@ export interface FfmpegProcess {
   stop(timeoutMs?: number): Promise<void>;
 }
 
-export function spawnFfmpeg(args: readonly string[], options: RunOptions = {}): FfmpegProcess {
+export interface SpawnOptions extends RunOptions {
+  /** Called with each stderr line as it arrives, e.g. for live filter output. */
+  onLine?: (line: string) => void;
+}
+
+/** Split a stream of chunks into lines; ffmpeg ends progress lines with `\r`. */
+function onLines(child: ChildProcess, onLine: (line: string) => void): void {
+  let partial = '';
+  child.stderr?.on('data', (chunk: string) => {
+    const lines = (partial + chunk).split(/\r\n|\r|\n/);
+    partial = lines.pop() ?? '';
+    for (const line of lines) if (line !== '') onLine(line);
+  });
+}
+
+export function spawnFfmpeg(args: readonly string[], options: SpawnOptions = {}): FfmpegProcess {
   // stdin stays open (no -nostdin) so `stop()` can send `q`.
   const child = spawn(options.binary ?? 'ffmpeg', ['-hide_banner', '-y', ...args], {
     stdio: ['pipe', 'ignore', 'pipe'],
   });
   const tail = collectTail(child);
+  if (options.onLine) onLines(child, options.onLine);
   let stopping = false;
 
   const done = new Promise<void>((resolve, reject) => {
