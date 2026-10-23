@@ -78,7 +78,7 @@ async function start(interaction: Interaction, { sessions, config }: HandlerDeps
   if (problems.length > 0) return replyPrivately(interaction, problems.join('\n'));
 
   const liveNow = channel.members
-    .filter((member) => member.voice.streaming === true)
+    .filter((member) => member.voice.streaming === true && member.id !== config.recorderUserId)
     .map((member) => ({ userId: member.id, displayName: member.displayName }));
 
   const result = sessions.start(

@@ -47,6 +47,8 @@ export async function startBot({ config, sessions, logger }: BotDeps): Promise<C
 
   client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     if (newState.guild.id !== config.guildId) return;
+    // The recorder account is never a DJ, even if someone tests by streaming from it.
+    if (newState.id === config.recorderUserId) return;
     for (const event of toStreamEvents(oldState, newState)) {
       logger.info(event, event.type === 'start' ? 'stream started' : 'stream ended');
       if (event.type === 'start')
