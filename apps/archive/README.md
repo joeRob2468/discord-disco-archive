@@ -1,14 +1,36 @@
 # @dsr/archive
 
-The web archive of recorded sessions, built with Hono and server-rendered with `hono/jsx`. It reads the recordings volume **read-only** and treats each `session.json` as the source of truth.
+The web archive of recorded sessions: browse, search, play and download sets, and edit or hide them as an admin. It uses Hono, server-rendered with `hono/jsx`, with no client-side JavaScript, plus SQLite (`better-sqlite3`). Recordings are mounted **read-only**; the database lives in `/config` (`ARCHIVE_DATA_DIR`).
 
-| Path            | Responsibility                                                                       | Status          |
-| --------------- | ------------------------------------------------------------------------------------ | --------------- |
-| `src/config.ts` | Env config: recordings dir, port, public URL.                                        | done            |
-| `src/app.ts`    | Routes. Built by `createApp(deps)` so tests can call `app.request()` without a port. | `/healthz` only |
-| `src/main.ts`   | Starts the HTTP server and shuts down gracefully on SIGINT/SIGTERM.                  | done            |
-| `src/catalog/`  | Scans `*/session.json`, indexes by session and by streamer, watches for changes.     | milestone 7     |
-| `src/views/`    | Session list, session page, streamer list, streamer page, players.                   | milestone 7     |
-| `src/auth/`     | Optional shared password (`ARCHIVE_PASSWORD`), later Discord login.                  | milestone 7+    |
+The design (features, access, data model) is in [docs/plan.md, "Archive site"](../../docs/plan.md#archive-site) and ["Data storage"](../../docs/plan.md#data-storage-sessionjson-plus-the-archive-database).
 
-Media files are served with `@hono/node-server`'s `serveStatic`, which supports Range requests, so seeking works in long sets. The design is in [docs/plan.md, "Archive site"](../../docs/plan.md#archive-site).
+## Modules
+
+| Path                     | Responsibility                                                                                                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.ts`            | Composition root: config, database, catalog watcher, HTTP server, graceful shutdown.                                                                                                          |
+| `src/app.ts`             | `createApp(deps)`: middleware (secure headers, CSRF, auth, viewer gate), routes, error handling. Tests call `app.request()` on it.                                                            |
+| `src/config.ts`          | Env config, including password/secret cross-checks.                                                                                                                                           |
+| `src/db/`                | `database.ts` opens the database (WAL, foreign keys) and runs migrations. `migrations.ts` holds the append-only schema, including the `set_view` and `session_view` views that resolve edits. |
+| `src/catalog/sync.ts`    | Mirrors `session.json` files into `recorded_*` columns, flags missing items, rebuilds the search index.                                                                                       |
+| `src/catalog/watch.ts`   | Debounced `fs.watch` plus a periodic full sync.                                                                                                                                               |
+| `src/catalog/catalog.ts` | `Catalog`: every read query and every edit (with audit log and reindexing). The only place with SQL for app data.                                                                             |
+| `src/catalog/search.ts`  | FTS5 query building (`toMatchQuery`) and reindexing.                                                                                                                                          |
+| `src/auth/auth.ts`       | Shared-password roles (viewer and admin), signed session cookie, `safeNext`.                                                                                                                  |
+| `src/routes/`            | `browse.tsx` (GET pages), `admin.tsx` (edit posts, activity), `session.tsx` (login/logout), `media.ts` (file streaming), `params.ts` (input parsing).                                         |
+| `src/views/`             | `layout.tsx`, `components.tsx`, `pages.tsx`, `format.ts`, `styles.ts` (the whole stylesheet).                                                                                                 |
+| `src/test/fixtures.ts`   | Temporary recordings volume with `session.json` and media, for tests.                                                                                                                         |
+
+## Rules
+
+- Routes never touch SQL or the filesystem directly. They go through `Catalog`, or `serveStatic` with a path that came from the catalog.
+- Edit columns are never written by sync, and `recorded_*` columns are never written by edits.
+- Anything admin-only goes through `requireAdmin` on the route itself. Non-admins get 404, not 403.
+- Schema changes are a **new** entry in `migrations.ts`; never edit a shipped one.
+
+## Running
+
+```sh
+pnpm --filter @dsr/archive dev      # from the repo root's .env; http://localhost:3000
+docker compose up --build archive
+```

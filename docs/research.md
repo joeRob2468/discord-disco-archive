@@ -64,6 +64,13 @@ Last checked: 2026-10-23.
 - File syntax: `KEY=VALUE`, `#` comments (also at the end of a line), optional quotes, quoted multi-line values, and an `export` prefix, which is ignored.
 - **Caveat:** an unquoted `#` starts a comment, so quote any value that contains `#`, such as the VNC password.
 
+### Archive database
+
+- **`better-sqlite3` 13.0.3** (Node >= 22) ships prebuilt N-API binaries in the package (`prebuilds/` for linux, linuxmusl, darwin and win32 on x64 and arm64). Nothing compiles at install, so pnpm's build-script approval isn't needed (`ignoredBuiltDependencies`). Its bundled SQLite (3.53.4 at install) is compiled with `SQLITE_ENABLE_FTS5`, among others. Checked locally: an FTS5 table with `tokenize='unicode61 remove_diacritics 2'` matches `cafe*` against "Café". [better-sqlite3 compilation docs](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/compilation.md)
+- Types come from `@types/better-sqlite3` 9.6 (the package bundles none). The API they describe is unchanged.
+- **`node:sqlite`** is Stability 1.2 (release candidate) since Node 25.7, and was unflagged but experimental on 22.13+/23.4+. It has a `readOnly` option. We don't use it yet because the project targets Node 24, where it's still experimental. [Node docs](https://nodejs.org/api/sqlite.html)
+- **Hono:** `@hono/node-server`'s `serveStatic` handles Range requests (it parses `bytes=` and returns 206) and takes a fixed `path` option. It sets `Content-Type` from its own MIME table, which maps `.m4a` to `application/octet-stream`, so the media route overrides it on the response. [source](https://github.com/honojs/node-server/blob/main/src/serve-static.ts). `hono/csrf` rejects form posts whose `Origin` doesn't match, by throwing an `HTTPException` (403).
+
 ### Archive access and hosting
 
 - **Discord OAuth2** (if the archive uses "Login with Discord"): the authorization-code grant goes through `https://discord.com/oauth2/authorize`, then a POST to `https://discord.com/api/oauth2/token`. Validate `state`, and check that `iss` is `https://discord.com`. The `guilds.members.read` scope allows `GET /users/@me/guilds/{guild.id}/member`, which returns the user's member object (roles included) for one server. That's enough to limit access to server members or a role. [Discord docs: OAuth2](https://docs.discord.com/developers/topics/oauth2)
@@ -172,4 +179,6 @@ Run with `reprocess.ts` on the milestone 4 test recordings (8 sets, 1.5 s to 146
 
 - **Bot records the DJ's mic:** DJs would have to route their mix into the mic and disable voice processing. Lower quality, and it depends on every DJ setting it up right. The receiving side also needs DAVE support in the library. Ruled out by the user.
 - **OBS on a desktop:** works, but someone has to operate it. Kept as a manual fallback if the automated recorder fails during an event.
+- **Postgres for the archive:** the server already runs Postgres for other apps, but a single-process archive doesn't need a database server. SQLite is a file in `docker_data`, has FTS5 built in, and backs up as a file copy.
+- **JSON-only archive (no database):** fine while the archive only reads, but editing, tags, search and an audit log need transactions and indexes.
 - **Self-bot libraries that watch streams through the raw API:** same ToS risk as the browser approach, more fragile, and they'd need their own DAVE implementation.

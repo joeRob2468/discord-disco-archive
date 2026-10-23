@@ -1,0 +1,34 @@
+/** Lenient parsing of query and form input: bad values are dropped, not errors. */
+import { snowflakeSchema } from '@dsr/core';
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function pageParam(value: string | undefined): number {
+  const page = Number(value);
+  return Number.isInteger(page) && page >= 1 && page <= 10_000 ? page : 1;
+}
+
+export const dateParam = (value: string | undefined): string | undefined =>
+  value && DATE.test(value) ? value : undefined;
+
+export const snowflakeParam = (value: string | undefined): string | undefined =>
+  value && snowflakeSchema.safeParse(value).success ? value : undefined;
+
+export const textParam = (value: string | undefined, max = 200): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.slice(0, max) : undefined;
+};
+
+type FormBody = Record<string, string | File | (string | File)[]>;
+
+/** A form field as a string, or `undefined` if absent (meaning "leave unchanged"). */
+export function formField(body: FormBody, name: string): string | undefined {
+  const value = body[name];
+  return typeof value === 'string' ? value : undefined;
+}
+
+export const splitList = (value: string, separator: RegExp): string[] =>
+  value
+    .split(separator)
+    .map((item) => item.trim())
+    .filter((item) => item !== '');

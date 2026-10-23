@@ -212,18 +212,37 @@ Titles and display names are converted to safe file names (lowercase, `a-z0-9-`)
 
 ## Archive site
 
-`archive` is a second, small TypeScript service in this repo, in its own container. It serves the recordings over the web.
+`@dsr/archive` is a second TypeScript service in its own container. It's built with Hono and server-rendered with `hono/jsx`, with no client-side JavaScript. It mounts recordings **read-only** and keeps its own SQLite database in `/config` (see [Data storage](#data-storage-sessionjson-plus-the-archive-database)).
 
-- **Browse by session:** a list of past sessions, newest first, showing date, title, channel and number of sets. Each session page lists its sets in order, with a player and downloads.
-- **Browse by streamer:** a list of everyone who has played, with avatar and set count. Each streamer page lists their sets across all sessions.
-- **Player:** HTML5 `<audio>` (m4a) or `<video>` (mp4). Files are served with HTTP Range support so seeking works in long sets. Downloads offer MP3 and FLAC, plus MP4 if there's video.
-- **Data:** at startup it scans `RECORDINGS_DIR/*/session.json`, and rescans when files change (`fs.watch`) or on a timer. It needs no database in v1. It mounts recordings **read-only**.
-- **Hiding sets:** a set with `hidden: true` doesn't appear. v1 sets it by editing `session.json`. Later, `/archive hide`, which a DJ can run on their own sets and mods on any set.
-- **Access, v1:** public. Optionally, set `ARCHIVE_PASSWORD` to require one shared password:
-  - It's a simple login page that sets a signed, `HttpOnly` cookie (`ARCHIVE_SESSION_SECRET`, for 30 days), so links shared afterwards keep working and media range requests carry the cookie.
-  - Empty means public.
-  - It's done in the app rather than with Traefik basic auth, because the later Discord login will replace it in the same place.
-- **Access, later:** "Login with Discord", limited to members of the server and optionally a role, with the OAuth2 `identify` + `guilds.members.read` scopes. This reuses the **same Discord application** as the bot. It needs the app's client ID and secret and a redirect URI (`${ARCHIVE_PUBLIC_URL}/auth/discord/callback`) added in the Developer Portal. **It needs no extra bot permissions or intents**: OAuth scopes are separate from bot permissions, and membership is checked with the user's own token.
+**Browsing**
+
+- **Home:** the latest sessions, recent sets and popular tags.
+- **Sessions:** paginated, newest first. A session page shows its title, date, channel, description and its sets in play order.
+- **Sets:** a page with a player (`<video>` for mp4, otherwise `<audio>` for m4a or mp3), downloads (MP3, FLAC, AAC, MP4), notes or tracklist, tags, and previous/next within the session.
+- **Streamers:** everyone with a visible set, most recently active first. A streamer page shows the avatar, bio, links and a paginated list of their sets.
+- **Tags:** every tag with its count; each one links to a filtered search.
+- **Search:** full-text (FTS5) over DJ names, past recorded names, set and session titles, notes and tags. It matches word prefixes, ignores accents and is ranked by relevance. It can be combined with filters for streamer, tag and date range.
+- **Media:** served through the catalog, so hidden sets aren't downloadable either. Range requests make seeking work. `?download=1` names the file `DJ - Title (date).ext`.
+
+**Editing (admin)**
+
+- **Session:** title (overrides the recorded title or channel name), description, hidden.
+- **Set:** DJ name for this set (e.g. "A b2b B"), title, description or tracklist, tags, and visibility (default as recorded / visible / hidden).
+- **Streamer:** display name (applies to all their sets unless a set overrides it), bio, links (http/https only).
+- **Quick hide/unhide** buttons in set lists.
+- **Activity log** (`/admin/activity`): every edit with the changed fields' before and after values.
+- **Name precedence:** set edit → streamer edit → recorded display name. A blank edit field means "use the recorded value".
+- **Unlisted items:** anything hidden, or missing from disk, is unlisted. Admins still see it, with a badge.
+
+**Access**
+
+- **Public by default.** `ARCHIVE_PASSWORD` requires one shared viewer password, for pages and media alike.
+- **Editing:** `ARCHIVE_ADMIN_PASSWORD` turns it on. If unset, edit routes return 404.
+- **Login** sets a signed (`ARCHIVE_SESSION_SECRET`), `HttpOnly`, `SameSite=Lax` cookie for 30 days, marked `Secure` behind https. Password checks are constant-time, and failed attempts are delayed.
+- **Form posts** are CSRF-checked against `ARCHIVE_PUBLIC_URL`'s origin. Redirects after login only go to same-site paths.
+- **Later:** "Login with Discord", limited to server members and optionally a role, with the OAuth2 `identify` + `guilds.members.read` scopes. It reuses the **same Discord application** as the bot, and needs its client ID and secret plus a redirect URI (`${ARCHIVE_PUBLIC_URL}/auth/discord/callback`) in the Developer Portal. **No extra bot permissions or intents are needed.** It would set the same session cookie, mapping a configured role to admin. That would also let DJs edit their own sets.
+
+**Later ideas:** `/archive hide` in Discord, waveform previews, play counts, an RSS/podcast feed per streamer.
 
 ## Deployment (home server)
 
@@ -265,64 +284,70 @@ This mirrors the media stack on the home server: **app state** in `docker_data/<
 | Recordings | `RECORDINGS_HOST_DIR` | `./data/recordings` | `/mnt/media/data/media/discord-sets`             | `/recordings` (read-only in `archive`)                        |
 
 - `recorder` `/config`: `profile/`, the Discord login (treat it like a password).
-- `archive` `/config`: reserved for the archive's own data.
+- `archive` `/config`: `archive.db` (+ `-wal`, `-shm`), with edits, tags, the search index and the audit log.
 - Bind mounts rather than the media stack's `local-persist` volumes, so it also works on the dev machine without the plugin. The on-disk result is the same.
 
-## Data storage: JSON manifests, not a database (for now)
+**Back up both.** Recordings hold the media and `session.json`. `archive.db` holds every edit. If the database is lost, the catalog rebuilds from `session.json`, but the edits are gone.
 
-Each session folder holds a `session.json` written by the recorder. The archive loads them all into an in-memory index at startup and reloads when they change. No database is used.
+## Data storage: `session.json` plus the archive database
 
-**Why this is enough:**
+There are two stores with separate owners:
 
-- **Scale is small.** One session per event, around 5–20 sets each. Even 500 sessions is a few MB of JSON, read in milliseconds. Every query the archive needs (by session, by streamer, newest first) is a filter over an in-memory array.
-- **One writer.** Only the recorder writes, one session at a time, with an atomic write (temp file + rename). There's no concurrency problem for a database to solve.
-- **Self-describing folders.** Copy, move, back up or delete a session folder and its metadata goes with it. Nothing has to be kept in sync, and an index can always be rebuilt from the files.
-- **Simple containers.** SQLite in WAL mode needs write access for readers too (the `-shm` file), which conflicts with the archive's read-only mount. A database would also add migrations and a second source of truth next to the media files.
+1. **`session.json` (recorder → archive).** One per session folder, written atomically by the recorder, which is the only writer. It records _what was recorded_: sessions, sets, timings, files and recorded names. A session folder is self-describing, so it can be copied, moved or restored on its own.
+2. **`archive.db` (SQLite, owned by the archive).** It holds a mirror of every `session.json`, the archive's own data (edits, tags, streamer profiles, audit log) and the FTS5 search index.
 
-**When to switch to SQLite.** Any of these would justify it:
+**Sync:** at startup, on `session.json` changes (`fs.watch`, debounced 2 s), and as a full rescan every `ARCHIVE_SYNC_INTERVAL_SECONDS` in case file events don't cross the bind mount (Docker on WSL). Sync only writes the `recorded_*` and structural columns, never edit columns. Sessions or sets that vanish from disk are flagged `missing` (unlisted), not deleted, so their edits survive a folder being moved back.
 
-- The archive starts **writing**: hiding sets or editing titles from the web UI, Discord-login user records, play counts, comments.
-- Full-text search across titles and names, or the session count grows into the thousands.
+**Why SQLite (`better-sqlite3`):**
 
-**The plan if we switch:** Node's built-in `node:sqlite` (a release candidate since Node 25.7; unflagged but experimental on Node 24), or `better-sqlite3`. The database would be **owned by the archive** in its own volume, as a cache and index built from the `session.json` files, plus tables for archive-only data. The recorder keeps writing JSON, so the session folders stay the source of truth for recordings.
+- **One process, one host, small data.** There's no server to run. The database is a single file in `docker_data`, so backups are a file copy.
+- **FTS5 is built in** (with accent folding), so search needs no extra service.
+- `better-sqlite3` ships prebuilt binaries for linux/macOS/windows on x64 and arm64, so nothing is compiled in Docker. Node 24's built-in `node:sqlite` is still experimental and can replace it later.
+- **Postgres** (which the server already runs for other apps) would mean another container, a network connection and separate backups, all for one single-process app. It would only be worth it if several services needed to write concurrently.
+- The archive writes only to its own `/config`, so the recordings mount stays read-only.
+
+**Schema changes:** append-only migrations in `apps/archive/src/db/migrations.ts`, tracked with `PRAGMA user_version`. The archive refuses to start against a newer schema than it knows. Effective values (edit → streamer → recorded) are resolved in the `set_view` and `session_view` views, so every query agrees.
 
 ## Configuration (`.env`)
 
 All settings live in `.env` (git-ignored). `.env.example` is committed with every key and safe placeholders. Docker Compose passes it with `env_file: .env`, and Node reads it with `--env-file`.
 
-| Key                          | Example                       | Notes                                                                                  |
-| ---------------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
-| `DISCORD_BOT_TOKEN`          | —                             | Event bot token. Secret.                                                               |
-| `DISCORD_GUILD_ID`           | `123…`                        | Server to register `/record` in.                                                       |
-| `RECORDER_USER_ID`           | `789…`                        | User ID of the recorder account, for the pre-flight permission check.                  |
-| `COMMAND_DEFAULT_PERMISSION` | `ManageEvents`                | discord.js `PermissionFlagsBits` name used as `default_member_permissions`.            |
-| `ALLOWED_ROLE_IDS`           | (empty)                       | Optional comma list. If set, only these roles may use `/record`.                       |
-| `ANNOUNCE_SETS`              | `true`                        | Post "Now recording" and "Finished" messages in the voice channel's chat.              |
-| `RECORD_VIDEO`               | `false`                       | Also capture the screen with x11grab.                                                  |
-| `VIDEO_FPS`                  | `30`                          | Matches what most Go Live streams send.                                                |
-| `VIDEO_SIZE`                 | `1920x1080`                   | Xvfb screen and capture size.                                                          |
-| `RECORDINGS_DIR`             | `/recordings`                 | Path inside the containers.                                                            |
-| `RECORDINGS_HOST_DIR`        | `./data/recordings`           | Host path bind-mounted to `RECORDINGS_DIR` (see Storage layout).                       |
-| `APP_DATA_DIR`               | `./docker-data`               | Host path for app state; `recorder/` and `archive/` are mounted at `/config`.          |
-| `RAW_RETENTION_DAYS`         | (empty)                       | Delete raw WAV/MKV this many days after leveling. Empty = keep.                        |
-| `TZ`                         | `America/Chicago`             | Session dates and file times.                                                          |
-| `PROFILE_DIR`                | `/config/profile`             | Playwright user data dir (login session). Set by compose.                              |
-| `BROWSER_CHANNEL`            | `chrome`                      | `chrome` or `chromium`.                                                                |
-| `STREAM_VOLUME`              | `85`                          | Discord stream volume slider, 1–100. Below 100 leaves headroom against clipping.       |
-| `TARGET_LUFS`                | `-14`                         | Loudnorm integrated target.                                                            |
-| `TARGET_TP`                  | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                     |
-| `TARGET_LRA`                 | `11`                          | Loudnorm loudness range target.                                                        |
-| `EXPORT_FORMATS`             | `mp3,m4a`                     | Comma list: `mp3`, `m4a`.                                                              |
-| `RESTART_GRACE_SECONDS`      | `60`                          | Stream restart within this window = same set.                                          |
-| `HANDOVER_SILENCE_SECONDS`   | `45`                          | Current stream silent this long while another is live → switch.                        |
-| `VNC_ENABLED`                | `true`                        | noVNC for login and debugging.                                                         |
-| `VNC_PORT`                   | `6080`                        | Always bound to `127.0.0.1`.                                                           |
-| `VNC_PASSWORD`               | —                             | Secret. Required if VNC is enabled.                                                    |
-| `ARCHIVE_PORT`               | `3000`                        | Archive's internal HTTP port (Traefik targets it).                                     |
-| `ARCHIVE_PASSWORD`           | (empty)                       | Optional shared password for the archive. Empty = public. Quote it if it contains `#`. |
-| `ARCHIVE_SESSION_SECRET`     | —                             | Signs the archive login cookie. Secret. Required if `ARCHIVE_PASSWORD` is set.         |
-| `ARCHIVE_PUBLIC_URL`         | `https://archive.example.com` | Used for links in Discord messages and OAuth redirects.                                |
-| `DOMAIN`                     | `example.com`                 | Only for compose label interpolation on the server.                                    |
+| Key                             | Example                       | Notes                                                                                  |
+| ------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
+| `DISCORD_BOT_TOKEN`             | —                             | Event bot token. Secret.                                                               |
+| `DISCORD_GUILD_ID`              | `123…`                        | Server to register `/record` in.                                                       |
+| `RECORDER_USER_ID`              | `789…`                        | User ID of the recorder account, for the pre-flight permission check.                  |
+| `COMMAND_DEFAULT_PERMISSION`    | `ManageEvents`                | discord.js `PermissionFlagsBits` name used as `default_member_permissions`.            |
+| `ALLOWED_ROLE_IDS`              | (empty)                       | Optional comma list. If set, only these roles may use `/record`.                       |
+| `ANNOUNCE_SETS`                 | `true`                        | Post "Now recording" and "Finished" messages in the voice channel's chat.              |
+| `RECORD_VIDEO`                  | `false`                       | Also capture the screen with x11grab.                                                  |
+| `VIDEO_FPS`                     | `30`                          | Matches what most Go Live streams send.                                                |
+| `VIDEO_SIZE`                    | `1920x1080`                   | Xvfb screen and capture size.                                                          |
+| `RECORDINGS_DIR`                | `/recordings`                 | Path inside the containers.                                                            |
+| `RECORDINGS_HOST_DIR`           | `./data/recordings`           | Host path bind-mounted to `RECORDINGS_DIR` (see Storage layout).                       |
+| `APP_DATA_DIR`                  | `./docker-data`               | Host path for app state; `recorder/` and `archive/` are mounted at `/config`.          |
+| `RAW_RETENTION_DAYS`            | (empty)                       | Delete raw WAV/MKV this many days after leveling. Empty = keep.                        |
+| `TZ`                            | `America/Chicago`             | Session dates and file times.                                                          |
+| `PROFILE_DIR`                   | `/config/profile`             | Playwright user data dir (login session). Set by compose.                              |
+| `BROWSER_CHANNEL`               | `chrome`                      | `chrome` or `chromium`.                                                                |
+| `STREAM_VOLUME`                 | `85`                          | Discord stream volume slider, 1–100. Below 100 leaves headroom against clipping.       |
+| `TARGET_LUFS`                   | `-14`                         | Loudnorm integrated target.                                                            |
+| `TARGET_TP`                     | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                     |
+| `TARGET_LRA`                    | `11`                          | Loudnorm loudness range target.                                                        |
+| `EXPORT_FORMATS`                | `mp3,m4a`                     | Comma list: `mp3`, `m4a`.                                                              |
+| `RESTART_GRACE_SECONDS`         | `60`                          | Stream restart within this window = same set.                                          |
+| `HANDOVER_SILENCE_SECONDS`      | `45`                          | Current stream silent this long while another is live → switch.                        |
+| `VNC_ENABLED`                   | `true`                        | noVNC for login and debugging.                                                         |
+| `VNC_PORT`                      | `6080`                        | Always bound to `127.0.0.1`.                                                           |
+| `VNC_PASSWORD`                  | —                             | Secret. Required if VNC is enabled.                                                    |
+| `ARCHIVE_PORT`                  | `3000`                        | Archive's internal HTTP port (Traefik targets it).                                     |
+| `ARCHIVE_PASSWORD`              | (empty)                       | Optional shared password for the archive. Empty = public. Quote it if it contains `#`. |
+| `ARCHIVE_ADMIN_PASSWORD`        | (empty)                       | Admin password (12+ chars) for editing. Empty = editing disabled.                      |
+| `ARCHIVE_SESSION_SECRET`        | —                             | Signs login cookies (32+ chars). Secret. Required if either password is set.           |
+| `ARCHIVE_DATA_DIR`              | `/config`                     | Where `archive.db` lives. Set by compose.                                              |
+| `ARCHIVE_SYNC_INTERVAL_SECONDS` | `300`                         | Full rescan interval.                                                                  |
+| `ARCHIVE_PUBLIC_URL`            | `https://archive.example.com` | Used for links in Discord messages and OAuth redirects.                                |
+| `DOMAIN`                        | `example.com`                 | Only for compose label interpolation on the server.                                    |
 
 Later, for Discord login: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (secret), and `ARCHIVE_ALLOWED_ROLE_IDS` (optional).
 
@@ -336,7 +361,7 @@ The recorder account's password is **not** stored. Log in once by hand through n
 4. **Automated watch:** `/record start` makes the recorder join that channel (muted and deafened). It follows the handover rules (stream ends, silence, `/record switch`), posts switch notices, and leaves on `/record stop`.
 5. **Post-processing:** loudnorm, exports, set list.
 6. **Video:** x11grab capture, full-screen stream and the matching video file.
-7. **Archive site:** browse by session and by streamer, players, downloads, `hidden` sets. Runs locally against test recordings.
+7. **Archive site:** ✅ built early: browse, search, players, downloads, admin edits and hiding, an activity log. Tested against fixture recordings. Still to do: a check against real recordings from milestone 5.
 8. **Deploy to the home server:** compose with Traefik labels, `media_network`, a CNAME, the SSH-tunnelled noVNC login and a test event.
 9. **Hardening:** reconnects, restart grace, resuming from `state.json`, logout detection and alerts, dry run with friends.
 

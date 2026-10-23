@@ -15,7 +15,7 @@ pnpm workspace. Each app is one container. Each package is shared code with no I
 ```
 apps/
   recorder/   @dsr/recorder  Discord bot, session control, browser driver, live capture
-  archive/    @dsr/archive   Web archive (Hono): browse sessions and streamers, play, download
+  archive/    @dsr/archive   Web archive (Hono + SQLite): browse, search, play, download, admin edits
 packages/
   core/       @dsr/core      session.json/state.json schemas, file layout and naming, env parsing, logging
   media/      @dsr/media     ffmpeg runner, two-pass loudnorm, export encodes
