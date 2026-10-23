@@ -64,6 +64,10 @@ Built: after each set the controller queues `processSet` (one at a time, in the 
 
 Verified live on 2026-10-23 ("Set Test"): each set was processed about 10 s after it ended, the first while the next was recording; the session finished only after its last encode; masters and exports at −14.0 LUFS. Checking the files in the archive is part of milestone 7.
 
+## Browser: Firefox (2026-10-23)
+
+Chromium plays Discord's stream audio in mono, so the recorder now uses Firefox by default (`BROWSER_CHANNEL=firefox`, research.md "Audio quality"). The probe passed every step in Firefox and captured stereo. The recorder account is logged in to the Firefox profile (`docker-data/recorder/profile-firefox`). Still to do: a full `/record` session in Firefox.
+
 ## Dev environment state (session 2)
 
 - The recorder runs in Docker (`docker compose up -d recorder`); `/record` works from the container.

@@ -4,8 +4,9 @@
 # Keep in sync with the `playwright` version in apps/recorder/package.json.
 FROM mcr.microsoft.com/playwright:v1.64.1-noble
 
-# chrome (Google Chrome, amd64 only) or chromium (bundled with the image).
-ARG BROWSER_CHANNEL=chrome
+# firefox or chromium (both bundled with the image), or chrome (Google Chrome, amd64
+# only, installed below).
+ARG BROWSER_CHANNEL=firefox
 # UID/GID of the host user that owns the bind-mounted folders.
 ARG PUID=1000
 ARG PGID=1000

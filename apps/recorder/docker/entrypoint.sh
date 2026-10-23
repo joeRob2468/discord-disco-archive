@@ -16,6 +16,8 @@ rm -rf "${XDG_RUNTIME_DIR:?}" && mkdir -m 700 -p "$XDG_RUNTIME_DIR"
 # Chrome's profile lock names the container's hostname; a recreated container has a new
 # one, and Chrome would refuse the profile as "in use on another computer".
 rm -f "${PROFILE_DIR:?}"/Singleton{Lock,Cookie,Socket}
+# Firefox (BROWSER_CHANNEL=firefox) keeps its own profile and lock files.
+rm -f "${PROFILE_DIR}-firefox"/{lock,.parentlock}
 
 # Virtual display
 # Xvfb's stderr is mostly harmless xkbcomp keysym warnings; the check below catches failures.

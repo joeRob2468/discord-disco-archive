@@ -163,7 +163,7 @@ These need care:
 - **Playwright mutes Chromium by default** (`--mute-audio`). We must pass `ignoreDefaultArgs: ['--mute-audio']` or nothing reaches PulseAudio.
 - Use `launchPersistentContext(PROFILE_DIR, { headless: false, ... })` on Xvfb, not headless.
 - Pass `--autoplay-policy=no-user-gesture-required` so stream audio plays without a click.
-- Prefer the **Google Chrome channel** (`channel: 'chrome'`) over bundled Chromium. Chromium lacks some licensed codecs, and Discord may negotiate one. This is an open question; see research.md.
+- **Use Firefox** (`BROWSER_CHANNEL=firefox`, Playwright's bundled build). Chromium-based browsers, Chrome included, play Discord's stream audio in **mono**; Firefox plays it in stereo at 48 kHz (research.md, "Audio quality"; decided 2026-10-23). Firefox gets its settings as `firefoxUserPrefs` (autoplay, no mic prompt) and its own profile, `PROFILE_DIR-firefox`. Chrome remains selectable as a fallback.
 - Grant the `microphone` permission up front so Discord's join-voice flow doesn't stall on a prompt. The default mic is the silent null source, and the account is self-muted anyway.
 
 ### Isolating stream audio from voice chat
@@ -329,7 +329,7 @@ All settings live in `.env` (git-ignored). `.env.example` is committed with ever
 | `RAW_RETENTION_DAYS`            | (empty)                       | Delete raw WAV/MKV this many days after leveling. Empty = keep.                        |
 | `TZ`                            | `America/Chicago`             | Session dates and file times.                                                          |
 | `PROFILE_DIR`                   | `/config/profile`             | Playwright user data dir (login session). Set by compose.                              |
-| `BROWSER_CHANNEL`               | `chrome`                      | `chrome` or `chromium`.                                                                |
+| `BROWSER_CHANNEL`               | `firefox`                     | `firefox` (stereo), `chrome` or `chromium` (mono stream audio).                        |
 | `STREAM_VOLUME`                 | `85`                          | Discord stream volume slider, 1–100. Below 100 leaves headroom against clipping.       |
 | `TARGET_LUFS`                   | `-14`                         | Loudnorm integrated target.                                                            |
 | `TARGET_TP`                     | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                     |

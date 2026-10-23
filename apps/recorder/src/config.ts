@@ -56,7 +56,8 @@ const discordSchema = z
 const browserSchema = z
   .object({
     PROFILE_DIR: withDefault(z.string().min(1), './docker-data/recorder/profile'),
-    BROWSER_CHANNEL: withDefault(z.enum(['chrome', 'chromium']), 'chrome'),
+    /** firefox records stereo; Chromium-based browsers get Discord's stream audio in mono. */
+    BROWSER_CHANNEL: withDefault(z.enum(['firefox', 'chrome', 'chromium']), 'firefox'),
     VIDEO_SIZE: withDefault(videoSizeSchema, '1920x1080'),
     /** Discord's stream volume slider, in percent. Below 100 leaves headroom; leveling makes up the gain. */
     STREAM_VOLUME: withDefault(envInteger.min(1).max(100), '85'),

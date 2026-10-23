@@ -11,7 +11,7 @@ services:
       context: .
       dockerfile: apps/recorder/Dockerfile
       args:
-        BROWSER_CHANNEL: ${BROWSER_CHANNEL:-chrome}
+        BROWSER_CHANNEL: ${BROWSER_CHANNEL:-firefox}
         PUID: ${PUID:-1000}
         PGID: ${PGID:-1000}
     init: true
