@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatElapsed, status, switched } from './messages.ts';
+import { formatElapsed, status, switched, targetChanged } from './messages.ts';
 
 const at = (iso: string) => new Date(iso);
 const A = { userId: '1', displayName: 'DJ A', since: at('2026-11-14T20:00:00Z') };
@@ -20,6 +20,18 @@ describe('messages', () => {
       '🔀 Switched from **DJ A** to **DJ B**: requested by <@9>.',
     );
     expect(switched({ from: A, to: B, reason: 'silence' })).toContain('went silent');
+  });
+
+  it('announces every new recording, and idling, but not session start/stop', () => {
+    expect(targetChanged({ from: undefined, to: A, reason: 'went-live' })).toBe(
+      '🔴 Now recording **DJ A**.',
+    );
+    expect(targetChanged({ from: A, to: B, reason: 'silence' })).toContain('🔀 Switched');
+    expect(targetChanged({ from: A, to: undefined, reason: 'stopped-streaming' })).toBe(
+      '⏸️ **DJ A** stopped streaming. Waiting for the next stream.',
+    );
+    expect(targetChanged({ from: undefined, to: A, reason: 'already-live' })).toBeUndefined();
+    expect(targetChanged({ from: A, to: undefined, reason: 'session-stopped' })).toBeUndefined();
   });
 
   it('lists the target and other live streams in the status', () => {

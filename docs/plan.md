@@ -91,7 +91,9 @@ discord.js: `interaction.channel?.isVoiceBased()` for step 2, and `interaction.m
 - **Notices in the channel's chat** (`ANNOUNCE_SETS=true`, the default). These need `Send Messages` in that channel; interaction replies don't.
   - "🔴 Now recording: DJ name" when a set starts.
   - "✅ Finished: DJ name (1h02m)" when it ends.
-  - **Every stream switch** posts one message with the reason, e.g. "🔀 Switched from **A** to **B**: A stopped streaming", "…: A was silent for 45 s", or "…: requested by @mod".
+  - **Every time a new stream starts being recorded:** "🔴 Now recording **A**" (nobody was being recorded before), or "🔀 Switched from **A** to **B**: A stopped streaming" / "…: went silent" / "…: requested by @mod".
+  - **When the current streamer stops and nobody else is live:** "⏸️ **A** stopped streaming. Waiting for the next stream."
+  - `/record start` names the first target itself if someone is already live ("🎧 First up: …"). `/record switch` replies privately, and the switch is announced like any other.
 - **Bot or container restart with a session active:** the session is saved to `RECORDINGS_DIR/state.json` on start and cleared on stop. On boot, the bot resumes it and posts a notice that there was a gap.
 
 ### Which stream to record (handover)

@@ -98,7 +98,7 @@ async function start(interaction: Interaction, { sessions, config }: HandlerDeps
       'Already recording this channel. `/record status` for details.',
     );
   }
-  await reply(interaction, messages.sessionStarted(result.session));
+  await reply(interaction, messages.sessionStarted(result.session, sessions.status()?.target));
 }
 
 async function stop(interaction: Interaction, { sessions }: HandlerDeps): Promise<void> {
@@ -122,7 +122,8 @@ async function switchTarget(interaction: Interaction, { sessions }: HandlerDeps)
   if (!result.change) {
     return replyPrivately(interaction, `Already recording <@${user.id}>.`);
   }
-  await reply(interaction, messages.switched(result.change));
+  // The switch itself is announced in the channel by the announcer.
+  await replyPrivately(interaction, `Switching to <@${user.id}>.`);
 }
 
 async function title(interaction: Interaction, { sessions }: HandlerDeps): Promise<void> {

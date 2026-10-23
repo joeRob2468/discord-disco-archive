@@ -6,6 +6,7 @@ import type {
   SessionInfo,
   SessionStatus,
   SwitchReason,
+  Target,
   TargetChange,
 } from '../session/session-manager.ts';
 
@@ -19,11 +20,15 @@ export function formatElapsed(fromMs: number, toMs: number): string {
 
 const relative = (date: Date): string => `<t:${Math.floor(date.getTime() / 1000)}:R>`;
 
-export function sessionStarted(session: SessionInfo): string {
+export function sessionStarted(session: SessionInfo, firstTarget: Target | undefined): string {
   const title = session.title ? `: **${session.title}**` : '';
+  const first = firstTarget
+    ? `\n🎧 First up: **${firstTarget.displayName}** (already live).`
+    : '\nWaiting for someone to go live.';
   return (
     `🔴 Recording session started in <#${session.channelId}> by <@${session.startedBy.userId}>${title}.\n` +
-    'Go Live streams in this channel will be recorded.'
+    'Go Live streams in this channel will be recorded.' +
+    first
   );
 }
 
@@ -53,6 +58,21 @@ export function switched(change: TargetChange): string {
   if (change.reason === 'stopped-streaming' && change.from)
     reason = `${change.from.displayName} stopped streaming`;
   return `🔀 Switched from ${from} to ${to}: ${reason}.`;
+}
+
+/**
+ * The automatic channel notice for a target change, or undefined when none is needed:
+ * the start reply already names an already-live first target, and the stop reply covers
+ * the end of the session.
+ */
+export function targetChanged(change: TargetChange): string | undefined {
+  if (change.reason === 'already-live' || change.reason === 'session-stopped') return undefined;
+  if (change.from && change.to) return switched(change);
+  if (change.to) return `🔴 Now recording **${change.to.displayName}**.`;
+  if (change.from) {
+    return `⏸️ **${change.from.displayName}** stopped streaming. Waiting for the next stream.`;
+  }
+  return undefined;
 }
 
 export function status(current: SessionStatus, now: Date): string {
