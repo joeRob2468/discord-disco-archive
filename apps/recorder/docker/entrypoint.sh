@@ -10,20 +10,28 @@ export DISPLAY
 
 log() { echo "[entrypoint] $*" >&2; }
 
-# Virtual display
-rm -f "/tmp/.X${DISPLAY#:}-lock"
-Xvfb "$DISPLAY" -screen 0 "${VIDEO_SIZE}x24" -nolisten tcp &
-for _ in $(seq 50); do xdpyinfo -display "$DISPLAY" >/dev/null 2>&1 && break; sleep 0.1; done
+# The container filesystem survives restarts, so clear state from the last run.
+rm -f "/tmp/.X${DISPLAY#:}-lock" "/tmp/.X11-unix/X${DISPLAY#:}"
+rm -rf "${XDG_RUNTIME_DIR:?}" && mkdir -m 700 -p "$XDG_RUNTIME_DIR"
 
-# PulseAudio: a float32 null sink is the browser's only output; its monitor is what
-# ffmpeg records. A null source gives Discord a silent mic.
-pulseaudio --daemonize=no --exit-idle-time=-1 --log-target=stderr --log-level=error &
+# Virtual display
+# Xvfb's stderr is mostly harmless xkbcomp keysym warnings; the check below catches failures.
+Xvfb "$DISPLAY" -screen 0 "${VIDEO_SIZE}x24" -nolisten tcp >/dev/null 2>&1 &
+for _ in $(seq 50); do xdpyinfo -display "$DISPLAY" >/dev/null 2>&1 && break; sleep 0.1; done
+if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+  log "Xvfb did not start on $DISPLAY"
+  exit 1
+fi
+
+# PulseAudio with only the null sink/source from /etc/pulse/recorder.pa
+# (no dbus or hardware modules; client autospawn is disabled in client.conf.d).
+pulseaudio --daemonize=no --exit-idle-time=-1 --realtime=no --high-priority=no \
+  --log-target=stderr --log-level=error -n -F /etc/pulse/recorder.pa &
 for _ in $(seq 50); do pactl info >/dev/null 2>&1 && break; sleep 0.1; done
-pactl load-module module-null-sink sink_name=recorder format=float32le rate=48000 channels=2 \
-  sink_properties=device.description=recorder >/dev/null
-pactl load-module module-null-source source_name=silence >/dev/null
-pactl set-default-sink recorder
-pactl set-default-source silence
+if ! pactl list short sinks | grep -q '^[0-9]*\s*recorder\s'; then
+  log "PulseAudio did not come up with the 'recorder' sink"
+  exit 1
+fi
 log "display $DISPLAY ready, PulseAudio sink 'recorder' ready"
 
 # noVNC for logging in and debugging. The container port is published on the host's

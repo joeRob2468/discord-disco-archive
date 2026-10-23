@@ -43,10 +43,16 @@ COPY packages/core/src packages/core/src
 COPY packages/media/src packages/media/src
 COPY apps/recorder/src apps/recorder/src
 COPY --chmod=755 apps/recorder/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY apps/recorder/docker/pulse/recorder.pa /etc/pulse/recorder.pa
+COPY apps/recorder/docker/pulse/client.conf /etc/pulse/client.conf.d/00-no-autospawn.conf
 
-RUN mkdir -p /config /recordings && chown pwuser:pwuser /config /recordings
+# Xvfb needs a root-owned, world-writable socket dir; it can't create one as pwuser.
+RUN mkdir -p /config /recordings /tmp/.X11-unix \
+ && chown pwuser:pwuser /config /recordings \
+ && chmod 1777 /tmp/.X11-unix
 USER pwuser
 ENV HOME=/home/pwuser \
+    XDG_RUNTIME_DIR=/tmp/runtime-pwuser \
     DISPLAY=:99 \
     RECORDINGS_DIR=/recordings \
     PROFILE_DIR=/config/profile
@@ -54,6 +60,8 @@ ENV HOME=/home/pwuser \
 # noVNC (published on 127.0.0.1 only; see compose.yaml)
 EXPOSE 6080
 
+# Run from the package so its dependencies (tsx, playwright) resolve; pnpm doesn't hoist.
+WORKDIR /app/apps/recorder
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 # Milestone 1: smoke test. Replaced by src/main.ts once the bot and controller exist.
-CMD ["node", "--import", "tsx", "apps/recorder/src/smoke.ts"]
+CMD ["node", "--import", "tsx", "src/smoke.ts"]
