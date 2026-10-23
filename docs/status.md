@@ -66,7 +66,7 @@ Verified live on 2026-10-23 ("Set Test"): each set was processed about 10 s afte
 
 ## Browser: Firefox (2026-10-23)
 
-Chromium plays Discord's stream audio in mono, so the recorder now uses Firefox by default (`BROWSER_CHANNEL=firefox`, research.md "Audio quality"). The probe passed every step in Firefox and captured stereo. The recorder account is logged in to the Firefox profile (`docker-data/recorder/profile-firefox`). Still to do: a full `/record` session in Firefox.
+Chromium plays Discord's stream audio in mono, so the recorder now uses Firefox by default (`BROWSER_CHANNEL=firefox`, research.md "Audio quality"). The probe passed every step in Firefox, and a full `/record` session ("Firefox Stereo") recorded and leveled in stereo: side channel 10 dB under mid in raw, master and M4A, master at −14.0 LUFS. Firefox runs in kiosk mode. The recorder account is logged in to the Firefox profile (`docker-data/recorder/profile-firefox`), with **Disable All Notification Sounds** on: a capture during the recorder joining, a member joining and leaving, and an @mention stayed at digital silence (−91 dB). Discord keeps that setting per browser profile, so set it again after any new login.
 
 ## Dev environment state (session 2)
 

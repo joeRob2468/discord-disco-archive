@@ -172,6 +172,11 @@ Run with `reprocess.ts` on the milestone 4 test recordings (8 sets, 1.5 s to 146
 - **Firefox (Playwright's build, firefox-1555) records stereo:** the same left/right test gave side −27 to −39 dB with clearly alternating channels, and Firefox plays into PulseAudio at `float32le 2ch 48000Hz` (Chrome used 44.1 kHz, resampled by Pulse). Every `discord-web.ts` selector worked unchanged in Firefox.
 - **Playwright's Firefox ignores `-width`/`-height`** and opens "1920" as a URL. A 1920×1080 `viewport` doesn't fit either: the toolbars push the page's bottom (the settings gear) off the Xvfb screen. `--kiosk` (full screen, no toolbars) with `viewport: null` fills the screen exactly.
 
+### Discord notification sounds (2026-10-23)
+
+- The toggle is User Settings → Notifications → **Disable All Notification Sounds**. Users report that Discord's sound settings are stored per browser, not per account ([Discord community](https://support.discord.com/hc/en-us/community/posts/360057428771-Turn-off-all-sounds), [Android Authority](https://androidauthority.com/disable-discord-notifications-3147128)); it's set in the recorder's Firefox profile.
+- Verified with the setting on and the recorder deafened: 82 s of capture covering the recorder joining voice, another member joining and leaving, and an @mention of the recorder account stayed at −91 dB (digital silence). Which of the two (setting or deafen) blocks them wasn't isolated.
+
 ## Unverified / to test
 
 | Question                                                                                       | Why it matters                                                                                                                                                    | How we'll check                                                                                                          |
