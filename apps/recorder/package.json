@@ -1,0 +1,19 @@
+{
+  "name": "@dsr/recorder",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Discord bot + browser-driven Go Live capture. Writes recordings and session.json.",
+  "type": "module",
+  "scripts": {
+    "smoke": "node --env-file-if-exists=../../.env --import tsx src/smoke.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@dsr/core": "workspace:*",
+    "@dsr/media": "workspace:*",
+    "discord.js": "^14.27.0",
+    "playwright": "1.64.1",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
+  }
+}

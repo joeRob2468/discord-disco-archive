@@ -1,0 +1,51 @@
+# Local / default deployment. On the home server, layer compose.server.yaml on top
+# (set COMPOSE_FILE=compose.yaml:compose.server.yaml in that machine's .env).
+name: discord-stream-recorder
+
+services:
+  recorder:
+    build:
+      context: .
+      dockerfile: apps/recorder/Dockerfile
+      args:
+        BROWSER_CHANNEL: ${BROWSER_CHANNEL:-chrome}
+    init: true
+    # Recommended by Playwright for Chromium (shared memory).
+    ipc: host
+    mem_limit: 3g
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      RECORDINGS_DIR: /recordings
+      PROFILE_DIR: /profile
+    volumes:
+      - ${RECORDINGS_HOST_DIR:-./recordings}:/recordings
+      - ${PROFILE_HOST_DIR:-./profile}:/profile
+    ports:
+      # Loopback only: Docker-published ports bypass host firewalls such as ufw.
+      - 127.0.0.1:${VNC_PORT:-6080}:6080
+
+  archive:
+    build:
+      context: .
+      dockerfile: apps/archive/Dockerfile
+    init: true
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      RECORDINGS_DIR: /recordings
+    volumes:
+      - ${RECORDINGS_HOST_DIR:-./recordings}:/recordings:ro
+    ports:
+      - 127.0.0.1:${ARCHIVE_PORT:-3000}:${ARCHIVE_PORT:-3000}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:'+(process.env.ARCHIVE_PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s

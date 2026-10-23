@@ -1,0 +1,18 @@
+# Home server overlay: serve the archive through the existing Traefik on the shared
+# `media_network` instead of a host port. See docs/plan.md, "Deployment".
+services:
+  archive:
+    ports: !reset []
+    networks:
+      - default
+      - media_network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=media_network
+      - traefik.http.routers.dsr-archive.rule=Host(`archive.${DOMAIN:?set DOMAIN in .env}`)
+      - traefik.http.routers.dsr-archive.entrypoints=websecure
+      - traefik.http.services.dsr-archive.loadbalancer.server.port=${ARCHIVE_PORT:-3000}
+
+networks:
+  media_network:
+    external: true

@@ -1,0 +1,19 @@
+{
+  "name": "@dsr/archive",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Web archive of recorded sessions, browsable by session and by streamer.",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --watch --import tsx src/main.ts",
+    "start": "node --import tsx src/main.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@dsr/core": "workspace:*",
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
+  }
+}

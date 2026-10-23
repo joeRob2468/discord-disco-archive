@@ -1,0 +1,13 @@
+node_modules/
+coverage/
+*.log
+*.tsbuildinfo
+
+# Local config and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data (bind-mounted into containers)
+recordings/
+profile/
