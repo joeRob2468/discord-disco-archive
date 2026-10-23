@@ -102,6 +102,8 @@ Checked on the live server over SSH on 2026-10-23 (read-only):
   - Xvfb needs a root-owned `/tmp/.X11-unix` (1777), now created at build time.
   - `pactl` auto-started a second PulseAudio daemon. PulseAudio now runs `-n -F /etc/pulse/recorder.pa` with client autospawn disabled.
   - A restarted container kept a stale X lock and Pulse runtime dir; the entrypoint now clears both.
+- **The login persists** in `/config/profile` across restarts and container recreation (checked 2026-10-23; the account shows as logged in after `docker compose restart` and after `up --build`).
+- **Shutdown:** Playwright's default SIGTERM handler kills Chrome outright. We disable it (`handleSIGTERM: false`, and the same for INT and HUP) and call `context.close()` ourselves, which finishes in about 120 ms. Chrome still records `exit_type: "Crashed"` after a DevTools-protocol close (a known quirk of automated closes); `--hide-crash-restore-bubble` keeps the "Restore pages?" popup off screen. Stale `Singleton*` lock files are removed at startup, because they name the old container's hostname.
 - **Open:** Chrome shows an "unsupported command-line flag: --no-sandbox" info bar, because Playwright disables the Chromium sandbox by default. It would show up in video captures (milestone 6). Options: `chromiumSandbox: true` (needs Docker seccomp/userns support), or hiding the bar.
 
 ## Unverified / to test

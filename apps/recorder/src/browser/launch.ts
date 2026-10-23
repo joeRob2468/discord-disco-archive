@@ -16,8 +16,15 @@ export async function launchBrowser(config: BrowserConfig): Promise<BrowserConte
     ...(config.channel === 'chrome' ? { channel: 'chrome' } : {}),
     // Playwright mutes Chromium by default; we need audio to reach PulseAudio.
     ignoreDefaultArgs: ['--mute-audio'],
+    // Our own signal handlers close the context cleanly. Playwright's defaults kill
+    // Chrome outright, which leaves the profile marked as crashed.
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
     args: [
       '--autoplay-policy=no-user-gesture-required',
+      // Never show "Restore pages?" over the stream if a previous run did crash.
+      '--hide-crash-restore-bubble',
       `--window-size=${width},${height}`,
       '--window-position=0,0',
     ],

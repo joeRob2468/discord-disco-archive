@@ -13,6 +13,9 @@ log() { echo "[entrypoint] $*" >&2; }
 # The container filesystem survives restarts, so clear state from the last run.
 rm -f "/tmp/.X${DISPLAY#:}-lock" "/tmp/.X11-unix/X${DISPLAY#:}"
 rm -rf "${XDG_RUNTIME_DIR:?}" && mkdir -m 700 -p "$XDG_RUNTIME_DIR"
+# Chrome's profile lock names the container's hostname; a recreated container has a new
+# one, and Chrome would refuse the profile as "in use on another computer".
+rm -f "${PROFILE_DIR:?}"/Singleton{Lock,Cookie,Socket}
 
 # Virtual display
 # Xvfb's stderr is mostly harmless xkbcomp keysym warnings; the check below catches failures.

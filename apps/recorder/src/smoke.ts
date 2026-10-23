@@ -19,6 +19,7 @@ logger.info({ url: page.url() }, 'Discord opened; log in over noVNC if prompted'
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'closing browser');
   await context.close();
+  logger.info('browser closed');
   process.exit(0);
 };
 
