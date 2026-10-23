@@ -22,7 +22,7 @@ export interface LoudnessMeasurement {
   truePeak: number;
   range: number;
   threshold: number;
-  /** Gain loudnorm suggests for pass 2 (`target_offset`). */
+  /** Pass 1's `target_offset`. Informational: pass 2 deliberately doesn't use it. */
   offset: number;
 }
 
@@ -52,7 +52,8 @@ export function normalizeFilter(targets: LoudnessTargets, measured: LoudnessMeas
     `measured_TP=${format(measured.truePeak)}`,
     `measured_LRA=${format(measured.range)}`,
     `measured_thresh=${format(measured.threshold)}`,
-    `offset=${format(measured.offset)}`,
+    // No `offset`: linear mode computes its own gain and ignores it, and in the dynamic
+    // fallback it is applied as extra gain, overshooting the target (−9 LUFS for −14).
     'linear=true',
     'print_format=summary',
   ].join(':');

@@ -45,7 +45,11 @@ describe('normalizeFilter', () => {
   it('passes the measurements back in linear mode', () => {
     expect(normalizeFilter(targets, parseMeasurement(stderr))).toBe(
       'loudnorm=I=-14.00:TP=-1.00:LRA=11.00:measured_I=-21.37:measured_TP=-3.02' +
-        ':measured_LRA=6.40:measured_thresh=-31.55:offset=0.02:linear=true:print_format=summary',
+        ':measured_LRA=6.40:measured_thresh=-31.55:linear=true:print_format=summary',
     );
+  });
+
+  it('never passes the offset, which overshoots in the dynamic fallback', () => {
+    expect(normalizeFilter(targets, parseMeasurement(stderr))).not.toContain('offset=');
   });
 });
