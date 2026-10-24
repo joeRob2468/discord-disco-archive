@@ -92,6 +92,22 @@ describe('archive app', () => {
       expect(list).not.toContain(`href="${setPage('session-1', 'set-1')}"`);
     });
 
+    it('counts plays reported by the player', async () => {
+      const app = build();
+      const play = (uuid: string) =>
+        app.request(
+          new Request(`${ORIGIN}/api/plays/${uuid}`, {
+            method: 'POST',
+            headers: { Origin: ORIGIN },
+          }),
+        );
+      expect((await play(setUuid('session-1', 'set-1'))).status).toBe(204);
+      expect((await play('00000000-0000-5000-8000-000000000000')).status).toBe(404);
+      expect((await play('not-a-uuid')).status).toBe(404);
+      const page = await (await app.request(setPage('session-1', 'set-1'))).text();
+      expect(page).toContain('1 play');
+    });
+
     it('serves sets under their session and redirects older set links there', async () => {
       const app = build();
       for (const old of ['/sets/set-1', `/t/${setUuid('session-1', 'set-1')}`]) {
@@ -148,7 +164,9 @@ describe('archive app', () => {
       await syncCatalog(db, recordings.dir);
       const app = build();
       const page = await (await app.request(setPage('session-raw', 'set-raw'))).text();
-      expect(page).toContain('src="/media/set-raw/raw"');
+      // The player queue on the play button points at the raw capture.
+      expect(page).toContain('data-queue=');
+      expect(page).toContain('/media/set-raw/raw');
       expect(page).toContain('not leveled yet');
       expect(page).toContain('href="/media/set-raw/raw?download=1"');
       const media = await app.request('/media/set-raw/raw');

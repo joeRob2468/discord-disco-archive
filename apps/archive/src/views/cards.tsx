@@ -1,10 +1,10 @@
 /** Building blocks shared by the home, search, album and set pages. */
 import type { SetSummary } from '../catalog/catalog.ts';
-import { gradient, initials } from './art.ts';
+import type { Track } from '../client/track.ts';
+import { gradient, imageUrl, initials, setArt } from './art.ts';
 import { formatDate, formatDuration, plural } from './format.ts';
 import { setUrl } from './links.ts';
-
-export const imageUrl = (name: string): string => `/images/${encodeURIComponent(name)}`;
+import { PlayButton } from './play.tsx';
 
 /** Artwork: the uploaded image if there is one, else a gradient seeded by `seed`. */
 export function Art({
@@ -23,9 +23,6 @@ export function Art({
   }
   return <div class={`art ${className}`} style={`background:${gradient(seed)}`} />;
 }
-
-/** A set's art: its own, else its album's cover, else its gradient. */
-export const setArt = (set: SetSummary): string | undefined => set.image ?? set.sessionImage;
 
 /** A DJ's avatar: their gradient with initials. */
 export function DjAvatar({
@@ -74,38 +71,57 @@ export function StatusBadges({ set }: { set: SetSummary }) {
 }
 
 /**
- * One set as a list row linking to its page. In an album the row shows its track number
- * and leaves out the session it belongs to.
+ * One set as a list row: a play button (playing `queue` from this set) and a link to the
+ * set's page. In an album the row shows its track number, which turns into the play
+ * button on hover, and leaves out the session it belongs to.
  */
-export function SetListRow({ set, number }: { set: SetSummary; number?: number }) {
+export function SetListRow({
+  set,
+  queue,
+  number,
+}: {
+  set: SetSummary;
+  queue: Track[];
+  number?: number;
+}) {
   return (
-    <a
-      class="plain panel hover:bg-base-100/60 flex items-center gap-3 rounded-2xl p-3 transition"
-      href={setUrl(set)}
+    <div
+      class="panel group hover:bg-base-100 flex items-center gap-3 rounded-2xl p-2 pr-4 transition"
+      data-track-uuid={set.uuid}
     >
-      {number !== undefined && (
-        <span class="text-base-content/50 w-6 text-right text-sm tabular-nums">{number}</span>
-      )}
-      <Art seed={set.uuid} image={setArt(set)} class="size-12 shrink-0 rounded-xl" />
-      <div class="min-w-0 flex-1">
-        <p class="truncate font-semibold">
-          {set.title ?? set.name}
-          {set.title && <span class="text-base-content/60 font-normal"> · {set.name}</span>}
-          <StatusBadges set={set} />
-        </p>
-        {number === undefined && (
-          <p class="text-base-content/60 truncate text-sm">
-            {set.sessionTitle} · {formatDate(set.sessionStartedAt)}
-          </p>
+      <div class="grid w-8 shrink-0 place-items-center">
+        {number !== undefined && (
+          <span class="text-base-content/50 text-sm tabular-nums group-hover:hidden">{number}</span>
         )}
+        <PlayButton
+          queue={queue}
+          startUuid={set.uuid}
+          label={`Play ${set.title ?? set.name}`}
+          class={`btn btn-circle btn-primary btn-sm ${number !== undefined ? 'hidden group-hover:inline-flex' : ''}`}
+        />
       </div>
+      <a class="plain flex min-w-0 flex-1 items-center gap-3" href={setUrl(set)}>
+        <Art seed={set.uuid} image={setArt(set)} class="size-12 shrink-0 rounded-xl" />
+        <div class="min-w-0 flex-1">
+          <p class="playing-title truncate font-semibold">
+            {set.title ?? set.name}
+            {set.title && <span class="text-base-content/60 font-normal"> · {set.name}</span>}
+            <StatusBadges set={set} />
+          </p>
+          {number === undefined && (
+            <p class="text-base-content/60 truncate text-sm">
+              {set.sessionTitle} · {formatDate(set.sessionStartedAt)}
+            </p>
+          )}
+        </div>
+      </a>
       <span class="text-base-content/60 hidden text-sm tabular-nums sm:block">
         {plural(set.plays, 'play')}
       </span>
-      <span class="w-16 text-right text-sm tabular-nums">
+      <span class="w-14 text-right text-sm tabular-nums">
         {formatDuration(set.durationSeconds)}
       </span>
-    </a>
+    </div>
   );
 }
 

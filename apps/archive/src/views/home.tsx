@@ -4,10 +4,12 @@
  */
 import type { AuthState } from '../auth/auth.ts';
 import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/catalog.ts';
-import { Art, DjAvatar, setArt } from './cards.tsx';
+import { setArt } from './art.ts';
+import { Art, DjAvatar } from './cards.tsx';
 import { formatDate, formatDuration, plural } from './format.ts';
 import { Layout } from './layout.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
+import { PlayButton, queueOf } from './play.tsx';
 
 export interface Album {
   session: SessionSummary;
@@ -129,36 +131,48 @@ export function AlbumCard({ album }: { album: Album }) {
 
 function PopularSets({ sets }: { sets: SetSummary[] }) {
   if (sets.length === 0) return null;
+  const queue = queueOf(sets);
   return (
     <section class="mt-10">
       <h2 class="mb-4 text-xl font-bold">Popular sets</h2>
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         {sets.map((set) => (
-          <a
-            class="plain panel rounded-3xl p-3 transition hover:-translate-y-0.5"
-            href={setUrl(set)}
+          // The play button sits beside the card's link, not in it (no buttons inside links).
+          <div
+            class="panel group relative rounded-3xl p-3 transition hover:-translate-y-0.5"
+            data-track-uuid={set.uuid}
           >
-            <div class="relative">
-              <Art seed={set.uuid} image={setArt(set)} class="aspect-[4/3] rounded-2xl" />
-              <span class="badge badge-sm absolute top-2 left-2 border-0 bg-black/40 text-white backdrop-blur">
-                {plural(set.plays, 'play')}
-              </span>
-            </div>
-            <div class="mt-3 flex items-center gap-2 px-1">
-              <DjAvatar
-                userId={set.userId}
-                name={set.name}
-                image={set.streamerImage}
-                size="size-8 text-sm"
-              />
-              <div class="min-w-0">
-                <p class="truncate font-semibold">{set.title ?? set.name}</p>
-                <p class="text-base-content/60 truncate text-xs">
-                  {set.sessionTitle} · {formatDuration(set.durationSeconds)}
-                </p>
+            <a class="plain block" href={setUrl(set)}>
+              <div class="relative">
+                <Art seed={set.uuid} image={setArt(set)} class="aspect-[4/3] rounded-2xl" />
+                <span class="badge badge-sm absolute top-2 left-2 border-0 bg-black/50 text-white">
+                  {plural(set.plays, 'play')}
+                </span>
               </div>
+              <div class="mt-3 flex items-center gap-2 px-1">
+                <DjAvatar
+                  userId={set.userId}
+                  name={set.name}
+                  image={set.streamerImage}
+                  size="size-8 text-sm"
+                />
+                <div class="min-w-0">
+                  <p class="playing-title truncate font-semibold">{set.title ?? set.name}</p>
+                  <p class="text-base-content/60 truncate text-xs">
+                    {set.sessionTitle} · {formatDuration(set.durationSeconds)}
+                  </p>
+                </div>
+              </div>
+            </a>
+            <div class="absolute top-5 right-5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+              <PlayButton
+                queue={queue}
+                startUuid={set.uuid}
+                label={`Play ${set.title ?? set.name}`}
+                class="btn btn-circle btn-primary shadow-lg"
+              />
             </div>
-          </a>
+          </div>
         ))}
       </div>
     </section>

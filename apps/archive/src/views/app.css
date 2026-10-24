@@ -14,25 +14,40 @@
     light;
 }
 
-/* App shell: soft colour glows behind frosted-glass panels. */
+/* App shell: a dark page with one faint glow at the top, and solid panels on it. */
 @layer base {
   /* On the root, not <body>: the root background paints beneath the fixed backdrop. */
   html {
+    background-color: oklch(16% 0.01 270);
+  }
+  html[data-theme='light'] {
     background-color: var(--color-base-300);
   }
 }
 @layer components {
   .panel {
-    @apply bg-base-200/70 border-base-content/5 border shadow-xl backdrop-blur-xl;
+    @apply bg-base-200 border-base-content/10 border shadow-lg;
   }
-  /* Fixed to the viewport, so the glow covers the page however far it scrolls. */
+  /* Fixed to the viewport, so it stays put however far the page scrolls. */
   .backdrop {
     @apply pointer-events-none fixed inset-0 -z-10;
-    background:
-      radial-gradient(90vmax 70vmax at 0% 0%, oklch(50% 0.14 300 / 0.28), transparent 65%),
-      radial-gradient(80vmax 70vmax at 100% 35%, oklch(55% 0.1 200 / 0.2), transparent 65%),
-      radial-gradient(90vmax 70vmax at 40% 100%, oklch(50% 0.12 340 / 0.18), transparent 65%),
-      var(--color-base-300);
+    background: radial-gradient(
+      120vmax 60vmax at 50% -20%,
+      oklch(45% 0.12 290 / 0.25),
+      transparent 60%
+    );
+  }
+  /* Room for the player bar once something is playing. */
+  body.has-player {
+    @apply pb-28;
+  }
+  #player[data-state='playing'] .player-play,
+  #player[data-state='paused'] .player-pause {
+    @apply hidden;
+  }
+  /* The set that's playing, wherever it's listed. */
+  .is-playing .playing-title {
+    @apply text-primary;
   }
   .art {
     @apply bg-base-300 relative overflow-hidden;

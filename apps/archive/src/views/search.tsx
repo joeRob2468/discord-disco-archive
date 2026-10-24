@@ -8,6 +8,7 @@ import { SetListRow } from './cards.tsx';
 import { plural } from './format.ts';
 import { Icon, Layout } from './layout.tsx';
 import { searchUrl, type SearchFilters } from './links.ts';
+import { queueOf } from './play.tsx';
 
 export interface SearchData {
   list: Page<SetSummary>;
@@ -30,6 +31,7 @@ function FilterChip({ label, href }: { label: string; href: string }) {
 
 function SetList({ data }: { data: SearchData }) {
   const { list, filters, labels } = data;
+  const queue = queueOf(list.items);
   return (
     <div id="set-list">
       <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
@@ -49,7 +51,7 @@ function SetList({ data }: { data: SearchData }) {
       </div>
       <div class="flex flex-col gap-2">
         {list.items.map((set) => (
-          <SetListRow set={set} />
+          <SetListRow set={set} queue={queue} />
         ))}
       </div>
       {list.total === 0 && <p class="text-base-content/60 py-8 text-center">No sets match.</p>}

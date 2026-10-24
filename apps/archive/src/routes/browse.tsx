@@ -102,6 +102,7 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
       <SetDetailPage
         auth={auth}
         set={set}
+        albumSets={siblings}
         previous={index > 0 ? siblings[index - 1] : undefined}
         next={siblings[index + 1]}
       />,
@@ -117,6 +118,13 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
     const uuid = c.req.param('uuid');
     const set = isUuid(uuid) ? catalog.getSetByUuid(uuid, c.var.auth.isAdmin) : undefined;
     return set ? c.redirect(setUrl(set), 301) : c.html(<NotFoundPage auth={c.var.auth} />, 404);
+  });
+
+  // Counted by the player after 30 s of listening.
+  app.post('/api/plays/:uuid', (c) => {
+    const uuid = c.req.param('uuid');
+    if (!isUuid(uuid) || !catalog.recordPlay(uuid)) return c.body(null, 404);
+    return c.body(null, 204);
   });
 
   app.get('/streamers', (c) => {

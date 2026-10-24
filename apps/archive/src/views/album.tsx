@@ -4,16 +4,19 @@
  */
 import type { AuthState } from '../auth/auth.ts';
 import type { SetSummary } from '../catalog/catalog.ts';
-import { Art, DjAvatar, ImageForm, SetListRow, setArt, StatusBadges } from './cards.tsx';
-import { Downloads, EditSessionForm, EditSetForm, mediaUrl } from './components.tsx';
+import { setArt } from './art.ts';
+import { Art, DjAvatar, ImageForm, SetListRow, StatusBadges } from './cards.tsx';
+import { Downloads, EditSessionForm, EditSetForm } from './components.tsx';
 import { formatDate, formatDateTime, formatDuration, plural } from './format.ts';
 import { djsOf, totalSeconds, type Album } from './home.tsx';
 import { Layout } from './layout.tsx';
+import { PlayButton, queueOf } from './play.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
 
 export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
   const { session, sets } = album;
   const djs = djsOf(sets);
+  const queue = queueOf(sets);
   return (
     <Layout title={session.title} auth={auth}>
       <section class="panel flex flex-col gap-6 rounded-3xl p-5 sm:flex-row sm:items-end sm:p-6">
@@ -55,15 +58,12 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
             <p class="mt-3 max-w-prose whitespace-pre-line">{session.description}</p>
           )}
           <div class="mt-5 flex flex-wrap gap-2">
-            {/* Wired to the queue when the player lands (stage 3). */}
-            <button
+            <PlayButton
+              queue={queue}
+              label="Play all"
+              text="Play all"
               class="btn btn-primary rounded-xl"
-              type="button"
-              disabled
-              title="Coming with the player"
-            >
-              ▶ Play all
-            </button>
+            />
             <button
               class="btn btn-ghost rounded-xl"
               type="button"
@@ -79,7 +79,7 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
         <h2 class="mb-3 text-xl font-bold">Sets</h2>
         <div class="flex flex-col gap-2">
           {sets.map((set, index) => (
-            <SetListRow set={set} number={index + 1} />
+            <SetListRow set={set} queue={queue} number={index + 1} />
           ))}
         </div>
       </section>
@@ -104,17 +104,15 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
 export function SetDetailPage(props: {
   auth: AuthState;
   set: SetSummary;
+  /** Every set in the album, in order: playing continues through them. */
+  albumSets: SetSummary[];
   previous: SetSummary | undefined;
   next: SetSummary | undefined;
 }) {
-  const { auth, set, previous, next } = props;
-  const format = set.files.mp3
-    ? 'mp3'
-    : set.files.m4a
-      ? 'm4a'
-      : set.files.rawAudio
-        ? 'raw'
-        : undefined;
+  const { auth, set, albumSets, previous, next } = props;
+  const queue = queueOf(albumSets);
+  const playable = queue.some((track) => track.uuid === set.uuid);
+  const raw = !set.files.mp3 && !set.files.m4a && set.files.rawAudio !== undefined;
   return (
     <Layout title={`${set.title ?? set.name} · ${set.sessionTitle}`} auth={auth}>
       <section class="panel flex flex-col gap-6 rounded-3xl p-5 sm:flex-row sm:items-end sm:p-6">
@@ -147,19 +145,25 @@ export function SetDetailPage(props: {
             {formatDateTime(set.startedAt)} · {formatDuration(set.durationSeconds)} ·{' '}
             {plural(set.plays, 'play')}
           </p>
-          {format ? (
-            <audio class="mt-4 w-full" controls preload="none" src={mediaUrl(set.id, format)} />
-          ) : (
-            <p class="text-base-content/60 mt-4 text-sm">Nothing to play yet.</p>
-          )}
-          {format === 'raw' && (
-            <p class="text-base-content/60 mt-1 text-xs">Raw capture, not leveled yet.</p>
-          )}
-          <div class="mt-3 flex flex-wrap items-center gap-2">
-            <Downloads set={set} />
+          <div class="mt-4 flex flex-wrap items-center gap-2">
+            {playable ? (
+              <PlayButton
+                queue={queue}
+                startUuid={set.uuid}
+                label="Play"
+                text="Play"
+                class="btn btn-primary rounded-xl"
+              />
+            ) : (
+              <p class="text-base-content/60 text-sm">Nothing to play yet.</p>
+            )}
             <button class="btn btn-ghost btn-sm" type="button" data-copy={setUrl(set)}>
               Copy link
             </button>
+          </div>
+          {raw && <p class="text-base-content/60 mt-2 text-xs">Raw capture, not leveled yet.</p>}
+          <div class="mt-3">
+            <Downloads set={set} />
           </div>
         </div>
       </section>

@@ -5,7 +5,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/', 'coverage/', 'docker-data/', 'data/'] },
+  { ignores: ['**/node_modules/', '**/dist/', 'coverage/', 'docker-data/', 'data/'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,

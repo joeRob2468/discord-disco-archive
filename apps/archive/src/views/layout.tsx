@@ -27,6 +27,10 @@ const PAGE_SCRIPT = `
       try { localStorage.setItem('theme', next); } catch {}
       return;
     }
+    // Close open dropdowns when clicking anywhere outside them.
+    for (const open of document.querySelectorAll('details.dropdown[open]')) {
+      if (!open.contains(event.target)) open.removeAttribute('open');
+    }
     const button = event.target.closest('[data-copy]');
     if (!button) return;
     const text = button.textContent;
@@ -34,6 +38,14 @@ const PAGE_SCRIPT = `
       button.textContent = 'Copied';
       setTimeout(() => { button.textContent = text; }, 1500);
     }, () => {});
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    for (const open of document.querySelectorAll('details.dropdown[open]')) open.removeAttribute('open');
+  });
+  // A dropdown left open must not survive navigation.
+  document.addEventListener('htmx:beforeSwap', () => {
+    for (const open of document.querySelectorAll('details.dropdown[open]')) open.removeAttribute('open');
   });
 })();
 `;
@@ -89,6 +101,7 @@ function Document({ title, children }: { title: string; children?: Child }) {
             content='{"responseHandling":[{"code":"204","swap":false},{"code":"...","swap":true}]}'
           />
           <script src="/assets/htmx.min.js" defer></script>
+          <script type="module" src="/assets/player.js"></script>
         </head>
         <body hx-boost="true" class="min-h-screen">
           <div class="backdrop" aria-hidden="true" />
@@ -157,28 +170,126 @@ function Menu({ auth }: { auth: AuthState }) {
   );
 }
 
-/** The right-hand "Now playing" panel; the player fills it in stage 3 of the UI rewrite. */
-function NowPlayingPanel() {
+const CONTROL_ICONS = {
+  previous: 'M6 5h2v14H6zM20 5v14L9 12z',
+  next: 'M16 5h2v14h-2zM4 5v14l11-7z',
+  play: 'M7 4.5v15l12-7.5z',
+  pause: 'M6 4h4v16H6zM14 4h4v16h-4z',
+  volume: 'M4 9v6h4l5 4V5L8 9zM16 8.5a5 5 0 0 1 0 7',
+} as const;
+
+function ControlIcon({
+  name,
+  class: className = 'size-5',
+}: {
+  name: keyof typeof CONTROL_ICONS;
+  class?: string;
+}) {
   return (
-    <aside class="hidden w-80 shrink-0 xl:block">
-      <div class="panel sticky top-6 rounded-3xl p-5">
-        <div class="from-primary/60 to-secondary/60 aspect-square rounded-2xl bg-gradient-to-br" />
-        <p class="mt-4 text-lg font-semibold">Nothing playing</p>
-        <p class="text-base-content/60 text-sm">Pick a set to start listening.</p>
+    <svg class={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d={CONTROL_ICONS[name]} />
+    </svg>
+  );
+}
+
+/**
+ * The player bar, fixed to the bottom like Spotify's. Hidden until something plays.
+ * `hx-preserve` keeps this element (and its audio) across hx-boost page swaps; the
+ * behaviour is in client/player.ts.
+ */
+function PlayerBar() {
+  return (
+    <section
+      id="player"
+      hx-preserve="true"
+      hidden
+      data-state="paused"
+      class="bg-base-200 border-base-content/10 fixed inset-x-0 bottom-0 z-40 border-t px-3 py-2 shadow-2xl sm:px-6"
+      aria-label="Player"
+    >
+      <audio id="player-audio" preload="metadata" />
+      <div class="mx-auto grid max-w-[1400px] grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[1fr_2fr_1fr]">
+        <div class="flex min-w-0 items-center gap-3">
+          <div id="player-art" class="size-12 shrink-0 rounded-lg shadow" />
+          <div class="min-w-0">
+            <a
+              id="player-title"
+              class="plain block truncate font-semibold hover:underline"
+              href="#"
+            />
+            <p id="player-subtitle" class="text-base-content/60 truncate text-xs" />
+          </div>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <div class="flex items-center gap-2">
+            <button
+              id="player-prev"
+              type="button"
+              class="btn btn-ghost btn-circle btn-sm"
+              aria-label="Previous"
+            >
+              <ControlIcon name="previous" class="size-4" />
+            </button>
+            <button
+              id="player-toggle"
+              type="button"
+              class="btn btn-circle btn-primary"
+              aria-label="Play or pause"
+            >
+              <ControlIcon name="play" class="player-play size-5" />
+              <ControlIcon name="pause" class="player-pause size-5" />
+            </button>
+            <button
+              id="player-next"
+              type="button"
+              class="btn btn-ghost btn-circle btn-sm"
+              aria-label="Next"
+            >
+              <ControlIcon name="next" class="size-4" />
+            </button>
+          </div>
+          <div class="hidden w-full items-center gap-2 text-xs tabular-nums sm:flex">
+            <span id="player-elapsed" class="text-base-content/60 w-12 text-right">
+              0:00
+            </span>
+            <input
+              id="player-seek"
+              type="range"
+              min="0"
+              max="1000"
+              value="0"
+              class="range range-xs range-primary flex-1"
+              aria-label="Seek"
+            />
+            <span id="player-duration" class="text-base-content/60 w-12">
+              0:00
+            </span>
+          </div>
+        </div>
+        <div class="hidden items-center justify-end gap-2 sm:flex">
+          <ControlIcon name="volume" class="text-base-content/60 size-4" />
+          <input
+            id="player-volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value="1"
+            class="range range-xs w-28"
+            aria-label="Volume"
+          />
+        </div>
       </div>
-    </aside>
+    </section>
   );
 }
 
 export function Layout({ title, auth, query, children }: LayoutProps) {
   return (
     <Document title={title}>
-      <div class="mx-auto flex max-w-[1500px] gap-6 p-3 sm:p-6">
-        <div class="min-w-0 flex-1">
+      <div class="mx-auto max-w-[1400px] p-3 sm:p-6">
+        <div class="min-w-0">
           <header class="mb-6 flex items-center gap-2">
-            <a href="/" class="text-primary mr-1 text-sm font-black tracking-widest">
-              DSR
-            </a>
             {auth.canView ? (
               <form class="ui flex-1" action="/search" method="get" role="search">
                 <label class="input panel h-12 w-full rounded-2xl border-0">
@@ -200,8 +311,8 @@ export function Layout({ title, auth, query, children }: LayoutProps) {
           </header>
           <main>{children}</main>
         </div>
-        <NowPlayingPanel />
       </div>
+      <PlayerBar />
     </Document>
   );
 }

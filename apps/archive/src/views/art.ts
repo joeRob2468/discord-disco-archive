@@ -1,7 +1,14 @@
 /**
- * Placeholder artwork: a gradient derived from an ID, so a given session, set or DJ
- * always gets the same colours. Replaced by real images (DJ avatars) later.
+ * Artwork: uploaded images where there are any, else a gradient derived from an ID, so
+ * a given session, set or DJ always gets the same colours.
  */
+
+import type { SetSummary } from '../catalog/catalog.ts';
+
+export const imageUrl = (name: string): string => `/images/${encodeURIComponent(name)}`;
+
+/** A set's uploaded art: its own, else its album's cover (undefined: use a gradient). */
+export const setArt = (set: SetSummary): string | undefined => set.image ?? set.sessionImage;
 
 /** FNV-1a: a small, stable string hash. */
 function hash(seed: string): number {

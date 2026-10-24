@@ -32,6 +32,7 @@ const PUBLIC_PATHS = new Set([
   '/logout',
   '/assets/app.css',
   '/assets/htmx.min.js',
+  '/assets/player.js',
 ]);
 
 const require = createRequire(import.meta.url);
@@ -41,6 +42,11 @@ const ASSETS = [
     '/assets/app.css',
     fileURLToPath(new URL('../dist/app.css', import.meta.url)),
     'text/css; charset=utf-8',
+  ],
+  [
+    '/assets/player.js',
+    fileURLToPath(new URL('../dist/player.js', import.meta.url)),
+    'text/javascript; charset=utf-8',
   ],
   [
     '/assets/htmx.min.js',
@@ -62,7 +68,7 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
       try {
         return c.body(await readFile(file));
       } catch {
-        // dist/app.css is missing until `pnpm --filter @dsr/archive build:css` has run.
+        // dist/ is empty until `build:css` and `build:js` have run (or `dev`).
         return c.notFound();
       }
     });
