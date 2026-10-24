@@ -7,6 +7,7 @@ import type { AuthEnv } from '../auth/auth.ts';
 import type { Catalog } from '../catalog/catalog.ts';
 import { ActivityPage, NotFoundPage } from '../views/pages.tsx';
 import { formField, splitList } from './params.ts';
+import { setUrl } from '../views/links.ts';
 
 const ACTOR = 'admin';
 
@@ -80,7 +81,8 @@ export function adminRoutes(catalog: Catalog): Hono<AuthEnv> {
       },
       ACTOR,
     );
-    return redirectBack(c, `/sets/${encodeURIComponent(id)}`);
+    const set = catalog.getSet(id, true);
+    return redirectBack(c, set ? setUrl(set) : '/');
   });
 
   app.post('/streamers/:userId/edit', requireAdmin, async (c) => {

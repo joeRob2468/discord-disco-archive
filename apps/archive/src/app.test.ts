@@ -14,6 +14,9 @@ import {
 } from './test/fixtures.ts';
 import { setUuid } from './catalog/ids.ts';
 
+const setPage = (sessionId: string, setId: string): string =>
+  `/sessions/${sessionId}/sets/${setUuid(sessionId, setId)}`;
+
 const ORIGIN = 'http://localhost:3000';
 const SECRET = 'x'.repeat(32);
 const ADMIN_PASSWORD = 'admin-password-123';
@@ -65,36 +68,36 @@ describe('archive app', () => {
       '/',
       '/sessions',
       '/sessions/session-1',
-      '/sets/set-1',
+      setPage('session-1', 'set-1'),
+      '/search?q=owl',
       '/streamers',
       `/streamers/${DJ_A}`,
       '/tags',
-      '/?q=owl',
-      '/?session=00000000-0000-4000-8000-000000000000',
+      '/search?session=00000000-0000-4000-8000-000000000000',
     ])('renders %s', async (path) => {
       const response = await build().request(path);
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toMatch(/text\/html/);
     });
 
-    it('filters the home set list by search text, and redirects old search links', async () => {
-      const app = build();
-      const html = await (await app.request('/?q=caf')).text();
+    it('filters the set list by search text', async () => {
+      const html = await (await build().request('/search?q=caf')).text();
       const list = html.slice(html.indexOf('id="set-list"'));
       expect(list).toContain('Café Sunrise');
-      expect(list).toContain(`id="set-${setUuid('session-1', 'set-2')}"`);
-      expect(list).not.toContain(`id="set-${setUuid('session-1', 'set-1')}"`);
-      const redirect = await app.request('/search?q=caf');
-      expect(redirect.status).toBe(301);
-      expect(redirect.headers.get('location')).toBe('/?q=caf#sets');
+      expect(list).toContain(`href="${setPage('session-1', 'set-2')}"`);
+      expect(list).not.toContain(`href="${setPage('session-1', 'set-1')}"`);
     });
 
-    it('opens a shared set by its UUID', async () => {
-      const uuid = setUuid('session-1', 'set-1');
-      const response = await build().request(`/t/${uuid}`);
-      expect(response.status).toBe(200);
-      expect(await response.text()).toContain('Shared with you');
-      expect((await build().request('/t/not-a-uuid')).status).toBe(404);
+    it('serves sets under their session and redirects older set links there', async () => {
+      const app = build();
+      for (const old of ['/sets/set-1', `/t/${setUuid('session-1', 'set-1')}`]) {
+        const response = await app.request(old);
+        expect(response.status).toBe(301);
+        expect(response.headers.get('location')).toBe(setPage('session-1', 'set-1'));
+      }
+      // A set's UUID only resolves under its own session.
+      expect((await app.request(setPage('session-2', 'set-1'))).status).toBe(404);
+      expect((await app.request('/t/not-a-uuid')).status).toBe(404);
     });
 
     it('returns 404 for unknown sets and hides admin routes', async () => {
@@ -140,7 +143,7 @@ describe('archive app', () => {
       );
       await syncCatalog(db, recordings.dir);
       const app = build();
-      const page = await (await app.request('/sets/set-raw')).text();
+      const page = await (await app.request(setPage('session-raw', 'set-raw'))).text();
       expect(page).toContain('src="/media/set-raw/raw"');
       expect(page).toContain('not leveled yet');
       expect(page).toContain('href="/media/set-raw/raw?download=1"');
@@ -182,15 +185,15 @@ describe('archive app', () => {
         ),
       );
       expect(edit.status).toBe(303);
-      expect(edit.headers.get('location')).toBe('/sets/set-1');
+      expect(edit.headers.get('location')).toBe(setPage('session-1', 'set-1'));
 
       // Admin still sees it, with a badge; the public doesn't.
       const adminView = await (
-        await app.request('/sets/set-1', { headers: { Cookie: cookie } })
+        await app.request(setPage('session-1', 'set-1'), { headers: { Cookie: cookie } })
       ).text();
       expect(adminView).toContain('Spooky Mix');
       expect(adminView).toContain('hidden');
-      expect((await app.request('/sets/set-1')).status).toBe(404);
+      expect((await app.request(setPage('session-1', 'set-1'))).status).toBe(404);
 
       const activity = await (
         await app.request('/admin/activity', { headers: { Cookie: cookie } })
@@ -231,12 +234,13 @@ describe('archive app', () => {
     it('lets viewers in after login, but not into admin', async () => {
       const app = build({ ...env, ARCHIVE_ADMIN_PASSWORD: ADMIN_PASSWORD });
       const login = await app.request(
-        post('/login', { password: VIEWER_PASSWORD, next: '/sets/set-1' }),
+        post('/login', { password: VIEWER_PASSWORD, next: '/search' }),
       );
-      expect(login.headers.get('location')).toBe('/sets/set-1');
+      expect(login.headers.get('location')).toBe('/search');
       const cookie = cookieFrom(login);
 
-      expect((await app.request('/sets/set-1', { headers: { Cookie: cookie } })).status).toBe(200);
+      const page = setPage('session-1', 'set-1');
+      expect((await app.request(page, { headers: { Cookie: cookie } })).status).toBe(200);
       expect((await app.request('/admin/activity', { headers: { Cookie: cookie } })).status).toBe(
         404,
       );

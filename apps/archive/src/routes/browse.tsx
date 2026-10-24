@@ -1,102 +1,122 @@
 /**
- * Read-only pages. The home page holds the set list; the session, set and streamer pages
- * stay for admin edits until the admin panel replaces them.
+ * Read-only pages: home, search, sessions (as albums) and the sets inside them, DJs and
+ * tags. Sets are addressed under their session by UUID; old set links redirect there.
  */
 import { Hono } from 'hono';
 import type { AuthEnv, AuthState } from '../auth/auth.ts';
-import type { Catalog, SetSummary } from '../catalog/catalog.ts';
+import type { Catalog, SessionSummary } from '../catalog/catalog.ts';
 import { isUuid } from '../catalog/ids.ts';
-import { HomePage, homeUrl, type HomeData, type ListFilters } from '../views/home.tsx';
+import { AlbumPage, SetDetailPage } from '../views/album.tsx';
+import { HomePage, type Album } from '../views/home.tsx';
+import { setUrl, type SearchFilters } from '../views/links.ts';
 import {
   NotFoundPage,
-  SessionPage,
   SessionsPage,
-  SetPage,
   StreamerPage,
   StreamersPage,
   TagsPage,
 } from '../views/pages.tsx';
+import { SearchPage } from '../views/search.tsx';
 import { pageParam, snowflakeParam, textParam } from './params.ts';
 
 const RECENT_SESSIONS = 4;
 const POPULAR_SETS = 8;
 const POPULAR_DAYS = 30;
 
+/** A session is only worth showing with sets in it (an album without tracks is noise). */
+const hasSets = (session: SessionSummary, auth: AuthState): boolean =>
+  (auth.isAdmin ? session.totalSets : session.visibleSets) > 0;
+
 export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
 
-  function homeData(auth: AuthState, filters: ListFilters, shared?: SetSummary): HomeData {
-    const all = auth.isAdmin;
-    const session = filters.sessionId ? catalog.getSession(filters.sessionId, all) : undefined;
-    const streamer = filters.userId ? catalog.getStreamer(filters.userId, all) : undefined;
-    return {
-      sessions: catalog
-        .listSessions(1, all)
-        .items.slice(0, RECENT_SESSIONS)
-        .map((s) => ({ session: s, sets: catalog.listSessionSets(s.id, all) })),
-      streamers: catalog.listStreamers(all),
-      popular: catalog.popularSets(POPULAR_SETS, POPULAR_DAYS, all),
-      list: catalog.search({ ...filters, sessionId: session?.id, userId: streamer?.userId }, all),
-      filters,
-      filterLabels: { session: session?.title, streamer: streamer?.name },
-      shared,
-    };
-  }
-
-  const listFilters = (query: (key: string) => string | undefined): ListFilters => {
-    const session = textParam(query('session'), 64);
-    return {
-      q: textParam(query('q')),
-      sessionId: session && isUuid(session) ? session : undefined,
-      userId: snowflakeParam(query('streamer')),
-      page: pageParam(query('page')),
-    };
-  };
+  const albumOf = (session: SessionSummary, auth: AuthState): Album => ({
+    session,
+    sets: catalog.listSessionSets(session.id, auth.isAdmin),
+  });
 
   app.get('/', (c) => {
     const auth = c.var.auth;
-    const filters = listFilters((key) => c.req.query(key));
-    return c.html(<HomePage auth={auth} data={homeData(auth, filters)} />);
+    const sessions = catalog.listSessions(1, auth.isAdmin).items.filter((s) => hasSets(s, auth));
+    return c.html(
+      <HomePage
+        auth={auth}
+        data={{
+          albums: sessions.slice(0, RECENT_SESSIONS).map((s) => albumOf(s, auth)),
+          streamers: catalog.listStreamers(auth.isAdmin),
+          popular: catalog.popularSets(POPULAR_SETS, POPULAR_DAYS, auth.isAdmin),
+        }}
+      />,
+    );
   });
 
-  // A shared set: the home page with that set open at the top of the list.
-  app.get('/t/:uuid', (c) => {
+  app.get('/search', (c) => {
     const auth = c.var.auth;
-    const uuid = c.req.param('uuid');
-    const set = isUuid(uuid) ? catalog.getSetByUuid(uuid, auth.isAdmin) : undefined;
-    if (!set) return c.html(<NotFoundPage auth={auth} />, 404);
-    const filters = { sessionId: set.sessionId };
-    return c.html(<HomePage auth={auth} data={homeData(auth, filters, set)} />);
+    const session = textParam(c.req.query('session'), 64);
+    const filters: SearchFilters = {
+      q: textParam(c.req.query('q')),
+      sessionId: session && isUuid(session) ? session : undefined,
+      userId: snowflakeParam(c.req.query('streamer')),
+      page: pageParam(c.req.query('page')),
+    };
+    const sessionInfo = filters.sessionId
+      ? catalog.getSession(filters.sessionId, auth.isAdmin)
+      : undefined;
+    const streamer = filters.userId ? catalog.getStreamer(filters.userId, auth.isAdmin) : undefined;
+    const list = catalog.search(
+      { ...filters, sessionId: sessionInfo?.id, userId: streamer?.userId },
+      auth.isAdmin,
+    );
+    return c.html(
+      <SearchPage
+        auth={auth}
+        data={{ list, filters, labels: { session: sessionInfo?.title, streamer: streamer?.name } }}
+      />,
+    );
   });
 
   app.get('/sessions', (c) => {
     const auth = c.var.auth;
     const page = catalog.listSessions(pageParam(c.req.query('page')), auth.isAdmin);
-    return c.html(<SessionsPage auth={auth} page={page} />);
+    const items = page.items.filter((s) => hasSets(s, auth));
+    return c.html(<SessionsPage auth={auth} page={{ ...page, items }} />);
   });
 
   app.get('/sessions/:id', (c) => {
     const auth = c.var.auth;
     const session = catalog.getSession(c.req.param('id'), auth.isAdmin);
-    if (!session) return c.html(<NotFoundPage auth={auth} />, 404);
-    const sets = catalog.listSessionSets(session.id, auth.isAdmin);
-    return c.html(<SessionPage auth={auth} session={session} sets={sets} />);
+    if (!session || !hasSets(session, auth)) return c.html(<NotFoundPage auth={auth} />, 404);
+    return c.html(<AlbumPage auth={auth} album={albumOf(session, auth)} />);
   });
 
-  app.get('/sets/:id', (c) => {
+  app.get('/sessions/:id/sets/:uuid', (c) => {
     const auth = c.var.auth;
-    const set = catalog.getSet(c.req.param('id'), auth.isAdmin);
-    if (!set) return c.html(<NotFoundPage auth={auth} />, 404);
+    const uuid = c.req.param('uuid');
+    const set = isUuid(uuid) ? catalog.getSetByUuid(uuid, auth.isAdmin) : undefined;
+    if (set?.sessionId !== c.req.param('id')) {
+      return c.html(<NotFoundPage auth={auth} />, 404);
+    }
     const siblings = catalog.listSessionSets(set.sessionId, auth.isAdmin);
     const index = siblings.findIndex((s) => s.id === set.id);
     return c.html(
-      <SetPage
+      <SetDetailPage
         auth={auth}
         set={set}
         previous={index > 0 ? siblings[index - 1] : undefined}
         next={siblings[index + 1]}
       />,
     );
+  });
+
+  // Older set links: by recorder set ID, and the short share link.
+  app.get('/sets/:id', (c) => {
+    const set = catalog.getSet(c.req.param('id'), c.var.auth.isAdmin);
+    return set ? c.redirect(setUrl(set), 301) : c.html(<NotFoundPage auth={c.var.auth} />, 404);
+  });
+  app.get('/t/:uuid', (c) => {
+    const uuid = c.req.param('uuid');
+    const set = isUuid(uuid) ? catalog.getSetByUuid(uuid, c.var.auth.isAdmin) : undefined;
+    return set ? c.redirect(setUrl(set), 301) : c.html(<NotFoundPage auth={c.var.auth} />, 404);
   });
 
   app.get('/streamers', (c) => {
@@ -114,9 +134,6 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
     );
     return c.html(<StreamerPage auth={auth} streamer={streamer} sets={sets} />);
   });
-
-  // Search lives in the home page's set list now.
-  app.get('/search', (c) => c.redirect(homeUrl(listFilters((key) => c.req.query(key))), 301));
 
   app.get('/tags', (c) => {
     const auth = c.var.auth;

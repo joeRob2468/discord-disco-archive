@@ -15,16 +15,23 @@
 }
 
 /* App shell: soft colour glows behind frosted-glass panels. */
+@layer base {
+  /* On the root, not <body>: the root background paints beneath the fixed backdrop. */
+  html {
+    background-color: var(--color-base-300);
+  }
+}
 @layer components {
   .panel {
     @apply bg-base-200/70 border-base-content/5 border shadow-xl backdrop-blur-xl;
   }
+  /* Fixed to the viewport, so the glow covers the page however far it scrolls. */
   .backdrop {
     @apply pointer-events-none fixed inset-0 -z-10;
     background:
-      radial-gradient(40rem 30rem at 10% 0%, oklch(55% 0.2 300 / 0.35), transparent 70%),
-      radial-gradient(35rem 30rem at 90% 30%, oklch(65% 0.15 190 / 0.25), transparent 70%),
-      radial-gradient(40rem 30rem at 50% 100%, oklch(55% 0.18 330 / 0.2), transparent 70%),
+      radial-gradient(90vmax 70vmax at 0% 0%, oklch(50% 0.14 300 / 0.28), transparent 65%),
+      radial-gradient(80vmax 70vmax at 100% 35%, oklch(55% 0.1 200 / 0.2), transparent 65%),
+      radial-gradient(90vmax 70vmax at 40% 100%, oklch(50% 0.12 340 / 0.18), transparent 65%),
       var(--color-base-300);
   }
   .art {

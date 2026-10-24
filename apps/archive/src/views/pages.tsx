@@ -12,20 +12,14 @@ import type {
 } from '../catalog/catalog.ts';
 import {
   Avatar,
-  Downloads,
-  EditSessionForm,
-  EditSetForm,
   EditStreamerForm,
   Pager,
-  Player,
   SessionCard,
-  SetBadges,
   SetRow,
   StreamerRow,
-  Tags,
 } from './components.tsx';
-import { formatDateTime, formatDuration, plural } from './format.ts';
-import { Layout } from './layout.tsx';
+import { formatDateTime, plural } from './format.ts';
+import { BareLayout, Layout } from './layout.tsx';
 
 const withPage = (base: string, params: Record<string, string | undefined>) => (page: number) => {
   const query = new URLSearchParams();
@@ -45,86 +39,6 @@ export function SessionsPage({ auth, page }: { auth: AuthState; page: Page<Sessi
         ))}
       </div>
       <Pager page={page} href={withPage('/sessions', {})} />
-    </Layout>
-  );
-}
-
-export function SessionPage(props: {
-  auth: AuthState;
-  session: SessionSummary;
-  sets: SetSummary[];
-}) {
-  const { auth, session, sets } = props;
-  return (
-    <Layout title={session.title} auth={auth}>
-      <h1>
-        {session.title}
-        {session.hidden && <span class="badge warn">hidden</span>}
-        {session.missing && <span class="badge warn">missing on disk</span>}
-      </h1>
-      <p class="muted">
-        {formatDateTime(session.startedAt)} · #{session.channelName} · {plural(sets.length, 'set')}
-      </p>
-      {session.description && <p style="white-space: pre-line">{session.description}</p>}
-
-      <div class="rows">
-        {sets.map((set) => (
-          <SetRow set={set} auth={auth} showSession={false} />
-        ))}
-      </div>
-      {sets.length === 0 && <p class="muted">No sets to show.</p>}
-
-      {auth.isAdmin && <EditSessionForm session={session} />}
-    </Layout>
-  );
-}
-
-export function SetPage(props: {
-  auth: AuthState;
-  set: SetSummary;
-  previous: SetSummary | undefined;
-  next: SetSummary | undefined;
-}) {
-  const { auth, set, previous, next } = props;
-  return (
-    <Layout title={`${set.name}${set.title ? ` · ${set.title}` : ''}`} auth={auth}>
-      <div class="row" style="border: none; background: none; padding: 0">
-        <Avatar url={set.avatarUrl} large />
-        <div class="grow">
-          <h1>
-            <a href={`/streamers/${encodeURIComponent(set.userId)}`}>{set.name}</a>
-            <SetBadges set={set} />
-          </h1>
-          {set.title && <div>{set.title}</div>}
-          <div class="muted small">
-            <a href={`/sessions/${encodeURIComponent(set.sessionId)}`}>{set.sessionTitle}</a> ·{' '}
-            {formatDateTime(set.startedAt)}
-            {set.durationSeconds !== undefined && ` · ${formatDuration(set.durationSeconds)}`}
-          </div>
-          <Tags tags={set.tags} />
-        </div>
-      </div>
-
-      <Player set={set} />
-      <Downloads set={set} />
-
-      {set.description && (
-        <>
-          <h2>Notes</h2>
-          <p style="white-space: pre-line">{set.description}</p>
-        </>
-      )}
-
-      <nav class="pager" aria-label="Sets in this session">
-        {previous ? (
-          <a href={`/sets/${encodeURIComponent(previous.id)}`}>← {previous.name}</a>
-        ) : (
-          <span />
-        )}
-        {next ? <a href={`/sets/${encodeURIComponent(next.id)}`}>{next.name} →</a> : <span />}
-      </nav>
-
-      {auth.isAdmin && <EditSetForm set={set} />}
     </Layout>
   );
 }
@@ -245,12 +159,12 @@ export function ActivityPage({ auth, entries }: { auth: AuthState; entries: Audi
   );
 }
 
-export function LoginPage(props: { auth: AuthState; next: string; error?: string | undefined }) {
-  const { auth, next, error } = props;
+export function LoginPage(props: { next: string; error?: string | undefined }) {
+  const { next, error } = props;
   return (
-    <Layout title="Log in" auth={auth}>
-      <div class="flex min-h-[60vh] items-center justify-center">
-        <div class="card bg-base-200 border-base-300 w-full max-w-sm border shadow-xl">
+    <BareLayout title="Log in">
+      <div class="w-full max-w-sm">
+        <div class="card panel w-full rounded-3xl">
           <form class="ui card-body gap-4" method="post" action="/login">
             <div>
               <h1 class="card-title text-2xl">Stream Archive</h1>
@@ -290,7 +204,7 @@ export function LoginPage(props: { auth: AuthState; next: string; error?: string
           </form>
         </div>
       </div>
-    </Layout>
+    </BareLayout>
   );
 }
 

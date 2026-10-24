@@ -10,7 +10,7 @@ export function sessionRoutes(auth: Auth): Hono<AuthEnv> {
 
   app.get('/login', (c) => {
     if (!loginEnabled) return c.html(<NotFoundPage auth={c.var.auth} />, 404);
-    return c.html(<LoginPage auth={c.var.auth} next={safeNext(c.req.query('next'))} />);
+    return c.html(<LoginPage next={safeNext(c.req.query('next'))} />);
   });
 
   app.post('/login', async (c) => {
@@ -19,7 +19,7 @@ export function sessionRoutes(auth: Auth): Hono<AuthEnv> {
     const next = safeNext(formField(body, 'next'));
     const role = await auth.checkPassword(formField(body, 'password') ?? '');
     if (!role) {
-      return c.html(<LoginPage auth={c.var.auth} next={next} error="Wrong password." />, 401);
+      return c.html(<LoginPage next={next} error="Wrong password." />, 401);
     }
     await auth.login(c, role);
     return c.redirect(next, 303);
