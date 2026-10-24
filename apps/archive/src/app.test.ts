@@ -12,6 +12,7 @@ import {
   standardFixture,
   type RecordingsFixture,
 } from './test/fixtures.ts';
+import { setUuid } from './catalog/ids.ts';
 
 const ORIGIN = 'http://localhost:3000';
 const SECRET = 'x'.repeat(32);
@@ -68,18 +69,32 @@ describe('archive app', () => {
       '/streamers',
       `/streamers/${DJ_A}`,
       '/tags',
-      '/search?q=owl',
+      '/?q=owl',
+      '/?session=00000000-0000-4000-8000-000000000000',
     ])('renders %s', async (path) => {
       const response = await build().request(path);
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toMatch(/text\/html/);
     });
 
-    it('shows search results', async () => {
-      const html = await (await build().request('/search?q=caf')).text();
-      expect(html).toContain('Café Sunrise');
-      expect(html).toContain('href="/sets/set-2"');
-      expect(html).not.toContain('href="/sets/set-1"');
+    it('filters the home set list by search text, and redirects old search links', async () => {
+      const app = build();
+      const html = await (await app.request('/?q=caf')).text();
+      const list = html.slice(html.indexOf('id="set-list"'));
+      expect(list).toContain('Café Sunrise');
+      expect(list).toContain(`id="set-${setUuid('session-1', 'set-2')}"`);
+      expect(list).not.toContain(`id="set-${setUuid('session-1', 'set-1')}"`);
+      const redirect = await app.request('/search?q=caf');
+      expect(redirect.status).toBe(301);
+      expect(redirect.headers.get('location')).toBe('/?q=caf#sets');
+    });
+
+    it('opens a shared set by its UUID', async () => {
+      const uuid = setUuid('session-1', 'set-1');
+      const response = await build().request(`/t/${uuid}`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('Shared with you');
+      expect((await build().request('/t/not-a-uuid')).status).toBe(404);
     });
 
     it('returns 404 for unknown sets and hides admin routes', async () => {

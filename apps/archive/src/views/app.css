@@ -14,6 +14,24 @@
     light;
 }
 
+/* App shell: soft colour glows behind frosted-glass panels. */
+@layer components {
+  .panel {
+    @apply bg-base-200/70 border-base-content/5 border shadow-xl backdrop-blur-xl;
+  }
+  .backdrop {
+    @apply pointer-events-none fixed inset-0 -z-10;
+    background:
+      radial-gradient(40rem 30rem at 10% 0%, oklch(55% 0.2 300 / 0.35), transparent 70%),
+      radial-gradient(35rem 30rem at 90% 30%, oklch(65% 0.15 190 / 0.25), transparent 70%),
+      radial-gradient(40rem 30rem at 50% 100%, oklch(55% 0.18 330 / 0.2), transparent 70%),
+      var(--color-base-300);
+  }
+  .art {
+    @apply bg-base-300 relative overflow-hidden;
+  }
+}
+
 /*
  * Stage 1 of the UI rewrite: the existing page markup still uses these classes. They
  * map onto daisyUI until stage 2 rebuilds the pages with daisyUI components directly.
@@ -34,7 +52,7 @@
   h2 {
     @apply mt-8 mb-3 text-lg font-semibold;
   }
-  main a:not(.btn, .row, .button) {
+  main a:not(.btn, .row, .button, .plain) {
     @apply link link-primary no-underline hover:underline;
   }
   .cards {

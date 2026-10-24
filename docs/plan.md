@@ -254,6 +254,8 @@ The first UI was a plain server-rendered site. It's being rebuilt before deploy,
 - **Tables with stats:** sessions, streamers and sets as sortable, filterable tables (via htmx): set counts, total time played, first and last played, durations.
 - **Admin panel:** rename streamers and edit set and session titles and tags (these routes already exist), hide sets, see failed and processing sets, storage use, and the activity log.
 
+**Redesigned home page (2026-10-23, user's reference image):** a dashboard look (glass panels on a glowing dark backdrop, icon rail, large search, gradient hero, DJ avatar row, recent session cards, popular sets, and a "Now playing" side panel), followed by one searchable list of every set. There are no per-set pages: sessions and DJs filter the list (`/?session=<uuid>`, `/?streamer=<id>`), and `/t/<set uuid>` opens a shared set. Set UUIDs are version 5 UUIDs of the session and set IDs, so they survive a database rebuild. "Popular" is play counts (last 30 days, then all time). Artwork is placeholder gradients seeded by ID until DJ avatars are captured.
+
 Stages, each stopped for testing: (1) build setup, layout, theme, login; (2) the existing pages restyled as tables and cards; (3) the player and queue; (4) the admin panel and stats.
 
 ## Deployment (home server)

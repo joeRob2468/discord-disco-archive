@@ -5,7 +5,6 @@ import type { AuthState } from '../auth/auth.ts';
 import type {
   AuditEntry,
   Page,
-  SearchParams,
   SessionSummary,
   SetSummary,
   StreamerSummary,
@@ -34,53 +33,6 @@ const withPage = (base: string, params: Record<string, string | undefined>) => (
   query.set('page', String(page));
   return `${base}?${query.toString()}`;
 };
-
-export function HomePage(props: {
-  auth: AuthState;
-  sessions: SessionSummary[];
-  recent: SetSummary[];
-  tags: TagCount[];
-}) {
-  const { auth, sessions, recent, tags } = props;
-  return (
-    <Layout title="Home" auth={auth}>
-      <h1>Stream Archive</h1>
-      <p class="muted">Recorded DJ sets from our Discord sessions.</p>
-
-      <h2>Latest sessions</h2>
-      {sessions.length === 0 ? (
-        <p class="muted">Nothing recorded yet.</p>
-      ) : (
-        <div class="cards">
-          {sessions.map((session) => (
-            <SessionCard session={session} />
-          ))}
-        </div>
-      )}
-      <p>
-        <a href="/sessions">All sessions →</a>
-      </p>
-
-      {recent.length > 0 && (
-        <>
-          <h2>Recent sets</h2>
-          <div class="rows">
-            {recent.map((set) => (
-              <SetRow set={set} auth={auth} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {tags.length > 0 && (
-        <>
-          <h2>Tags</h2>
-          <Tags tags={tags.slice(0, 30).map((t) => t.tag)} />
-        </>
-      )}
-    </Layout>
-  );
-}
 
 export function SessionsPage({ auth, page }: { auth: AuthState; page: Page<SessionSummary> }) {
   return (
@@ -232,75 +184,6 @@ export function StreamerPage(props: {
       <Pager page={sets} href={withPage(`/streamers/${encodeURIComponent(streamer.userId)}`, {})} />
 
       {auth.isAdmin && <EditStreamerForm streamer={streamer} />}
-    </Layout>
-  );
-}
-
-export function SearchPage(props: {
-  auth: AuthState;
-  params: SearchParams;
-  results: Page<SetSummary>;
-  streamers: StreamerSummary[];
-  tags: TagCount[];
-}) {
-  const { auth, params, results, streamers, tags } = props;
-  const filters = {
-    q: params.q,
-    tag: params.tag,
-    streamer: params.userId,
-    from: params.from,
-    to: params.to,
-  };
-  return (
-    <Layout title="Search" auth={auth} query={params.q}>
-      <h1>Search</h1>
-      <form class="filters" action="/search" method="get">
-        <label>
-          Words
-          <input type="search" name="q" value={params.q ?? ''} placeholder="DJ, title, notes…" />
-        </label>
-        <label>
-          Streamer
-          <select name="streamer">
-            <option value="">Anyone</option>
-            {streamers.map((s) => (
-              <option value={s.userId} selected={s.userId === params.userId}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Tag
-          <select name="tag">
-            <option value="">Any</option>
-            {tags.map((t) => (
-              <option value={t.tag} selected={t.tag === params.tag}>
-                {t.tag} ({t.count})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          From
-          <input type="date" name="from" value={params.from ?? ''} />
-        </label>
-        <label>
-          To
-          <input type="date" name="to" value={params.to ?? ''} />
-        </label>
-        <div>
-          <button type="submit">Search</button>
-        </div>
-      </form>
-
-      <p class="muted">{plural(results.total, 'result')}</p>
-      <div class="rows">
-        {results.items.map((set) => (
-          <SetRow set={set} auth={auth} />
-        ))}
-      </div>
-      <Pager page={results} href={withPage('/search', filters)} />
     </Layout>
   );
 }

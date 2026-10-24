@@ -1,11 +1,14 @@
-/** Read-only pages: home, sessions, sets, streamers, search, tags. */
+/**
+ * Read-only pages. The home page holds the set list; the session, set and streamer pages
+ * stay for admin edits until the admin panel replaces them.
+ */
 import { Hono } from 'hono';
-import type { AuthEnv } from '../auth/auth.ts';
-import type { Catalog } from '../catalog/catalog.ts';
+import type { AuthEnv, AuthState } from '../auth/auth.ts';
+import type { Catalog, SetSummary } from '../catalog/catalog.ts';
+import { isUuid } from '../catalog/ids.ts';
+import { HomePage, homeUrl, type HomeData, type ListFilters } from '../views/home.tsx';
 import {
-  HomePage,
   NotFoundPage,
-  SearchPage,
   SessionPage,
   SessionsPage,
   SetPage,
@@ -13,21 +16,57 @@ import {
   StreamersPage,
   TagsPage,
 } from '../views/pages.tsx';
-import { dateParam, pageParam, snowflakeParam, textParam } from './params.ts';
+import { pageParam, snowflakeParam, textParam } from './params.ts';
+
+const RECENT_SESSIONS = 4;
+const POPULAR_SETS = 8;
+const POPULAR_DAYS = 30;
 
 export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
 
+  function homeData(auth: AuthState, filters: ListFilters, shared?: SetSummary): HomeData {
+    const all = auth.isAdmin;
+    const session = filters.sessionId ? catalog.getSession(filters.sessionId, all) : undefined;
+    const streamer = filters.userId ? catalog.getStreamer(filters.userId, all) : undefined;
+    return {
+      sessions: catalog
+        .listSessions(1, all)
+        .items.slice(0, RECENT_SESSIONS)
+        .map((s) => ({ session: s, sets: catalog.listSessionSets(s.id, all) })),
+      streamers: catalog.listStreamers(all),
+      popular: catalog.popularSets(POPULAR_SETS, POPULAR_DAYS, all),
+      list: catalog.search({ ...filters, sessionId: session?.id, userId: streamer?.userId }, all),
+      filters,
+      filterLabels: { session: session?.title, streamer: streamer?.name },
+      shared,
+    };
+  }
+
+  const listFilters = (query: (key: string) => string | undefined): ListFilters => {
+    const session = textParam(query('session'), 64);
+    return {
+      q: textParam(query('q')),
+      sessionId: session && isUuid(session) ? session : undefined,
+      userId: snowflakeParam(query('streamer')),
+      page: pageParam(query('page')),
+    };
+  };
+
   app.get('/', (c) => {
     const auth = c.var.auth;
-    return c.html(
-      <HomePage
-        auth={auth}
-        sessions={catalog.listSessions(1, auth.isAdmin).items.slice(0, 6)}
-        recent={catalog.recentSets(8, auth.isAdmin)}
-        tags={catalog.listTags(auth.isAdmin)}
-      />,
-    );
+    const filters = listFilters((key) => c.req.query(key));
+    return c.html(<HomePage auth={auth} data={homeData(auth, filters)} />);
+  });
+
+  // A shared set: the home page with that set open at the top of the list.
+  app.get('/t/:uuid', (c) => {
+    const auth = c.var.auth;
+    const uuid = c.req.param('uuid');
+    const set = isUuid(uuid) ? catalog.getSetByUuid(uuid, auth.isAdmin) : undefined;
+    if (!set) return c.html(<NotFoundPage auth={auth} />, 404);
+    const filters = { sessionId: set.sessionId };
+    return c.html(<HomePage auth={auth} data={homeData(auth, filters, set)} />);
   });
 
   app.get('/sessions', (c) => {
@@ -76,26 +115,8 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
     return c.html(<StreamerPage auth={auth} streamer={streamer} sets={sets} />);
   });
 
-  app.get('/search', (c) => {
-    const auth = c.var.auth;
-    const params = {
-      q: textParam(c.req.query('q')),
-      tag: textParam(c.req.query('tag'), 32),
-      userId: snowflakeParam(c.req.query('streamer')),
-      from: dateParam(c.req.query('from')),
-      to: dateParam(c.req.query('to')),
-      page: pageParam(c.req.query('page')),
-    };
-    return c.html(
-      <SearchPage
-        auth={auth}
-        params={params}
-        results={catalog.search(params, auth.isAdmin)}
-        streamers={catalog.listStreamers(auth.isAdmin)}
-        tags={catalog.listTags(auth.isAdmin)}
-      />,
-    );
-  });
+  // Search lives in the home page's set list now.
+  app.get('/search', (c) => c.redirect(homeUrl(listFilters((key) => c.req.query(key))), 301));
 
   app.get('/tags', (c) => {
     const auth = c.var.auth;
