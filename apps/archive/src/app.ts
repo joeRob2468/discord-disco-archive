@@ -89,7 +89,15 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
 
   app.route('/', sessionRoutes(auth));
   app.route('/', browseRoutes(catalog));
-  app.route('/', adminRoutes(catalog, imagesDir(config.dataDir), config.recordingsDir));
+  app.route(
+    '/',
+    adminRoutes(
+      catalog,
+      imagesDir(config.dataDir),
+      config.recordingsDir,
+      logger?.child({ module: 'admin' }),
+    ),
+  );
   app.route('/', mediaRoutes(catalog, config.recordingsDir, imagesDir(config.dataDir)));
 
   app.onError((error, c) => {

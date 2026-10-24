@@ -24,7 +24,7 @@ _Last updated: 2026-10-23 (session 3)_
 | 5   | Post-processing       | ✅ done            | After each set: trim ends, loudnorm measurement, fixed gain + oversampled true-peak limiter into a FLAC master, MP3 + M4A, `ready`/`failed`, `setlist.csv`. Verified live: sets processed within ~10 s of ending, all at −14.0 LUFS. `reprocess.ts` re-runs a session.                        |
 | 6   | Video                 | ⏸️ deferred        | Tabled on 2026-10-23 as a future optimisation; audio-only for now. Still open when it's picked up: x11grab capture, full-screen stream, the `--no-sandbox` info bar.                                                                                                                          |
 | 7   | Archive site          | 🧪 merged, testing | On `main`. Runs locally against the real recordings: browse, streamers, search, set pages, M4A player with range requests, MP3/FLAC/M4A downloads, raw WAV playback and download until leveling finishes. Not yet: the Docker image, admin edits on real data.                                |
-| 8   | Deploy to home server | 🧪 deployed        |                                                                                                                                                                                                                                                                                               |
+| 8   | Deploy to home server | ✅ done            |                                                                                                                                                                                                                                                                                               |
 | 9   | Hardening             | ⬜                 |                                                                                                                                                                                                                                                                                               |
 
 ## Implemented on `main`
@@ -75,11 +75,11 @@ daisyUI 5 + Tailwind 4 + htmx, on the existing server-rendered architecture; pla
 - **Stage 2 done (2026-10-23):** (2a) set UUIDs (v5 of session and set ID, stable across rebuilds), a plays table, popular and session-filter queries; (2b) the new shell (icon rail, big search, "Now playing" placeholder panel, glowing backdrop) and home page (hero, DJ row, recent session cards, popular sets, live-filtered set list with removable filter chips; rows expand to play, download, copy link, and Edit for admins). `/search` redirects into the list. The old session, set and streamer pages remain only for admin edits until stage 4. Checked in Chromium at 1500 px and 390 px, including htmx filtering with and without a session filter.
 - **Stage 1 done (2026-10-23):** Tailwind 4.3 + daisyUI 5.7 built by the Tailwind CLI (`build:css`; `dev` watches it), htmx 2.0 with `hx-boost` (error pages swap in too), navbar with a phone drawer, dark default with a remembered light toggle, login card. The old page classes are mapped onto daisyUI in `app.css` until stage 2. Checked in Chromium at desktop and phone widths. Not yet: the archive Docker image (it now has a CSS build stage), and real passwords in `.env` (`ARCHIVE_ADMIN_PASSWORD` 12+ characters, `ARCHIVE_SESSION_SECRET` 32+).
 
-## Milestone 8 (deploy): deployed, awaiting DNS and a test event
+## Milestone 8 (deploy): done
 
 Deployed on 2026-10-23 to `~/.services/discord-stream-recorder` on the server, cloned from the private GitHub repo with a read-only deploy key (`github-dsr` host alias). Both containers run; the archive is healthy and reachable through Traefik with a valid certificate (checked from the server with `--resolve`); noVNC is on `127.0.0.1:6080` only. The recorder started logged in from the copied Firefox profile (stale `lock` files removed). Data starts fresh. The local recorder is stopped and must stay stopped (same account).
 
-Left: the Cloudflare CNAME `archive` → `media` (DNS only) and the LAN override (user), then a test `/record` event and a look at the result in the archive.
+DNS: CNAME `archive` → `media`, DNS only (checked against 1.1.1.1: not proxied), plus the LAN override; `https://archive.<domain>` works from the LAN. Test event on 2026-10-23: one set captured on the server with **no clock drift** ("capture duration ok", unlike WSL), leveled 2.8 s after it ended into FLAC + MP3 only; the user confirmed playback and downloads, then deleted the session from the archive (folder and catalog rows gone). Admin deletes are now logged (`set deleted`, `session deleted`, `delete refused`). Not yet checked: access from outside the LAN.
 
 ## Deploy prep (2026-10-23)
 
@@ -96,7 +96,7 @@ Chromium plays Discord's stream audio in mono, so the recorder now uses Firefox 
 
 ## Dev environment state (end of session 2, 2026-10-23)
 
-- **Resume here:** milestone 8 is deployed; finish it with DNS and a test event (see "Milestone 8" above), then milestone 9 (hardening). Earlier note: See "Next: archive UI rewrite" above. Starting the archive migrates `docker-data/archive/archive.db` to schema v4.
+- **Resume here:** milestone 9 (hardening). Milestone 8 is done (see above). Earlier note: See "Next: archive UI rewrite" above. Starting the archive migrates `docker-data/archive/archive.db` to schema v4.
 - The recorder runs in Docker (`docker compose up -d recorder`, currently stopped); `/record` works from the container. It uses **Firefox** (`BROWSER_CHANNEL=firefox` in `.env`), logged in as "Recorder Account" in `docker-data/recorder/profile-firefox`, with Discord notification sounds disabled. The old Chrome profile is in `docker-data/recorder/profile`.
 - `.env` is filled in (bot token, guild ID, recorder user ID, `COMMAND_DEFAULT_PERMISSION=Everyone`, `VNC_PASSWORD`, `PUID`/`PGID` 1000, and the archive's viewer and admin passwords and session secret). Never print it.
 - The bot application is "Recorder Bot" (private), invited with View Channels + Send Messages. Test server: the user's; test voice channel: "👻Halloween Disco👻" (formerly "Test Room"). Test accounts: Val Mason (desktop client) and 🎃 (web client).

@@ -80,6 +80,10 @@ The archive syncs on file changes and every `ARCHIVE_SYNC_INTERVAL_SECONDS`. `do
 
 Admin → Overview shows storage by kind. Raw captures (about 1.3 GB/h) go 48 h after leveling; the recorder logs `retention: removed files` when its hourly sweep deletes them. Failed sets keep their raw capture until fixed or deleted from the archive's admin pages.
 
+### Who deleted what
+
+Admin → Activity lists every edit and delete. Permanent deletes are also in the archive log: `docker compose logs archive | grep -E 'set deleted|session deleted|delete refused'` (with the set or session, its folder, and whether it was forced).
+
 ### The archive database is lost or corrupted
 
 Stop the archive, move `archive.db*` aside and start it: it rebuilds the catalog from every `session.json`. Edits (titles, tags, archive state, order, images, plays) are lost unless restored from a backup.

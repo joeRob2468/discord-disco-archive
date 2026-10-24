@@ -6,7 +6,7 @@
  */
 import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { setStatusSchema } from '@dsr/core';
+import { setStatusSchema, type Logger } from '@dsr/core';
 import { safeNext, type AuthEnv } from '../auth/auth.ts';
 import { SET_SORTS, type Catalog, type ImageEntity } from '../catalog/catalog.ts';
 import { deleteImage, IMAGE_MAX_BYTES, ImageError, saveImage } from '../images.ts';
@@ -72,6 +72,7 @@ export function adminRoutes(
   catalog: Catalog,
   imagesDir: string,
   recordingsDir: string,
+  logger?: Logger,
 ): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
 
@@ -150,6 +151,7 @@ export function adminRoutes(
   /** Run a permanent delete; a refusal (still recording) becomes a message page. */
   async function deleting(
     c: Context<AuthEnv>,
+    context: Record<string, unknown>,
     run: () => Promise<void>,
   ): Promise<Response | undefined> {
     try {
@@ -157,6 +159,7 @@ export function adminRoutes(
       return undefined;
     } catch (error) {
       if (!(error instanceof DeleteError)) throw error;
+      logger?.warn({ ...context, reason: error.message }, 'delete refused');
       return c.html(
         <MessagePage auth={c.var.auth} title="Not deleted" message={error.message} />,
         409,
@@ -169,11 +172,21 @@ export function adminRoutes(
     if (!set) return c.html(<NotFoundPage auth={c.var.auth} />, 404);
     const body = await c.req.parseBody();
     const force = formField(body, 'force') === '1';
-    const refused = await deleting(c, () =>
+    // Permanent deletes are logged as well as audited, so they show in the container logs.
+    const context = {
+      setId: set.id,
+      sessionId: set.sessionId,
+      dir: set.sessionDir,
+      name: set.title ?? set.name,
+      force,
+    };
+    const refused = await deleting(c, context, () =>
       deleteSetFiles(recordingsDir, set.sessionDir, set.id, force),
     );
     if (refused) return refused;
-    for (const image of catalog.deleteSet(set.id, ACTOR)) await deleteImage(imagesDir, image);
+    const images = catalog.deleteSet(set.id, ACTOR);
+    for (const image of images) await deleteImage(imagesDir, image);
+    logger?.info({ ...context, files: Object.values(set.files), images }, 'set deleted');
     return redirectBack(c, body, sessionUrl(set.sessionId));
   });
 
@@ -182,13 +195,20 @@ export function adminRoutes(
     if (!session) return c.html(<NotFoundPage auth={c.var.auth} />, 404);
     const body = await c.req.parseBody();
     const force = formField(body, 'force') === '1';
-    const refused = await deleting(c, () =>
+    const context = {
+      sessionId: session.id,
+      dir: session.dir,
+      title: session.title,
+      sets: session.totalSets,
+      force,
+    };
+    const refused = await deleting(c, context, () =>
       deleteSessionFolder(recordingsDir, session.dir, session.endedAt !== undefined, force),
     );
     if (refused) return refused;
-    for (const image of catalog.deleteSession(session.id, ACTOR)) {
-      await deleteImage(imagesDir, image);
-    }
+    const images = catalog.deleteSession(session.id, ACTOR);
+    for (const image of images) await deleteImage(imagesDir, image);
+    logger?.info({ ...context, images }, 'session deleted');
     return redirectBack(c, body, '/sessions');
   });
 
