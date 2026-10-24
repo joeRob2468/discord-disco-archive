@@ -138,6 +138,33 @@ describe('catalog', () => {
     });
   });
 
+  describe('album order', () => {
+    const order = () => catalog.listSessionSets('session-1', true).map((set) => set.id);
+
+    it('moves sets within their album, survives a sync, and resets', async () => {
+      expect(order()).toEqual(['set-1', 'set-2']);
+      catalog.moveSet('session-1', 'set-2', -1, 'test');
+      expect(order()).toEqual(['set-2', 'set-1']);
+      expect(catalog.getSet('set-2', true)).toMatchObject({ position: 0, reordered: true });
+      // Moving past either end does nothing.
+      catalog.moveSet('session-1', 'set-2', -1, 'test');
+      expect(order()).toEqual(['set-2', 'set-1']);
+
+      await syncCatalog(db, recordings.dir);
+      expect(order()).toEqual(['set-2', 'set-1']);
+      expect(catalog.recentAudit(1)[0]?.changes['order']).toEqual({
+        from: ['set-1', 'set-2'],
+        to: ['set-2', 'set-1'],
+      });
+
+      catalog.resetSetOrder('session-1', 'test');
+      expect(order()).toEqual(['set-1', 'set-2']);
+      expect(() => {
+        catalog.moveSet('session-1', 'set-3', 1, 'test');
+      }).toThrow(NotFoundError);
+    });
+  });
+
   describe('sync', () => {
     it('imports sessions newest first, with titles falling back to the channel name', () => {
       const page = catalog.listSessions(1, false);

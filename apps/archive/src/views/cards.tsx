@@ -70,6 +70,32 @@ export function StatusBadges({ set }: { set: SetSummary }) {
   );
 }
 
+function MoveButtons(props: { set: SetSummary; first: boolean; last: boolean; next: string }) {
+  const { set, first, last, next } = props;
+  const button = (move: 'up' | 'down', disabled: boolean) => (
+    <form method="post" action={`/sessions/${encodeURIComponent(set.sessionId)}/order`}>
+      <input type="hidden" name="set" value={set.id} />
+      <input type="hidden" name="move" value={move} />
+      <input type="hidden" name="next" value={next} />
+      <button
+        class="btn btn-ghost btn-xs btn-square"
+        type="submit"
+        disabled={disabled}
+        aria-label={move === 'up' ? 'Move earlier' : 'Move later'}
+        title={move === 'up' ? 'Move earlier' : 'Move later'}
+      >
+        {move === 'up' ? '↑' : '↓'}
+      </button>
+    </form>
+  );
+  return (
+    <div class="flex flex-col">
+      {button('up', first)}
+      {button('down', last)}
+    </div>
+  );
+}
+
 /**
  * One set as a list row: a play button (playing `queue` from this set), the set's title,
  * which expands the row into an inline set page (a real link, so it also opens in a new
@@ -81,12 +107,15 @@ export function SetListRow({
   queue,
   number,
   current = false,
+  reorder,
 }: {
   set: SetSummary;
   queue: Track[];
   number?: number;
   /** The set whose page this is: highlighted. */
   current?: boolean;
+  /** Admins on the album page: move buttons, disabled at the ends. */
+  reorder?: { first: boolean; last: boolean; next: string } | undefined;
 }) {
   const track = queue.find((t) => t.uuid === set.uuid);
   return (
@@ -137,6 +166,7 @@ export function SetListRow({
           {formatDuration(set.durationSeconds)}
         </span>
         {track && <QueueButton tracks={[track]} />}
+        {reorder && <MoveButtons set={set} {...reorder} />}
       </div>
       <div data-set-inline hidden />
     </div>

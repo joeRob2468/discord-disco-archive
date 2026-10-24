@@ -47,7 +47,10 @@ export interface SetSummary {
   sessionStartedAt: string;
   sessionDir: string;
   userId: string;
+  /** Place in its album: the admin's order if set, else start time. */
   position: number;
+  /** Whether an admin reordered this set. */
+  reordered: boolean;
   /** Effective name: set edit, then streamer edit, then the recorded display name. */
   name: string;
   recordedName: string;
@@ -245,6 +248,7 @@ interface SetRow {
   session_dir: string;
   user_id: string;
   position: number;
+  reordered: number;
   name: string;
   recorded_name: string;
   edited_name: string | null;
@@ -318,6 +322,7 @@ function toSet(row: SetRow): SetSummary {
     sessionDir: row.session_dir,
     userId: row.user_id,
     position: row.position,
+    reordered: row.reordered === 1,
     name: row.name,
     recordedName: row.recorded_name,
     editedName: opt(row.edited_name),
@@ -452,7 +457,7 @@ export class Catalog {
     const rows = this.#db
       .prepare(
         `SELECT * FROM set_view WHERE session_id = @sessionId AND (@all OR NOT unlisted)
-         ORDER BY position`,
+         ORDER BY position, started_at`,
       )
       .all({ sessionId, all: includeUnlisted ? 1 : 0 }) as SetRow[];
     return rows.map(toSet);
@@ -782,6 +787,41 @@ export class Catalog {
   }
 
   /**
+   * Move a set one place earlier (`-1`) or later (`1`) in its album. Every set in the
+   * session gets an explicit place, so the order no longer follows start times.
+   */
+  moveSet(sessionId: string, setId: string, delta: -1 | 1, actor: string): void {
+    const ids = this.#albumOrder(sessionId);
+    const from = ids.indexOf(setId);
+    if (from < 0) throw new NotFoundError('set', setId);
+    const to = from + delta;
+    if (to < 0 || to >= ids.length) return;
+    const next = [...ids];
+    [next[from], next[to]] = [ids[to] ?? setId, setId];
+    this.#db.transaction(() => {
+      const update = this.#db.prepare(`UPDATE sets SET album_position = ? WHERE id = ?`);
+      next.forEach((id, position) => update.run(position, id));
+      this.#audit(actor, 'session', sessionId, { order: ids }, { order: next });
+    })();
+  }
+
+  /** Back to the recorder's order (by start time). */
+  resetSetOrder(sessionId: string, actor: string): void {
+    const ids = this.#albumOrder(sessionId);
+    if (ids.length === 0) throw new NotFoundError('session', sessionId);
+    this.#db.transaction(() => {
+      this.#db.prepare(`UPDATE sets SET album_position = NULL WHERE session_id = ?`).run(sessionId);
+      this.#audit(
+        actor,
+        'session',
+        sessionId,
+        { order: ids },
+        { order: this.#albumOrder(sessionId) },
+      );
+    })();
+  }
+
+  /**
    * Set or clear the uploaded image of a DJ, session or set. Returns the previous file
    * name, so the caller can delete the file once nothing uses it.
    */
@@ -819,6 +859,14 @@ export class Catalog {
   }
 
   // --- Helpers ----------------------------------------------------------------------------
+
+  /** Every set of a session (hidden ones too), in album order. */
+  #albumOrder(sessionId: string): string[] {
+    return this.#db
+      .prepare(`SELECT id FROM set_view WHERE session_id = ? ORDER BY position, started_at`)
+      .pluck()
+      .all(sessionId) as string[];
+  }
 
   #setIds(where: string, value: string): string[] {
     return this.#db.prepare(`SELECT id FROM sets WHERE ${where}`).pluck().all(value) as string[];

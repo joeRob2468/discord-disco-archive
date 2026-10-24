@@ -142,6 +142,19 @@ export function adminRoutes(catalog: Catalog, imagesDir: string): Hono<AuthEnv> 
     ),
   );
 
+  // Reorder an album: `move=up|down` with `set=<id>`, or `move=reset`.
+  app.post('/sessions/:id/order', requireAdmin, async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.parseBody();
+    const move = formField(body, 'move');
+    const setId = formField(body, 'set');
+    if (move === 'reset') catalog.resetSetOrder(id, ACTOR);
+    else if ((move === 'up' || move === 'down') && setId) {
+      catalog.moveSet(id, setId, move === 'up' ? -1 : 1, ACTOR);
+    }
+    return redirectBack(c, body, sessionUrl(id));
+  });
+
   app.post(
     '/sets/:id/edit',
     requireAdmin,

@@ -397,6 +397,27 @@ describe('archive app', () => {
       expect(page).toContain(`<dialog id="edit-streamer-${DJ_A}"`);
     });
 
+    it('reorders an album', async () => {
+      const app = build(adminEnv);
+      const cookie = await loginAsAdmin(app);
+      const move = await app.request(
+        post(
+          '/sessions/session-1/order',
+          { set: 'set-2', move: 'up', next: '/sessions/session-1' },
+          cookie,
+        ),
+      );
+      expect(move.headers.get('location')).toBe('/sessions/session-1');
+      const album = await (
+        await app.request('/sessions/session-1', { headers: { Cookie: cookie } })
+      ).text();
+      expect(album.indexOf('Café Sunrise')).toBeLessThan(album.indexOf('Night Owl'));
+      expect(album).toContain('Back to recorded order');
+      expect((await app.request(post('/sessions/session-1/order', { move: 'reset' }))).status).toBe(
+        404,
+      );
+    });
+
     it('rejects cross-site form posts', async () => {
       const app = build(adminEnv);
       const cookie = await loginAsAdmin(app);

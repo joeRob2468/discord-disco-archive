@@ -82,10 +82,34 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
       </section>
 
       <section class="mt-8">
-        <h2 class="mb-3 text-xl font-bold">Sets</h2>
+        <div class="mb-3 flex items-center justify-between gap-2">
+          <h2 class="text-xl font-bold">Sets</h2>
+          {auth.isAdmin && sets.some((set) => set.reordered) && (
+            <form method="post" action={`${sessionUrl(session.id)}/order`}>
+              <input type="hidden" name="move" value="reset" />
+              <input type="hidden" name="next" value={sessionUrl(session.id)} />
+              <button class="btn btn-ghost btn-sm" type="submit">
+                Back to recorded order
+              </button>
+            </form>
+          )}
+        </div>
         <div class="flex flex-col gap-2">
           {sets.map((set, index) => (
-            <SetListRow set={set} queue={queue} number={index + 1} />
+            <SetListRow
+              set={set}
+              queue={queue}
+              number={index + 1}
+              reorder={
+                auth.isAdmin
+                  ? {
+                      first: index === 0,
+                      last: index === sets.length - 1,
+                      next: sessionUrl(session.id),
+                    }
+                  : undefined
+              }
+            />
           ))}
         </div>
       </section>
