@@ -40,8 +40,14 @@ export const streamSetSchema = z.object({
   avatarUrl: z.url().optional(),
   startedAt: timestampSchema,
   endedAt: timestampSchema.optional(),
-  /** True when the recording missed the start or end of the stream. */
+  /** True when the recording missed music at the start or end of the set. */
   partial: z.boolean(),
+  /**
+   * Which ends recording cut instead of the DJ: the start when they were already live,
+   * the end on `/record stop` or a drop. Post-processing turns these into `partial` only
+   * if there was sound at that end. Absent on sets recorded before it existed.
+   */
+  cut: z.object({ start: z.boolean(), end: z.boolean() }).optional(),
   /** Hidden sets are kept on disk but not listed by the archive. */
   hidden: z.boolean().default(false),
   status: setStatusSchema,

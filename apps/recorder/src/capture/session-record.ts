@@ -131,6 +131,7 @@ export class SessionRecord {
         displayName: target.displayName,
         startedAt: startedAt.toISOString(),
         partial,
+        cut: { start: partial, end: false },
         hidden: false,
         status: 'recording',
         files: { rawAudio },
@@ -151,15 +152,24 @@ export class SessionRecord {
       ...set,
       endedAt: endedAt.toISOString(),
       partial: set.partial || partial,
+      ...(set.cut && { cut: { ...set.cut, end: set.cut.end || partial } }),
       status: error === undefined ? 'processing' : 'failed',
       ...(error !== undefined && { error }),
     }));
   }
 
-  /** Post-processing finished: add its files and mark the set playable. */
-  completeSet(setId: string, files: SetFiles): Promise<void> {
+  /**
+   * Post-processing finished: add its files and mark the set playable, with `partial`
+   * settled from the audio if given.
+   */
+  completeSet(setId: string, files: SetFiles, partial?: boolean): Promise<void> {
     return this.#updateSet(setId, (set) => {
-      const next: StreamSet = { ...set, status: 'ready', files: { ...set.files, ...files } };
+      const next: StreamSet = {
+        ...set,
+        status: 'ready',
+        files: { ...set.files, ...files },
+        ...(partial !== undefined && { partial }),
+      };
       // A reprocessed set may have failed before.
       delete next.error;
       return next;

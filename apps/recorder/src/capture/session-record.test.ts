@@ -47,6 +47,7 @@ describe('SessionRecord', () => {
     expect((await readSession(record))?.sets[0]).toMatchObject({
       status: 'processing',
       partial: true,
+      cut: { start: true, end: false },
       files: { rawAudio: 'raw/2026-10-31T21-03-12_dj-spooky.wav' },
     });
   });

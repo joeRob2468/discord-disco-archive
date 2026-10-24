@@ -15,11 +15,25 @@ import {
   type LoudnessTargets,
   type SilenceOptions,
   type Tags,
+  type TrimRange,
 } from '@dsr/media';
 import type { SessionRecord } from '../capture/session-record.ts';
 
 /** Trim only real dead air: two seconds below -60 dB, keeping half a second of it. */
 const END_SILENCE: SilenceOptions = { thresholdDb: -60, minSeconds: 2, padSeconds: 0.5 };
+
+/**
+ * Did recording cut off music? A cut start only counts if the capture opens with sound
+ * (no leading silence was trimmed), a cut end if it closes with sound. So a DJ who was
+ * live but not yet playing, or a `/record stop` after the music ended, isn't partial.
+ */
+export function settlePartial(
+  cut: { start: boolean; end: boolean },
+  trim: TrimRange,
+  duration: number,
+): boolean {
+  return (cut.start && trim.start === 0) || (cut.end && trim.end >= duration);
+}
 
 export interface ProcessingConfig {
   targets: LoudnessTargets;
@@ -81,7 +95,8 @@ export async function processSet(
       files[format] = file;
     }
 
-    await record.completeSet(setId, files);
+    const partial = set.cut && settlePartial(set.cut, analysis.trim, analysis.duration);
+    await record.completeSet(setId, files, partial);
     logger.info({ setId, files, seconds: (Date.now() - started) / 1000 }, 'set processed');
   } catch (error) {
     if (signal?.aborted) {
