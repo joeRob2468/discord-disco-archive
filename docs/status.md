@@ -77,15 +77,17 @@ daisyUI 5 + Tailwind 4 + htmx, on the existing server-rendered architecture; pla
 
 Chromium plays Discord's stream audio in mono, so the recorder now uses Firefox by default (`BROWSER_CHANNEL=firefox`, research.md "Audio quality"). The probe passed every step in Firefox, and a full `/record` session ("Firefox Stereo") recorded and leveled in stereo: side channel 10 dB under mid in raw, master and M4A, master at −14.0 LUFS. Firefox runs in kiosk mode. The recorder account is logged in to the Firefox profile (`docker-data/recorder/profile-firefox`), with **Disable All Notification Sounds** on: a capture during the recorder joining, a member joining and leaving, and an @mention stayed at digital silence (−91 dB). Discord keeps that setting per browser profile, so set it again after any new login.
 
-## Dev environment state (session 2)
+## Dev environment state (end of session 2, 2026-10-23)
 
-- The recorder runs in Docker (`docker compose up -d recorder`); `/record` works from the container.
-- `.env` is filled in: bot token, guild ID, recorder user ID, `COMMAND_DEFAULT_PERMISSION=Everyone`, a generated `VNC_PASSWORD`, `PUID`/`PGID` 1000. Never print it.
-- The recorder account ("Recorder Account") is logged in. The profile is in `docker-data/recorder/profile`.
-- The bot application is "Recorder Bot" (private), invited with View Channels + Send Messages. Test server: the user's; test voice channel: "Test Room".
+- **Resume here:** stage 4 of the archive UI rewrite (the admin panel), then the archive Docker image check, then milestone 8 (deploy). See "Next: archive UI rewrite" above.
+- The recorder runs in Docker (`docker compose up -d recorder`, currently stopped); `/record` works from the container. It uses **Firefox** (`BROWSER_CHANNEL=firefox` in `.env`), logged in as "Recorder Account" in `docker-data/recorder/profile-firefox`, with Discord notification sounds disabled. The old Chrome profile is in `docker-data/recorder/profile`.
+- `.env` is filled in (bot token, guild ID, recorder user ID, `COMMAND_DEFAULT_PERMISSION=Everyone`, `VNC_PASSWORD`, `PUID`/`PGID` 1000, and the archive's viewer and admin passwords and session secret). Never print it.
+- The bot application is "Recorder Bot" (private), invited with View Channels + Send Messages. Test server: the user's; test voice channel: "👻Halloween Disco👻" (formerly "Test Room"). Test accounts: Val Mason (desktop client) and 🎃 (web client).
 - The server's inactive timeout is disabled. Any AFK bot still needs a recorder exemption before a real event.
-- Test captures from milestone 2: `data/recordings/_tests/`.
-- The archive runs locally with `pnpm --filter @dsr/archive dev` (http://localhost:3000) against `data/recordings`.
+- Test recordings: `data/recordings/2026-10-23_*` (one early session still has unprocessed sets; `reprocess.ts` would level them) and `data/recordings/_tests/`.
+- The archive runs locally with `pnpm --filter @dsr/archive dev` (http://localhost:3000; it also watches the CSS and the player script) against `data/recordings`, with its database and images in `docker-data/archive`.
+- WSL2's monotonic clock drifts (about 7% slow), which drops audio from desktop-client streams on this machine only; `wsl --shutdown` resets it.
+- When stopping a temporary archive, don't kill every `node … apps/archive/src/main.ts`: `node --watch` runs the dev server as a child with those same arguments.
 
 ## Open questions blocking upcoming milestones
 
@@ -93,5 +95,4 @@ See the "Unverified / to test" table in [research.md](research.md). The most rel
 
 - The recorder isolates voice by self-deafening (streams still play); AFK timeout/bot must exempt it.
 - Overlapping streams: one recorder plus handover rules (plan.md, "Which stream to record"); every switch is announced.
-- The controller must set the stream volume slider to 100% (it defaults to 50%).
 - The `--no-sandbox` info bar in Chrome; it matters for video (milestone 6).
