@@ -164,7 +164,7 @@ function PopularSets({ sets }: { sets: SetSummary[] }) {
                 </div>
               </div>
             </a>
-            <div class="absolute top-5 right-5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+            <div class="pointer-coarse:opacity-100 absolute top-5 right-5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
               <PlayButton
                 queue={queue}
                 startUuid={set.uuid}

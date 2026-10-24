@@ -100,7 +100,8 @@ function MoveButtons(props: { set: SetSummary; first: boolean; last: boolean; ne
  * One set as a list row: a play button (playing `queue` from this set), the set's title,
  * which expands the row into an inline set page (a real link, so it also opens in a new
  * tab), and an "Add to queue" button. In an album the row shows its track number, which
- * turns into the play button on hover, and leaves out the session it belongs to.
+ * turns into the play button on hover (touchscreens always show the button), and leaves out
+ * the session it belongs to.
  */
 export function SetListRow({
   set,
@@ -127,7 +128,7 @@ export function SetListRow({
       <div class="group hover:bg-base-100 flex items-center gap-3 rounded-2xl p-2 pr-4 transition">
         <div class="grid w-8 shrink-0 place-items-center">
           {number !== undefined && (
-            <span class="text-base-content/50 text-sm tabular-nums group-hover:hidden">
+            <span class="text-base-content/50 pointer-coarse:hidden text-sm tabular-nums group-hover:hidden">
               {number}
             </span>
           )}
@@ -135,7 +136,7 @@ export function SetListRow({
             queue={queue}
             startUuid={set.uuid}
             label={`Play ${set.title ?? set.name}`}
-            class={`btn btn-circle btn-primary btn-sm ${number !== undefined ? 'hidden group-hover:inline-flex' : ''}`}
+            class={`btn btn-circle btn-primary btn-sm ${number !== undefined ? 'pointer-coarse:inline-flex hidden group-hover:inline-flex' : ''}`}
           />
         </div>
         <a

@@ -331,7 +331,8 @@ function PlayerBar() {
             <p id="player-subtitle" class="text-base-content/60 truncate text-xs" />
           </div>
         </div>
-        <div class="flex flex-col items-center gap-1">
+        {/* On phones its two rows become grid items: controls beside the title, seek below. */}
+        <div class="contents sm:flex sm:flex-col sm:items-center sm:gap-1">
           <div class="flex items-center gap-2">
             <button
               id="player-stop"
@@ -379,7 +380,7 @@ function PlayerBar() {
               <ControlIcon name="queue" class="size-4" />
             </button>
           </div>
-          <div class="hidden w-full items-center gap-2 text-xs tabular-nums sm:flex">
+          <div class="col-span-2 flex w-full items-center gap-2 text-xs tabular-nums sm:col-span-1">
             <span id="player-elapsed" class="text-base-content/60 w-12 text-right">
               0:00
             </span>
