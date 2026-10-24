@@ -44,6 +44,7 @@ const post = createChannelPoster(() => clientRef.current, logger);
 const announce = createAnnouncer(post);
 
 const sessions = new SessionManager({
+  restartGraceMs: config.session.restartGraceMs,
   onSessionStart: (session) => {
     controller.sessionStarted(session);
   },

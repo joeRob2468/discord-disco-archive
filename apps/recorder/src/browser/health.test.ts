@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { HealthMonitor, type BrowserHealth } from './health.ts';
 
 const logger = createLogger('test');
+// One test makes the check throw on purpose.
+logger.level = 'silent';
 
 function monitorWith(results: (BrowserHealth | Error)[]) {
   const changes: [BrowserHealth, BrowserHealth][] = [];

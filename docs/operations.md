@@ -51,6 +51,10 @@ If the bot is offline in Discord, check `DISCORD_BOT_TOKEN` in `.env` and that t
 
 The chat gets "⚠️ The recorder dropped out of voice… Rejoining…", then "✅ Back in voice after N s" once it has rejoined (it tries for about 2 minutes) and is recording the current DJ again as a new set. The set before the drop is kept as a partial set. If it says it couldn't get back in, check noVNC (logged out? captcha?), then `/record stop` and `/record start`. In the log: `recorder dropped out of voice`, `rejoin attempt failed`, `rejoined voice` or `could not rejoin voice`.
 
+### A DJ's stream dropped and came back
+
+If the current DJ's Go Live ends and nobody else is live, the chat gets "⏳ …stream dropped. Keeping their set open for 60 s". If they're back within `RESTART_GRACE_SECONDS`, "▶️ …is back. Continuing the same set": the pieces are joined into one set, with the dropout cut out. Otherwise the set ends at the drop. Log: `set held open`, `set resumed`, `segments joined` (or `could not join segments; keeping the first one`, leaving `raw/*.segN.wav` files behind).
+
 ### A set is stuck "processing" or "failed"
 
 The archive's Admin → Overview lists these with the failure reason. Sets left `processing` usually mean the recorder stopped mid-encode. Re-run leveling for a finished session:

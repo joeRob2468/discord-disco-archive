@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createLogger, readJsonFile, sessionSchema } from '@dsr/core';
@@ -20,6 +20,7 @@ vi.mock('../browser/discord-web.ts', () => ({
   leaveVoice: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('@dsr/media', () => ({
+  concatAudio: vi.fn(() => Promise.resolve('')),
   captureAudio: vi.fn(() => {
     let finish = (): void => undefined;
     const done = new Promise<void>((resolve) => {
@@ -126,11 +127,99 @@ describe('RecordingController: recorder dropping out of voice', () => {
   });
 
   it('gives up after its retries and says so', async () => {
-    vi.mocked(web.joinVoice).mockRejectedValue(new Error('no network'));
+    // Once per retry (two), so later tests can join again.
+    const offline = new Error('no network');
+    vi.mocked(web.joinVoice).mockRejectedValueOnce(offline).mockRejectedValueOnce(offline);
     controller.recorderLeftVoice(CHANNEL);
     await controller.idle();
     expect(web.joinVoice).toHaveBeenCalledTimes(3);
     expect(media.captureAudio).toHaveBeenCalledTimes(1);
     expect(notices.at(-1)).toContain("couldn't get back into voice");
+  });
+});
+
+describe('RecordingController: restart grace', () => {
+  let dir: string;
+  let timers: (() => void)[];
+  let sessions: SessionManager;
+  let controller: RecordingController;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    dir = await mkdtemp(path.join(tmpdir(), 'dsr-grace-'));
+    timers = [];
+    sessions = new SessionManager({
+      restartGraceMs: 60_000,
+      setTimer: (callback) => {
+        timers.push(callback);
+        return () => undefined;
+      },
+      onSessionStart: (session) => {
+        controller.sessionStarted(session);
+      },
+      onTargetChange: (change, session) => {
+        controller.targetChanged(change, session);
+      },
+      onSessionEnd: (session) => {
+        controller.sessionEnded(session);
+      },
+    });
+    controller = new RecordingController({
+      page: {} as Page,
+      sessions,
+      config: {
+        recordingsDir: dir,
+        pulseSource: 'test',
+        streamVolume: 85,
+        handoverSilenceSeconds: 45,
+      },
+      notify: () => undefined,
+      postProcess: () => Promise.resolve(),
+      logger: quietLogger,
+    });
+    sessions.start(info, [DJ]);
+    await controller.idle();
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const onlySet = async () => {
+    const [folder] = await readdir(dir);
+    const session = await readJsonFile(path.join(dir, folder ?? '', 'session.json'), sessionSchema);
+    expect(session?.sets).toHaveLength(1);
+    return session?.sets[0];
+  };
+
+  it('records a stream that comes back as the next segment of the same set, then joins them', async () => {
+    sessions.streamEnded(CHANNEL, DJ.userId);
+    await controller.idle();
+    expect((await onlySet())?.status).toBe('recording');
+
+    sessions.streamStarted(CHANNEL, DJ.userId, DJ.displayName);
+    await controller.idle();
+    const outputs = vi.mocked(media.captureAudio).mock.calls.map(([options]) => options.output);
+    expect(outputs).toHaveLength(2);
+    expect(outputs[1]).toMatch(/\.seg2\.wav$/);
+
+    // The joined file replaces the first segment; give the mock something to rename.
+    vi.mocked(media.concatAudio).mockImplementation(async (_inputs, output) => {
+      await writeFile(output, '');
+      return '';
+    });
+    sessions.stop();
+    await controller.idle();
+    expect(media.concatAudio).toHaveBeenCalledWith([outputs[0], outputs[1]], expect.any(String));
+    expect(await onlySet()).toMatchObject({ status: 'processing' });
+  });
+
+  it('ends the held set when the grace window runs out', async () => {
+    sessions.streamEnded(CHANNEL, DJ.userId);
+    await controller.idle();
+    for (const fire of timers) fire();
+    await controller.idle();
+    expect(await onlySet()).toMatchObject({ status: 'processing', partial: true });
+    expect(media.concatAudio).not.toHaveBeenCalled();
   });
 });

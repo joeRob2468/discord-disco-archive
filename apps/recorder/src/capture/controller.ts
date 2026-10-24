@@ -10,10 +10,14 @@
  * If the recorder drops out of voice on its own (network, AFK move, kick), it closes the
  * current set, rejoins with a few retries, and picks the current target up again as a
  * new set.
+ *
+ * Restart grace: when the session manager holds a set open after its stream dropped, the
+ * capture stops but the set doesn't end. If the stream comes back, the next capture goes
+ * into a new segment file; when the set ends, its segments are joined into its raw WAV.
  */
-import { stat } from 'node:fs/promises';
+import { rename, rm, stat } from 'node:fs/promises';
 import type { Logger } from '@dsr/core';
-import { captureAudio, type FfmpegProcess, type SilenceEvent } from '@dsr/media';
+import { captureAudio, concatAudio, type FfmpegProcess, type SilenceEvent } from '@dsr/media';
 import type { Page } from 'playwright';
 import {
   isMutedAndDeafened,
@@ -73,12 +77,20 @@ const sleep = (ms: number): Promise<void> =>
 
 interface ActiveCapture {
   setId: string;
+  /** The set's raw WAV (`files.rawAudio`): the first segment, and the joined result. */
+  mainFile: string;
+  /** The segment being written now. */
   file: string;
+  /** Finished segment files, in order. */
+  parts: string[];
+  /** When the current segment started. */
   startedAt: Date;
   target: Target;
   ffmpeg: FfmpegProcess;
   stopping: boolean;
   silenceTimer: NodeJS.Timeout | undefined;
+  /** Set while the set is held open between segments (its stream dropped). */
+  heldAt: Date | undefined;
 }
 
 const errorMessage = (error: unknown): string =>
@@ -235,6 +247,13 @@ export class RecordingController {
 
   /** Open `target`'s stream and start a set. Returns false (and says so) if it fails. */
   async #openStream(target: Target, partial: boolean, session: SessionInfo): Promise<boolean> {
+    if (!(await this.#showStream(target, session))) return false;
+    await this.#startCapture(target, partial, session);
+    return true;
+  }
+
+  /** Watch, unmute and set the volume of `target`'s stream. False (and says so) on failure. */
+  async #showStream(target: Target, session: SessionInfo): Promise<boolean> {
     try {
       await watchStream(this.#page, target);
       const wasMuted = await unmuteStream(this.#page, target);
@@ -249,11 +268,52 @@ export class RecordingController {
       );
       return false;
     }
-    await this.#startCapture(target, partial, session);
     return true;
   }
 
+  /** The target's stream dropped: stop capturing but keep the set open for its return. */
+  async #hold(): Promise<void> {
+    const capture = this.#capture;
+    if (!capture || capture.heldAt) return;
+    await this.#stopSegment(capture);
+    capture.heldAt = this.#now();
+    this.#logger.info({ setId: capture.setId, segments: capture.parts.length }, 'set held open');
+  }
+
+  /** The held target is live again: record the next segment of the same set. */
+  async #resume(target: Target, session: SessionInfo): Promise<void> {
+    const capture = this.#capture;
+    if (capture?.heldAt === undefined || capture.target.userId !== target.userId) {
+      // Nothing held for them (e.g. the recorder rejoined meanwhile): a new set.
+      await this.#stopCapture(false);
+      if (this.#inVoice) await this.#openStream(target, false, session);
+      return;
+    }
+    if (!this.#inVoice || !(await this.#showStream(target, session))) {
+      await this.#stopCapture(false);
+      return;
+    }
+    const gapSeconds = Math.round((this.#now().getTime() - capture.heldAt.getTime()) / 1000);
+    capture.heldAt = undefined;
+    capture.file = capture.mainFile.replace(
+      /\.wav$/,
+      `.seg${String(capture.parts.length + 1)}.wav`,
+    );
+    capture.startedAt = this.#now();
+    this.#spawn(capture, session);
+    this.#logger.info({ setId: capture.setId, file: capture.file, gapSeconds }, 'set resumed');
+  }
+
   async #switch(change: TargetChange, session: SessionInfo): Promise<void> {
+    if (change.reason === 'stream-dropped') {
+      await this.#hold();
+      if (this.#inVoice) await stopWatching(this.#page);
+      return;
+    }
+    if (change.reason === 'resumed' && change.to) {
+      await this.#resume(change.to, session);
+      return;
+    }
     await this.#stopCapture(change.reason === 'session-stopped');
     if (change.from && this.#inVoice) await stopWatching(this.#page);
     if (!change.to) return;
@@ -306,37 +366,63 @@ export class RecordingController {
   async #startCapture(target: Target, partial: boolean, session: SessionInfo): Promise<void> {
     if (!this.#record) return;
     const { setId, rawAudioPath } = await this.#record.startSet(target, this.#now(), partial);
-    const ffmpeg = captureAudio(
+    const capture: ActiveCapture = {
+      setId,
+      mainFile: rawAudioPath,
+      file: rawAudioPath,
+      parts: [],
+      startedAt: this.#now(),
+      target,
+      // Runs the silence callback later, once `capture` exists.
+      ffmpeg: this.#runCapture(rawAudioPath, (event) => {
+        this.#onSilence(capture, event);
+      }),
+      stopping: false,
+      silenceTimer: undefined,
+      heldAt: undefined,
+    };
+    this.#capture = capture;
+    this.#watchExit(capture, session);
+    this.#logger.info({ setId, file: rawAudioPath }, 'capture started');
+  }
+
+  #runCapture(output: string, onSilence: (event: SilenceEvent) => void): FfmpegProcess {
+    return captureAudio(
       {
         source: this.#config.pulseSource,
-        output: rawAudioPath,
+        output,
         silence: {
           thresholdDb: SILENCE_THRESHOLD_DB,
           seconds: this.#config.handoverSilenceSeconds,
         },
       },
-      (event) => {
-        this.#onSilence(capture, event);
-      },
+      onSilence,
     );
-    const capture: ActiveCapture = {
-      setId,
-      file: rawAudioPath,
-      startedAt: this.#now(),
-      target,
-      ffmpeg,
-      stopping: false,
-      silenceTimer: undefined,
-    };
-    this.#capture = capture;
-    this.#logger.info({ setId, file: rawAudioPath }, 'capture started');
+  }
 
+  /** Start the next segment's ffmpeg, writing `capture.file`. */
+  #spawn(capture: ActiveCapture, session: SessionInfo): void {
+    capture.ffmpeg = this.#runCapture(capture.file, (event) => {
+      this.#onSilence(capture, event);
+    });
+    capture.stopping = false;
+    this.#watchExit(capture, session);
+  }
+
+  /** Report the current segment's ffmpeg dying on its own (not when we stop it). */
+  #watchExit(capture: ActiveCapture, session: SessionInfo): void {
+    const ffmpeg = capture.ffmpeg;
+    const died = (reason: string): void => {
+      if (!capture.stopping && capture.ffmpeg === ffmpeg) {
+        this.#captureDied(capture, session, reason);
+      }
+    };
     ffmpeg.done.then(
       () => {
-        if (!capture.stopping) this.#captureDied(capture, session, 'ffmpeg exited');
+        died('ffmpeg exited');
       },
       (error: unknown) => {
-        if (!capture.stopping) this.#captureDied(capture, session, errorMessage(error));
+        died(errorMessage(error));
       },
     );
   }
@@ -357,10 +443,8 @@ export class RecordingController {
     });
   }
 
-  async #stopCapture(partial: boolean): Promise<void> {
-    const capture = this.#capture;
-    if (!capture) return;
-    this.#capture = undefined;
+  /** Stop the current segment's ffmpeg. Returns the error if it didn't stop cleanly. */
+  async #stopSegment(capture: ActiveCapture): Promise<string | undefined> {
     capture.stopping = true;
     this.#clearSilence(capture);
     let error: string | undefined;
@@ -370,14 +454,53 @@ export class RecordingController {
       error = errorMessage(stopError);
       this.#logger.error({ err: stopError, setId: capture.setId }, 'capture did not stop cleanly');
     }
-    await this.#record?.endSet(capture.setId, this.#now(), {
+    await this.#checkDuration(capture);
+    capture.parts.push(capture.file);
+    return error;
+  }
+
+  /** End the set: stop capturing (unless held), join its segments, then post-process. */
+  async #stopCapture(partial: boolean): Promise<void> {
+    const capture = this.#capture;
+    if (!capture) return;
+    this.#capture = undefined;
+    const held = capture.heldAt;
+    // A held set ended when its stream dropped, not now.
+    const error = held ? undefined : await this.#stopSegment(capture);
+    if (capture.parts.length > 1) await this.#joinSegments(capture);
+    await this.#record?.endSet(capture.setId, held ?? this.#now(), {
       partial,
       ...(error !== undefined && { error }),
     });
-    this.#logger.info({ setId: capture.setId, partial }, 'capture stopped');
-    await this.#checkDuration(capture);
+    this.#logger.info(
+      { setId: capture.setId, partial, segments: capture.parts.length },
+      'capture stopped',
+    );
     if (error === undefined && this.#record) {
       this.#processing = this.#postProcess(this.#record, capture.setId);
+    }
+  }
+
+  /**
+   * Join a set's segments back to back into its raw WAV (the dropout is cut out). On
+   * failure the set keeps only its first segment, and the others stay on disk.
+   */
+  async #joinSegments(capture: ActiveCapture): Promise<void> {
+    const joined = capture.mainFile.replace(/\.wav$/, '.joined.wav');
+    try {
+      await concatAudio(capture.parts, joined);
+      await rename(joined, capture.mainFile);
+      for (const part of capture.parts.slice(1)) await rm(part, { force: true });
+      this.#logger.info(
+        { setId: capture.setId, segments: capture.parts.length },
+        'segments joined',
+      );
+    } catch (error) {
+      this.#logger.error(
+        { err: error, setId: capture.setId, parts: capture.parts },
+        'could not join segments; keeping the first one',
+      );
+      await rm(joined, { force: true });
     }
   }
 

@@ -3,6 +3,10 @@
  * recorded (docs/plan.md, "Which stream to record"). Pure state + decisions: Discord
  * events come in as method calls, and session and target changes go out through the
  * `on*` callbacks, which the recording controller acts on.
+ *
+ * Restart grace: when the current DJ's stream ends and nobody else is live, their set is
+ * held open for `restartGraceMs`. If they go live again in time it continues as the same
+ * set (`resumed`); otherwise it ends then. Anyone else going live hands over at once.
  */
 import { StreamTracker, type LiveStream } from './stream-tracker.ts';
 
@@ -27,7 +31,11 @@ export type SwitchReason =
   /** `/record switch`. */
   | 'requested'
   /** `/record stop`. */
-  | 'session-stopped';
+  | 'session-stopped'
+  /** The target's stream ended with nobody else live: their set is held open (grace). */
+  | 'stream-dropped'
+  /** The held target went live again within the grace window: same set continues. */
+  | 'resumed';
 
 export interface Target {
   userId: string;
@@ -42,11 +50,15 @@ export interface TargetChange {
   reason: SwitchReason;
   /** Who ran `/record switch`, for `requested`. */
   requestedBy?: string;
+  /** How long the set is held open, for `stream-dropped`. */
+  holdSeconds?: number;
 }
 
 export interface SessionStatus {
   session: SessionInfo;
   target: Target | undefined;
+  /** A target whose stream dropped, held open in case it comes back. */
+  held: Target | undefined;
   live: LiveStream[];
 }
 
@@ -58,6 +70,10 @@ export type SwitchResult =
 
 export interface SessionManagerOptions {
   now?: () => Date;
+  /** How long a dropped target's set stays open (0 ends it at once). */
+  restartGraceMs?: number;
+  /** Timer for the grace window; returns a cancel function. Injectable for tests. */
+  setTimer?: (callback: () => void, ms: number) => () => void;
   /** Called before the first target is picked, so listeners can join first. */
   onSessionStart?: (session: SessionInfo) => void;
   onTargetChange?: (change: TargetChange, session: SessionInfo) => void;
@@ -70,15 +86,28 @@ export class SessionManager {
   readonly #onSessionStart: (session: SessionInfo) => void;
   readonly #onTargetChange: (change: TargetChange, session: SessionInfo) => void;
   readonly #onSessionEnd: (session: SessionInfo) => void;
+  readonly #restartGraceMs: number;
+  readonly #setTimer: (callback: () => void, ms: number) => () => void;
   readonly #tracker = new StreamTracker();
   #session: SessionInfo | undefined;
   #target: Target | undefined;
+  #held: Target | undefined;
+  #cancelHold: (() => void) | undefined;
 
   constructor(options: SessionManagerOptions = {}) {
     this.#now = options.now ?? (() => new Date());
     this.#onSessionStart = options.onSessionStart ?? (() => undefined);
     this.#onTargetChange = options.onTargetChange ?? (() => undefined);
     this.#onSessionEnd = options.onSessionEnd ?? (() => undefined);
+    this.#restartGraceMs = options.restartGraceMs ?? 0;
+    this.#setTimer =
+      options.setTimer ??
+      ((callback, ms) => {
+        const timer = setTimeout(callback, ms);
+        return () => {
+          clearTimeout(timer);
+        };
+      });
   }
 
   get active(): SessionInfo | undefined {
@@ -118,7 +147,9 @@ export class SessionManager {
   stop(): SessionInfo | undefined {
     const session = this.#session;
     if (!session) return undefined;
-    if (this.#target) this.#emit({ from: this.#target, to: undefined, reason: 'session-stopped' });
+    const current = this.#target ?? this.#held;
+    this.#clearHold();
+    if (current) this.#emit({ from: current, to: undefined, reason: 'session-stopped' });
     this.#session = undefined;
     this.#target = undefined;
     this.#tracker.clear();
@@ -134,14 +165,28 @@ export class SessionManager {
 
   status(): SessionStatus | undefined {
     if (!this.#session) return undefined;
-    return { session: this.#session, target: this.#target, live: this.#tracker.list() };
+    return {
+      session: this.#session,
+      target: this.#target,
+      held: this.#held,
+      live: this.#tracker.list(),
+    };
   }
 
   /** A member in `channelId` went live. */
   streamStarted(channelId: string, userId: string, displayName: string): void {
     if (this.#session?.channelId !== channelId) return;
     if (!this.#tracker.start(userId, displayName, this.#now())) return;
-    // Rule 1: stay on the current streamer. Only pick this one if nobody is recorded.
+    // Back within the grace window: the same set carries on.
+    if (this.#held?.userId === userId) {
+      const target = this.#held;
+      this.#clearHold();
+      this.#target = target;
+      this.#emit({ from: undefined, to: target, reason: 'resumed' });
+      return;
+    }
+    // Rule 1: stay on the current streamer. Only pick this one if nobody is recorded. A
+    // held set ends here: someone else going live hands over at once.
     if (!this.#target) this.#setTarget({ userId, displayName }, 'went-live');
   }
 
@@ -152,7 +197,35 @@ export class SessionManager {
     if (this.#target?.userId !== userId) return;
     // Rule 2: hand over to whoever went live earliest, or wait.
     const next = this.#tracker.earliest();
-    this.#setTarget(next, 'stopped-streaming');
+    if (next || this.#restartGraceMs <= 0) {
+      this.#setTarget(next, 'stopped-streaming');
+      return;
+    }
+    // Nobody else is live: hold the set open in case this stream comes back.
+    const held = this.#target;
+    this.#target = undefined;
+    this.#held = held;
+    this.#cancelHold = this.#setTimer(() => {
+      this.#expireHold(held);
+    }, this.#restartGraceMs);
+    this.#emit({
+      from: held,
+      to: undefined,
+      reason: 'stream-dropped',
+      holdSeconds: Math.round(this.#restartGraceMs / 1000),
+    });
+  }
+
+  #expireHold(held: Target): void {
+    if (this.#held !== held) return;
+    this.#clearHold();
+    this.#emit({ from: held, to: undefined, reason: 'stopped-streaming' });
+  }
+
+  #clearHold(): void {
+    this.#cancelHold?.();
+    this.#cancelHold = undefined;
+    this.#held = undefined;
   }
 
   /** Rule 3: the current stream has been silent for the handover window. */
@@ -183,7 +256,9 @@ export class SessionManager {
     reason: SwitchReason,
     requestedBy?: string,
   ): TargetChange | undefined {
-    const from = this.#target;
+    // A held set ends with any other change of target.
+    const from = this.#target ?? this.#held;
+    this.#clearHold();
     const to = next && { userId: next.userId, displayName: next.displayName, since: this.#now() };
     if (from === undefined && to === undefined) return undefined;
     this.#target = to;

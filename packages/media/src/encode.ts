@@ -119,3 +119,27 @@ export function muxMp4(
     options,
   );
 }
+
+/**
+ * Join raw capture segments (same format) back to back into one float32 WAV, for a set
+ * whose stream dropped and came back within the restart grace.
+ */
+export function concatAudioArgs(inputs: readonly string[], output: string): string[] {
+  const streams = inputs.map((_, i) => `[${String(i)}:a]`).join('');
+  // prettier-ignore
+  return [
+    ...inputs.flatMap((input) => ['-i', input]),
+    '-filter_complex', `${streams}concat=n=${String(inputs.length)}:v=0:a=1[a]`,
+    '-map', '[a]',
+    '-c:a', 'pcm_f32le',
+    output,
+  ];
+}
+
+export function concatAudio(
+  inputs: readonly string[],
+  output: string,
+  options?: RunOptions,
+): Promise<string> {
+  return runFfmpeg(concatAudioArgs(inputs, output), options);
+}

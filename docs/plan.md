@@ -123,7 +123,7 @@ One recorder can only watch one stream with clean audio. Chrome mixes everything
 
 Edge cases the controller must handle:
 
-- **The DJ's stream drops and restarts mid-set.** Treat a restart by the same user within `RESTART_GRACE_SECONDS` as the same set. Record it as a new segment and join the segments in post-processing.
+- **The DJ's stream drops and restarts mid-set.** Built in 9c: when the target's stream ends and nobody else is live, the session manager holds their set open for `RESTART_GRACE_SECONDS` (⏳ notice). If they go live again in time, the controller records a new segment of the same set (▶️ notice), and when the set ends the segments are joined back to back into its raw WAV (`concatAudio`; the dropout is cut out) before leveling. If the window runs out, the set ends at the drop. Anyone else going live during the hold hands over at once (decided 2026-10-23).
 - **The recorder gets disconnected** (network issue, AFK move or kick). Built in 9b: the bot sees the recorder account leave the session's channel; the controller ends the current set as partial, announces it, retries the join (0, 10, 30, 60 s), and records the current target again as a new set, announcing the gap. Leaves it asked for itself are ignored.
 - **Someone runs `/record stop` mid-set.** Finalise the file, mark it `partial`, and still post-process it.
 - **Two or more people stream at once.** Handled by the [handover rules](#which-stream-to-record-handover).

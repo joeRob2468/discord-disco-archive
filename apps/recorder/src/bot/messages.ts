@@ -47,6 +47,8 @@ const REASONS: Record<SwitchReason, string> = {
   silence: 'went silent',
   requested: 'requested',
   'session-stopped': 'session stopped',
+  'stream-dropped': 'stream dropped',
+  resumed: 'came back',
 };
 
 export function switched(change: TargetChange): string {
@@ -67,6 +69,15 @@ export function switched(change: TargetChange): string {
  */
 export function targetChanged(change: TargetChange): string | undefined {
   if (change.reason === 'already-live' || change.reason === 'session-stopped') return undefined;
+  if (change.reason === 'stream-dropped' && change.from) {
+    return (
+      `⏳ **${change.from.displayName}**'s stream dropped. Keeping their set open for ` +
+      `${String(change.holdSeconds ?? 0)} s in case it comes back.`
+    );
+  }
+  if (change.reason === 'resumed' && change.to) {
+    return `▶️ **${change.to.displayName}** is back. Continuing the same set.`;
+  }
   if (change.from && change.to) return switched(change);
   if (change.to) return `🔴 Now recording **${change.to.displayName}**.`;
   if (change.from) {
@@ -76,12 +87,14 @@ export function targetChanged(change: TargetChange): string | undefined {
 }
 
 export function status(current: SessionStatus, now: Date): string {
-  const { session, target, live } = current;
+  const { session, target, held, live } = current;
   const lines = [
     `🔴 Recording <#${session.channelId}>${session.title ? `: **${session.title}**` : ''} for ${formatElapsed(session.startedAt.getTime(), now.getTime())}.`,
     target
       ? `🎧 Recording: **${target.displayName}** (since ${relative(target.since)})`
-      : '🎧 Recording: nobody is live',
+      : held
+        ? `⏳ Waiting for **${held.displayName}** to come back (their set is still open)`
+        : '🎧 Recording: nobody is live',
   ];
   const others = live.filter((stream) => stream.userId !== target?.userId);
   if (others.length > 0) {

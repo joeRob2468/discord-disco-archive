@@ -34,6 +34,15 @@ describe('messages', () => {
     expect(targetChanged({ from: A, to: undefined, reason: 'session-stopped' })).toBeUndefined();
   });
 
+  it('announces a dropped stream being held open, and its return', () => {
+    expect(
+      targetChanged({ from: A, to: undefined, reason: 'stream-dropped', holdSeconds: 60 }),
+    ).toBe("⏳ **DJ A**'s stream dropped. Keeping their set open for 60 s in case it comes back.");
+    expect(targetChanged({ from: undefined, to: A, reason: 'resumed' })).toBe(
+      '▶️ **DJ A** is back. Continuing the same set.',
+    );
+  });
+
   it('lists the target and other live streams in the status', () => {
     const text = status(
       {
@@ -46,6 +55,7 @@ describe('messages', () => {
           startedBy: { userId: '9', displayName: 'Host' },
         },
         target: A,
+        held: undefined,
         live: [A, B],
       },
       at('2026-11-14T21:05:00Z'),

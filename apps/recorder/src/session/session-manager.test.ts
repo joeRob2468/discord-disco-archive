@@ -162,4 +162,71 @@ describe('SessionManager', () => {
       expect(manager.stop()).toBeUndefined();
     });
   });
+
+  describe('restart grace', () => {
+    let timers: { callback: () => void; cancelled: boolean }[];
+    let graced: SessionManager;
+
+    beforeEach(() => {
+      timers = [];
+      graced = new SessionManager({
+        now: () => new Date(clock),
+        restartGraceMs: 60_000,
+        setTimer: (callback) => {
+          const timer = { callback, cancelled: false };
+          timers.push(timer);
+          return () => {
+            timer.cancelled = true;
+          };
+        },
+        onTargetChange: (change) => changes.push(change),
+      });
+      graced.start(info, [A]);
+      changes = [];
+    });
+
+    const fire = () => {
+      for (const timer of timers) if (!timer.cancelled) timer.callback();
+    };
+
+    it('holds the set while the dropped stream may come back, then continues it', () => {
+      graced.streamEnded(CHANNEL, A.userId);
+      expect(summary()).toEqual(['DJ A → - (stream-dropped)']);
+      expect(graced.status()).toMatchObject({ target: undefined, held: { userId: A.userId } });
+      graced.streamStarted(CHANNEL, A.userId, A.displayName);
+      expect(summary().at(-1)).toBe('- → DJ A (resumed)');
+      expect(timers[0]?.cancelled).toBe(true);
+      expect(graced.status()?.target?.userId).toBe(A.userId);
+    });
+
+    it('ends the held set when the window runs out', () => {
+      graced.streamEnded(CHANNEL, A.userId);
+      fire();
+      expect(summary()).toEqual(['DJ A → - (stream-dropped)', 'DJ A → - (stopped-streaming)']);
+      expect(graced.status()?.held).toBeUndefined();
+      // Coming back later is a new set.
+      graced.streamStarted(CHANNEL, A.userId, A.displayName);
+      expect(summary().at(-1)).toBe('- → DJ A (went-live)');
+    });
+
+    it('hands over at once when someone else goes live during the hold', () => {
+      graced.streamEnded(CHANNEL, A.userId);
+      graced.streamStarted(CHANNEL, B.userId, B.displayName);
+      expect(summary().at(-1)).toBe('DJ A → DJ B (went-live)');
+      expect(timers[0]?.cancelled).toBe(true);
+    });
+
+    it("doesn't hold when someone else is already live", () => {
+      graced.streamStarted(CHANNEL, B.userId, B.displayName);
+      graced.streamEnded(CHANNEL, A.userId);
+      expect(summary()).toEqual(['DJ A → DJ B (stopped-streaming)']);
+    });
+
+    it('ends a held set on /record stop', () => {
+      graced.streamEnded(CHANNEL, A.userId);
+      graced.stop();
+      expect(summary().at(-1)).toBe('DJ A → - (session-stopped)');
+      expect(timers[0]?.cancelled).toBe(true);
+    });
+  });
 });
