@@ -8,7 +8,7 @@ import { createLogger } from '@dsr/core';
 import type { Client } from 'discord.js';
 import { createAnnouncer, createChannelPoster } from './bot/announcer.ts';
 import { startBot } from './bot/bot.ts';
-import { isLoggedOut } from './browser/discord-web.ts';
+import { checkBrowser, FIX_HINT, HEALTH_PROBLEMS, HealthMonitor } from './browser/health.ts';
 import { DISCORD_APP_URL, launchBrowser } from './browser/launch.ts';
 import { RecordingController } from './capture/controller.ts';
 import { loadConfig } from './config.ts';
@@ -37,11 +37,6 @@ await page.goto(DISCORD_APP_URL);
 await page.waitForURL(/\/(channels|login)/, { timeout: 60_000 }).catch((error: unknown) => {
   logger.warn({ err: error }, 'Discord did not finish loading');
 });
-if (await isLoggedOut(page)) {
-  logger.error('the recorder account is logged out; log in over noVNC before recording');
-} else {
-  logger.info('Discord web client ready');
-}
 
 // Channel posts need the bot client, which only exists after login.
 const clientRef: { current?: Client } = {};
@@ -83,16 +78,55 @@ const controller = new RecordingController({
   },
   notify: post,
   postProcess: (record, setId) =>
-    processor.enqueue(setId, (signal) =>
-      processSet(record, setId, config.processing, {
+    processor.enqueue(setId, async (signal) => {
+      await processSet(record, setId, config.processing, {
         signal,
         logger: logger.child({ module: 'pipeline' }),
-      }),
-    ),
+      });
+      const set = record.set(setId);
+      if (set?.status === 'failed') {
+        post(
+          record.session.channelId,
+          `⚠️ Processing failed for **${set.displayName}**'s set: ${set.error ?? 'unknown error'}. ` +
+            'The raw recording is kept, so an admin can re-run it.',
+        );
+      }
+    }),
   logger: logger.child({ module: 'controller' }),
 });
 
-const client = await startBot({ config: config.discord, sessions, logger });
+// Logged out or a captcha: refuse /record start up front, and alert the session's chat.
+const HEALTH_INTERVAL_MS = 5 * 60 * 1000;
+const health = new HealthMonitor({
+  check: () => checkBrowser(page),
+  onChange: (state, previous) => {
+    const active = sessions.active;
+    if (state === 'ok') {
+      logger.info({ previous }, 'recorder browser is healthy again');
+      if (active)
+        post(active.channelId, '✅ The recorder account is back; new streams will be recorded.');
+      return;
+    }
+    logger.error({ state }, `recorder browser problem: ${HEALTH_PROBLEMS[state]}`);
+    if (active) {
+      post(
+        active.channelId,
+        `⚠️ Recording may have stopped: ${HEALTH_PROBLEMS[state]}. ${FIX_HINT}`,
+      );
+    }
+  },
+  logger: logger.child({ module: 'health' }),
+});
+health.start(HEALTH_INTERVAL_MS);
+// At startup too: a problem is logged (by onChange) before anyone tries to record.
+if ((await health.poll()) === 'ok') logger.info('Discord web client ready');
+
+const preflight = async (): Promise<string | undefined> => {
+  const state = await health.poll();
+  return state === 'ok' ? undefined : `Can't record: ${HEALTH_PROBLEMS[state]}. ${FIX_HINT}`;
+};
+
+const client = await startBot({ config: config.discord, sessions, logger, preflight });
 clientRef.current = client;
 
 // Raw captures and dropped export formats are cleaned up at startup, then hourly.

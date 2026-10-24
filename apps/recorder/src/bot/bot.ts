@@ -20,9 +20,11 @@ export interface BotDeps {
   config: DiscordConfig;
   sessions: SessionManager;
   logger: Logger;
+  /** Why the recorder can't record right now (e.g. logged out), checked by `/record start`. */
+  preflight?: () => Promise<string | undefined>;
 }
 
-export async function startBot({ config, sessions, logger }: BotDeps): Promise<Client> {
+export async function startBot({ config, sessions, logger, preflight }: BotDeps): Promise<Client> {
   // Neither intent is privileged: Guilds (channels, roles) and GuildVoiceStates (Go Live).
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
@@ -67,7 +69,7 @@ export async function startBot({ config, sessions, logger }: BotDeps): Promise<C
     interaction: ChatInputCommandInteraction<'cached'>,
   ): Promise<void> {
     try {
-      await handleRecordCommand(interaction, { config, sessions, logger });
+      await handleRecordCommand(interaction, { config, sessions, logger, preflight });
     } catch (error) {
       logger.error({ err: error }, 'command failed');
       const content = 'Something went wrong; check the recorder logs.';

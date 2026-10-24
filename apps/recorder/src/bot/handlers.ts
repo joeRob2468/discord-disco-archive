@@ -18,6 +18,7 @@ export interface HandlerDeps {
   sessions: SessionManager;
   config: DiscordConfig;
   logger: Logger;
+  preflight?: (() => Promise<string | undefined>) | undefined;
 }
 
 type Interaction = ChatInputCommandInteraction<'cached'>;
@@ -79,7 +80,7 @@ export async function handleRecordCommand(
 
 async function start(
   interaction: Interaction,
-  { sessions, config, logger }: HandlerDeps,
+  { sessions, config, logger, preflight }: HandlerDeps,
 ): Promise<void> {
   const invokedIn = interaction.channel;
   const target = resolveTargetChannel({
@@ -96,6 +97,10 @@ async function start(
 
   const problems = await checkRecorderAccess(interaction.guild, channel, config.recorderUserId);
   if (problems.length > 0) return refuse(interaction, logger, problems.join('\n'));
+
+  // Catch a logged-out recorder now, not halfway through joining voice.
+  const blocked = await preflight?.();
+  if (blocked) return refuse(interaction, logger, blocked);
 
   const liveNow = channel.members
     .filter((member) => member.voice.streaming === true && member.id !== config.recorderUserId)

@@ -30,7 +30,7 @@ Recreating `recorder` during an event ends the current set (marked partial) and 
 
 ### The recorder account is logged out
 
-**Symptoms:** `/record start` replies that the recorder is logged out, or the recorder log has `the recorder account is logged out; log in over noVNC`.
+**Symptoms:** `/record start` refuses with "Can't record: the recorder account is logged out of Discord" (or "…is showing the recorder account a captcha"); during a session the chat gets a ⚠️ notice. The recorder checks its browser at startup and every 5 minutes, and logs `recorder browser problem: …` once when it breaks and `recorder browser is healthy again` once it's fixed (with a ✅ notice in an active session's chat).
 
 1. Open the tunnel and noVNC (see "At a glance"). You see the Discord web client in Firefox.
 2. Log in as the recorder account by hand, including any captcha or email check. Login is never automated (self-bot ToS risk).
