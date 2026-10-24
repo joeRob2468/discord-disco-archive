@@ -18,6 +18,7 @@ A tool that records Discord Go Live DJ sets (one file per streamer, loudness-nor
 3. `docs/conventions.md`: architecture rules, TypeScript and style, testing, security, git. **Follow it.**
 4. `docs/research.md`: verified facts with sources, plus open questions. Check it before re-researching anything.
 5. `docs/development.md`: setup, scripts, Docker workflow.
+6. `docs/operations.md`: the server runbook (deploy, access, troubleshooting). Keep it current when behaviour it describes changes.
 
 ## Commands
 

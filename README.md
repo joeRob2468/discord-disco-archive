@@ -24,7 +24,7 @@ compose.yaml          local / default deployment
 compose.server.yaml   home server overlay (Traefik on media_network)
 ```
 
-Dependencies only point one way: `apps/*` → `packages/*`, and `media` doesn't depend on `core`. The recorder is the only writer of the recordings volume; the archive mounts it read-only.
+Dependencies only point one way: `apps/*` → `packages/*`, and `media` doesn't depend on `core`. The recorder writes the recordings volume; the archive only reads it, except when an admin permanently deletes a set or session.
 
 ## Quick start
 
@@ -40,10 +40,15 @@ docker compose up --build recorder
 
 See [docs/development.md](docs/development.md) for the full workflow, and [docs/plan.md](docs/plan.md) for the design.
 
+## When something breaks
+
+[docs/operations.md](docs/operations.md) is the runbook for the server: deploying and updating, reaching the recorder's Discord over an SSH-tunnelled noVNC (e.g. to log the recorder account back in), logs, stuck or failed sets, archive routing, disk use and backups.
+
 ## Docs
 
 - [docs/plan.md](docs/plan.md): goals, architecture, commands, archive, deployment, configuration, milestones
 - [docs/research.md](docs/research.md): confirmed facts with sources, open questions, rejected options
 - [docs/status.md](docs/status.md): progress tracker, covering what's implemented and what's next
 - [docs/development.md](docs/development.md): setup, scripts, Docker workflow, adding packages
+- [docs/operations.md](docs/operations.md): running the server: deploy, access, troubleshooting, backups
 - [docs/conventions.md](docs/conventions.md): architecture rules, code style, testing, security, git
