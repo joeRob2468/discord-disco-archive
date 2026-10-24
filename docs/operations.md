@@ -1,6 +1,6 @@
 # Operations
 
-Running, updating and fixing the stack on the home server. Placeholders: `<server>` is the server's SSH host, `<domain>` is `DOMAIN` from `.env`. Commands run in the project folder on the server (`~/discord-stream-recorder`), where `.env` sets `COMPOSE_FILE=compose.yaml:compose.server.yaml`, so plain `docker compose` picks up the Traefik overlay.
+Running, updating and fixing the stack on the home server. Placeholders: `<server>` is the server's SSH host, `<domain>` is `DOMAIN` from `.env`. Commands run in the project folder on the server (`~/.services/discord-stream-recorder`, next to the other stacks), where `.env` sets `COMPOSE_FILE=compose.yaml:compose.server.yaml`, so plain `docker compose` picks up the Traefik overlay.
 
 ## At a glance
 
@@ -18,8 +18,8 @@ noVNC is bound to `127.0.0.1` on the server on purpose: Docker-published ports b
 
 ```sh
 ssh <server>
-cd ~/discord-stream-recorder
-git pull
+cd ~/.services/discord-stream-recorder
+git pull                            # read-only deploy key: Host github-dsr in ~/.ssh/config
 docker compose up -d --build        # rebuilds both images, recreates changed containers
 docker compose ps                   # archive should be "healthy"
 ```
