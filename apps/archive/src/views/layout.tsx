@@ -2,9 +2,51 @@ import { raw } from 'hono/html';
 import type { Child } from 'hono/jsx';
 import type { AuthState } from '../auth/auth.ts';
 
+const SITE_NAME = 'Stream Archive';
+const SITE_DESCRIPTION =
+  'Every set from every disco, in one place: recordings of our Discord DJ sessions, leveled and ready to play.';
+
+/** Absolute URLs for a link preview (Open Graph), which chat apps need. */
+export interface Preview {
+  url: string;
+  image: string;
+}
+
+/** The site's link preview for the page at `path`, from `ARCHIVE_PUBLIC_URL`. */
+export const sitePreview = (publicUrl: string, path = '/'): Preview => ({
+  url: new URL(path, publicUrl).href,
+  image: new URL('/assets/og.png', publicUrl).href,
+});
+
+/**
+ * Link preview tags. The viewer password sends crawlers to the login page, so it and
+ * the home page carry them; the image is served without logging in.
+ */
+function PreviewTags({ preview }: { preview: Preview }) {
+  return (
+    <>
+      <meta property="og:type" content="website" />
+      <meta property="og:site_name" content={SITE_NAME} />
+      <meta property="og:title" content={SITE_NAME} />
+      <meta property="og:description" content={SITE_DESCRIPTION} />
+      <meta property="og:url" content={preview.url} />
+      <meta property="og:image" content={preview.image} />
+      <meta property="og:image:type" content="image/png" />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content={`${SITE_NAME}: ${SITE_DESCRIPTION}`} />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={SITE_NAME} />
+      <meta name="twitter:description" content={SITE_DESCRIPTION} />
+      <meta name="twitter:image" content={preview.image} />
+    </>
+  );
+}
+
 export interface LayoutProps {
   title: string;
   auth: AuthState;
+  preview?: Preview | undefined;
   /** Pre-fill the header search box. */
   query?: string | undefined;
   children?: Child;
@@ -118,7 +160,8 @@ function Logo() {
 }
 
 /** `<html>` with the shared head: theme, stylesheet, htmx. */
-function Document({ title, children }: { title: string; children?: Child }) {
+function Document(props: { title: string; preview?: Preview | undefined; children?: Child }) {
+  const { title, preview, children } = props;
   return (
     <>
       {raw('<!doctype html>')}
@@ -126,7 +169,13 @@ function Document({ title, children }: { title: string; children?: Child }) {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>{`${title} · Stream Archive`}</title>
+          <title>{`${title} · ${SITE_NAME}`}</title>
+          <meta name="description" content={SITE_DESCRIPTION} />
+          {/* The hero's teal: also the accent colour Discord gives link embeds. */}
+          <meta name="theme-color" content="#14b8a6" />
+          <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+          <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+          {preview && <PreviewTags preview={preview} />}
           <script>{raw(PAGE_SCRIPT)}</script>
           <link rel="stylesheet" href="/assets/app.css" />
           {/* Error responses (wrong password, not found) are full pages too: show them. */}
@@ -366,9 +415,9 @@ function PlayerBar() {
   );
 }
 
-export function Layout({ title, auth, query, children }: LayoutProps) {
+export function Layout({ title, auth, query, preview, children }: LayoutProps) {
   return (
-    <Document title={title}>
+    <Document title={title} preview={preview}>
       <div class="mx-auto max-w-[1400px] p-3 sm:p-6">
         <div class="min-w-0">
           <header class="mb-6 flex items-center gap-2">
@@ -408,9 +457,14 @@ export function Layout({ title, auth, query, children }: LayoutProps) {
 }
 
 /** A page with nothing but its content centred: the login page. */
-export function BareLayout({ title, children }: { title: string; children?: Child }) {
+export function BareLayout(props: {
+  title: string;
+  preview?: Preview | undefined;
+  children?: Child;
+}) {
+  const { title, preview, children } = props;
   return (
-    <Document title={title}>
+    <Document title={title} preview={preview}>
       <main class="grid min-h-screen place-items-center p-4">{children}</main>
     </Document>
   );

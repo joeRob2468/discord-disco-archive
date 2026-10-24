@@ -33,6 +33,10 @@ const PUBLIC_PATHS = new Set([
   '/assets/app.css',
   '/assets/htmx.min.js',
   '/assets/player.js',
+  // Link previews and icons: chat apps fetch these without logging in.
+  '/assets/og.png',
+  '/assets/apple-touch-icon.png',
+  '/favicon.svg',
 ]);
 
 const require = createRequire(import.meta.url);
@@ -52,6 +56,17 @@ const ASSETS = [
     '/assets/htmx.min.js',
     require.resolve('htmx.org/dist/htmx.min.js'),
     'text/javascript; charset=utf-8',
+  ],
+  ['/assets/og.png', fileURLToPath(new URL('views/static/og.png', import.meta.url)), 'image/png'],
+  [
+    '/assets/apple-touch-icon.png',
+    fileURLToPath(new URL('views/static/apple-touch-icon.png', import.meta.url)),
+    'image/png',
+  ],
+  [
+    '/favicon.svg',
+    fileURLToPath(new URL('views/static/favicon.svg', import.meta.url)),
+    'image/svg+xml',
   ],
 ] as const;
 
@@ -87,8 +102,8 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
     await next();
   });
 
-  app.route('/', sessionRoutes(auth, logger?.child({ module: 'auth' })));
-  app.route('/', browseRoutes(catalog));
+  app.route('/', sessionRoutes(auth, config.publicUrl, logger?.child({ module: 'auth' })));
+  app.route('/', browseRoutes(catalog, config.publicUrl));
   app.route(
     '/',
     adminRoutes(

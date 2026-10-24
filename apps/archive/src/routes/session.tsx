@@ -2,6 +2,7 @@
 import type { Logger } from '@dsr/core';
 import { Hono, type Context } from 'hono';
 import { safeNext, type Auth, type AuthEnv } from '../auth/auth.ts';
+import { sitePreview } from '../views/layout.tsx';
 import { LoginPage, NotFoundPage } from '../views/pages.tsx';
 import { formField } from './params.ts';
 
@@ -9,13 +10,15 @@ import { formField } from './params.ts';
 const clientIp = (c: Context): string | undefined =>
   c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip');
 
-export function sessionRoutes(auth: Auth, logger?: Logger): Hono<AuthEnv> {
+export function sessionRoutes(auth: Auth, publicUrl: string, logger?: Logger): Hono<AuthEnv> {
+  // Crawlers land on /login when a viewer password is set; show the site's preview there.
+  const preview = sitePreview(publicUrl);
   const app = new Hono<AuthEnv>();
   const loginEnabled = auth.adminEnabled || auth.viewerPasswordRequired;
 
   app.get('/login', (c) => {
     if (!loginEnabled) return c.html(<NotFoundPage auth={c.var.auth} />, 404);
-    return c.html(<LoginPage next={safeNext(c.req.query('next'))} />);
+    return c.html(<LoginPage next={safeNext(c.req.query('next'))} preview={preview} />);
   });
 
   app.post('/login', async (c) => {

@@ -2,12 +2,16 @@
  * Full pages that don't belong to one area: login, messages and not found.
  */
 import type { AuthState } from '../auth/auth.ts';
-import { BareLayout, Layout } from './layout.tsx';
+import { BareLayout, Layout, type Preview } from './layout.tsx';
 
-export function LoginPage(props: { next: string; error?: string | undefined }) {
-  const { next, error } = props;
+export function LoginPage(props: {
+  next: string;
+  error?: string | undefined;
+  preview?: Preview | undefined;
+}) {
+  const { next, error, preview } = props;
   return (
-    <BareLayout title="Log in">
+    <BareLayout title="Log in" preview={preview}>
       <div class="w-full max-w-sm">
         <div class="card panel w-full rounded-3xl">
           <form class="card-body gap-4" method="post" action="/login">

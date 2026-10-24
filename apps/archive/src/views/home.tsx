@@ -7,7 +7,7 @@ import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/cat
 import { setArt } from './art.ts';
 import { Art, DjAvatar } from './cards.tsx';
 import { formatDate, formatDuration, plural } from './format.ts';
-import { Layout } from './layout.tsx';
+import { Layout, type Preview } from './layout.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
 import { PlayButton, queueOf } from './play.tsx';
 
@@ -179,9 +179,10 @@ function PopularSets({ sets }: { sets: SetSummary[] }) {
   );
 }
 
-export function HomePage({ data, auth }: { data: HomeData; auth: AuthState }) {
+export function HomePage(props: { data: HomeData; auth: AuthState; preview: Preview }) {
+  const { data, auth, preview } = props;
   return (
-    <Layout title="Home" auth={auth}>
+    <Layout title="Home" auth={auth} preview={preview}>
       <Hero latest={data.albums[0]?.session} />
       <StreamersRow streamers={data.streamers} />
       {data.albums.length > 0 && (

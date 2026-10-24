@@ -134,6 +134,12 @@ describe('archive app', () => {
       }
     });
 
+    it('has a link preview on the home page only', async () => {
+      const app = build();
+      expect(await (await app.request('/')).text()).toContain('property="og:image"');
+      expect(await (await app.request('/djs')).text()).not.toContain('property="og:image"');
+    });
+
     it('filters the set list by search text', async () => {
       const html = await (await build().request('/search?q=caf')).text();
       const list = html.slice(html.indexOf('id="set-list"'));
@@ -531,6 +537,25 @@ describe('archive app', () => {
       expect((await app.request('/admin/activity', { headers: { Cookie: cookie } })).status).toBe(
         404,
       );
+    });
+
+    it('gives crawlers a link preview on the login page, with a public image', async () => {
+      const app = build(env);
+      const home = await app.request('/');
+      expect(home.headers.get('location')).toBe('/login?next=%2F');
+      const login = await (await app.request('/login?next=%2F')).text();
+      expect(login).toContain('<meta property="og:title" content="Stream Archive"');
+      expect(login).toContain(`<meta property="og:image" content="${ORIGIN}/assets/og.png"`);
+      expect(login).toContain(`<meta property="og:url" content="${ORIGIN}/"`);
+      for (const [path, type] of [
+        ['/assets/og.png', 'image/png'],
+        ['/assets/apple-touch-icon.png', 'image/png'],
+        ['/favicon.svg', 'image/svg+xml'],
+      ] as const) {
+        const response = await app.request(path);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toBe(type);
+      }
     });
 
     it('refuses open redirects after login', async () => {

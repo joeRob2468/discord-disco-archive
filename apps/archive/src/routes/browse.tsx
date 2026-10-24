@@ -15,6 +15,7 @@ import { isUuid } from '../catalog/ids.ts';
 import { AlbumPage, SetDetailPage, SetInline } from '../views/album.tsx';
 import { HomePage, type Album } from '../views/home.tsx';
 import { setUrl, type SearchFilters } from '../views/links.ts';
+import { sitePreview } from '../views/layout.tsx';
 import { NotFoundPage } from '../views/pages.tsx';
 import { SearchPage } from '../views/search.tsx';
 import { DjsPage, SessionsPage, sessionDefaultDir, streamerDefaultDir } from '../views/tables.tsx';
@@ -28,7 +29,7 @@ const POPULAR_DAYS = 30;
 const hasSets = (session: SessionSummary, auth: AuthState): boolean =>
   (auth.isAdmin ? session.totalSets : session.visibleSets) > 0;
 
-export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
+export function browseRoutes(catalog: Catalog, publicUrl: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
 
   const albumOf = (session: SessionSummary, auth: AuthState): Album => ({
@@ -42,6 +43,7 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
     return c.html(
       <HomePage
         auth={auth}
+        preview={sitePreview(publicUrl)}
         data={{
           albums: sessions.slice(0, RECENT_SESSIONS).map((s) => albumOf(s, auth)),
           streamers: catalog.listStreamers(auth.isAdmin),
