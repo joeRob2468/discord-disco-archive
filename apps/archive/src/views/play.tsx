@@ -76,3 +76,34 @@ export function PlayButton({
     </button>
   );
 }
+
+const QUEUE_ICON = 'M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3zM18 13v3h3v2h-3v3h-2v-3h-3v-2h3v-3z';
+
+/** Adds `tracks` to the end of the player's queue. Renders nothing if none are playable. */
+export function QueueButton({
+  tracks,
+  label = 'Add to queue',
+  class: className = 'btn btn-ghost btn-circle btn-sm',
+  text,
+}: {
+  tracks: Track[];
+  label?: string;
+  class?: string;
+  text?: string;
+}) {
+  if (tracks.length === 0) return null;
+  return (
+    <button
+      type="button"
+      class={className}
+      data-enqueue={JSON.stringify(tracks)}
+      aria-label={label}
+      title={label}
+    >
+      <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d={QUEUE_ICON} />
+      </svg>
+      {text}
+    </button>
+  );
+}

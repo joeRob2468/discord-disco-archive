@@ -1,7 +1,8 @@
 /**
  * The bottom player bar. Play buttons carry a queue (`data-queue`, JSON `Track[]`) and a
- * start position (`data-index`); clicks are handled by delegation, so buttons in pages
- * swapped in by htmx work too. The bar itself is `hx-preserve`d, so playback carries on
+ * start position (`data-index`); "Add to queue" buttons carry tracks to append
+ * (`data-enqueue`). Clicks are handled by delegation, so buttons in pages swapped in by
+ * htmx work too. The queue panel lists what's queued, to jump to or remove. The bar itself is `hx-preserve`d, so playback carries on
  * while browsing. A set counts as played after 30 s of actual listening.
  *
  * Built by esbuild into dist/player.js (`pnpm --filter @dsr/archive build:js`).
@@ -26,17 +27,21 @@ function formatTime(seconds: number): string {
   return h > 0 ? `${String(h)}:${String(m).padStart(2, '0')}:${ss}` : `${String(m)}:${ss}`;
 }
 
-function parseQueue(button: HTMLElement): { queue: Track[]; index: number } | undefined {
+function parseTracks(json: string | undefined): Track[] {
   try {
-    const queue = JSON.parse(button.dataset['queue'] ?? '[]') as Track[];
-    const index = Number(button.dataset['index'] ?? 0);
-    return queue.length > 0
-      ? { queue, index: Math.min(Math.max(index, 0), queue.length - 1) }
-      : undefined;
+    return JSON.parse(json ?? '[]') as Track[];
   } catch {
     // A malformed queue is a bug in the page; ignore the click rather than break the page.
-    return undefined;
+    return [];
   }
+}
+
+function parseQueue(button: HTMLElement): { queue: Track[]; index: number } | undefined {
+  const queue = parseTracks(button.dataset['queue']);
+  const index = Number(button.dataset['index'] ?? 0);
+  return queue.length > 0
+    ? { queue, index: Math.min(Math.max(index, 0), queue.length - 1) }
+    : undefined;
 }
 
 function init(): void {
@@ -52,6 +57,11 @@ function init(): void {
   const elapsed = byId('player-elapsed', HTMLElement);
   const duration = byId('player-duration', HTMLElement);
   const volume = byId('player-volume', HTMLInputElement);
+  const stop = byId('player-stop', HTMLButtonElement);
+  const queueToggle = byId('player-queue-toggle', HTMLButtonElement);
+  const queuePanel = byId('player-queue', HTMLElement);
+  const queueList = byId('player-queue-list', HTMLOListElement);
+  const queueClear = byId('player-queue-clear', HTMLButtonElement);
 
   let queue: Track[] = [];
   let index = 0;
@@ -62,7 +72,49 @@ function init(): void {
 
   const current = (): Track | undefined => queue[index];
 
+  function markPlaying(uuid: string | undefined): void {
+    for (const element of document.querySelectorAll<HTMLElement>('[data-track-uuid]')) {
+      element.classList.toggle('is-playing', element.dataset['trackUuid'] === uuid);
+    }
+  }
+
+  function renderQueue(): void {
+    queueClear.disabled = index >= queue.length - 1;
+    queueList.replaceChildren(
+      ...queue.map((track, position) => {
+        const item = document.createElement('li');
+        item.className = `flex items-center gap-1 rounded-xl ${position === index ? 'bg-base-100' : ''}`;
+        const jump = document.createElement('button');
+        jump.type = 'button';
+        jump.className = 'flex min-w-0 flex-1 items-center gap-3 px-2 py-1.5 text-left';
+        jump.dataset['queueJump'] = String(position);
+        const number = document.createElement('span');
+        number.className = 'text-base-content/50 w-5 shrink-0 text-right text-xs tabular-nums';
+        number.textContent = position === index ? '▶' : String(position + 1);
+        const text = document.createElement('span');
+        text.className = 'min-w-0';
+        const name = document.createElement('span');
+        name.className = `block truncate text-sm font-semibold ${position === index ? 'text-primary' : ''}`;
+        name.textContent = track.title;
+        const detail = document.createElement('span');
+        detail.className = 'text-base-content/60 block truncate text-xs';
+        detail.textContent = `${track.artist} · ${track.album}`;
+        text.append(name, detail);
+        jump.append(number, text);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-ghost btn-xs btn-circle shrink-0';
+        remove.dataset['queueRemove'] = String(position);
+        remove.setAttribute('aria-label', `Remove ${track.title} from the queue`);
+        remove.textContent = '✕';
+        item.append(jump, remove);
+        return item;
+      }),
+    );
+  }
+
   function render(): void {
+    renderQueue();
     const track = current();
     if (!track) return;
     bar.hidden = false;
@@ -74,9 +126,7 @@ function init(): void {
     previous.disabled = index === 0 && audio.currentTime < 3;
     next.disabled = index >= queue.length - 1;
     // Mark the playing set wherever it appears on the page.
-    for (const element of document.querySelectorAll<HTMLElement>('[data-track-uuid]')) {
-      element.classList.toggle('is-playing', element.dataset['trackUuid'] === track.uuid);
-    }
+    markPlaying(track.uuid);
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
@@ -99,6 +149,47 @@ function init(): void {
     if (autoplay) void audio.play().catch(() => undefined);
   }
 
+  /** Stop playback, empty the queue and hide the bar. */
+  function stopAll(): void {
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    queue = [];
+    index = 0;
+    bar.hidden = true;
+    queuePanel.hidden = true;
+    queueToggle.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('has-player');
+    markPlaying(undefined);
+    renderQueue();
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+  }
+
+  function enqueue(tracks: Track[]): void {
+    if (tracks.length === 0) return;
+    const empty = queue.length === 0;
+    queue = [...queue, ...tracks];
+    // Nothing loaded yet: show the first one in the bar, ready to play.
+    if (empty) load(0, false);
+    else render();
+  }
+
+  function removeAt(position: number): void {
+    if (position < 0 || position >= queue.length) return;
+    queue = queue.filter((_, i) => i !== position);
+    if (queue.length === 0) {
+      stopAll();
+      return;
+    }
+    if (position < index) index -= 1;
+    else if (position === index) {
+      // The playing set was removed: carry on with whatever took its place.
+      load(Math.min(index, queue.length - 1), !audio.paused);
+      return;
+    }
+    render();
+  }
+
   function countPlay(track: Track): void {
     counted = true;
     void fetch(`/api/plays/${encodeURIComponent(track.uuid)}`, { method: 'POST' }).catch(
@@ -108,6 +199,28 @@ function init(): void {
 
   document.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
+    const add = target?.closest<HTMLElement>('[data-enqueue]');
+    if (add) {
+      event.preventDefault();
+      event.stopPropagation();
+      enqueue(parseTracks(add.dataset['enqueue']));
+      // Brief confirmation on the button itself.
+      add.classList.add('btn-success');
+      setTimeout(() => {
+        add.classList.remove('btn-success');
+      }, 1200);
+      return;
+    }
+    // Clicking outside the open queue panel closes it.
+    if (
+      !queuePanel.hidden &&
+      target &&
+      !queuePanel.contains(target) &&
+      !queueToggle.contains(target)
+    ) {
+      queuePanel.hidden = true;
+      queueToggle.setAttribute('aria-expanded', 'false');
+    }
     const button = target?.closest<HTMLElement>('[data-queue]');
     if (!button) return;
     event.preventDefault();
@@ -126,6 +239,32 @@ function init(): void {
       render();
     } else {
       load(parsed.index);
+    }
+  });
+
+  stop.addEventListener('click', stopAll);
+  queueToggle.addEventListener('click', () => {
+    queuePanel.hidden = !queuePanel.hidden;
+    queueToggle.setAttribute('aria-expanded', String(!queuePanel.hidden));
+  });
+  queueClear.addEventListener('click', () => {
+    queue = queue.slice(0, index + 1);
+    render();
+  });
+  queueList.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const remove = target?.closest<HTMLElement>('[data-queue-remove]');
+    if (remove) {
+      removeAt(Number(remove.dataset['queueRemove']));
+      return;
+    }
+    const jump = target?.closest<HTMLElement>('[data-queue-jump]');
+    if (jump) load(Number(jump.dataset['queueJump']));
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !queuePanel.hidden) {
+      queuePanel.hidden = true;
+      queueToggle.setAttribute('aria-expanded', 'false');
     }
   });
 

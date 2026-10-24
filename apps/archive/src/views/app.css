@@ -19,6 +19,8 @@
   /* On the root, not <body>: the root background paints beneath the fixed backdrop. */
   html {
     background-color: oklch(16% 0.01 270);
+    /* Reserve the scrollbar's room on every page, so short and long pages are as wide. */
+    scrollbar-gutter: stable;
   }
   html[data-theme='light'] {
     background-color: var(--color-base-300);

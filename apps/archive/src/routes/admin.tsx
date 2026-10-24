@@ -1,12 +1,13 @@
 /**
  * The admin panel and the admin-only edit endpoints (HTML form posts). Fields missing
  * from a form are left unchanged, so a one-field form (e.g. the quick Hide button) only
- * touches that field.
+ * touches that field. Edit forms may also carry an image (`image` upload, or
+ * `removeImage=1`), applied in the same save.
  */
-import { Hono, type Context, type MiddlewareHandler } from 'hono';
+import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { safeNext, type AuthEnv } from '../auth/auth.ts';
 import { setStatusSchema } from '@dsr/core';
+import { safeNext, type AuthEnv } from '../auth/auth.ts';
 import { SET_SORTS, type Catalog, type ImageEntity } from '../catalog/catalog.ts';
 import { deleteImage, IMAGE_MAX_BYTES, ImageError, saveImage } from '../images.ts';
 import {
@@ -18,7 +19,7 @@ import {
 } from '../views/admin.tsx';
 import { MessagePage, NotFoundPage } from '../views/pages.tsx';
 import { formField, pageParam, sortParam, splitList, textParam } from './params.ts';
-import { searchUrl, setUrl } from '../views/links.ts';
+import { searchUrl, sessionUrl, setUrl } from '../views/links.ts';
 
 const ACTOR = 'admin';
 
@@ -52,123 +53,150 @@ const requireAdmin: MiddlewareHandler<AuthEnv> = async (c, next) => {
   await next();
 };
 
+// Room for the multipart wrapping around a maximum-size image.
+const editBodyLimit = bodyLimit({
+  maxSize: IMAGE_MAX_BYTES + 64 * 1024,
+  onError: (c) => c.text('Images must be 5 MB or smaller.', 413),
+});
+
+/** What an edit form asks for its image: a new upload, removal, or no change. */
+type ImageChange = { image: string | undefined } | undefined;
+
 /**
  * Mounted at the root; every route carries `requireAdmin` itself, because a sub-app's
  * `use()` would apply to the parent's routes too. Unknown IDs throw `NotFoundError`,
  * which the app's error handler turns into a 404.
  */
-const isImageEntity = (value: string): value is ImageEntity =>
-  value === 'streamer' || value === 'session' || value === 'set';
-
 export function adminRoutes(catalog: Catalog, imagesDir: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
 
-  // Upload (field `image`) or remove (`remove=1`) a DJ picture, set art or album cover.
-  app.post(
-    '/admin/images/:entity/:id',
-    requireAdmin,
-    // Room for the multipart wrapping around a maximum-size image.
-    bodyLimit({
-      maxSize: IMAGE_MAX_BYTES + 64 * 1024,
-      onError: (c) => c.text('Images must be 5 MB or smaller.', 413),
-    }),
+  /** Store an uploaded image (validated first, so a bad file changes nothing). */
+  async function imageChange(body: FormBody): Promise<ImageChange> {
+    const file = body['image'];
+    // Browsers send an empty file part when nothing was chosen.
+    if (file instanceof File && file.size > 0) {
+      return { image: await saveImage(imagesDir, new Uint8Array(await file.arrayBuffer())) };
+    }
+    return formField(body, 'removeImage') === '1' ? { image: undefined } : undefined;
+  }
+
+  async function applyImage(entity: ImageEntity, id: string, change: ImageChange): Promise<void> {
+    if (!change) return;
+    const previous = catalog.setImage(entity, id, change.image, ACTOR);
+    // Content-named files can be shared, so only delete one nothing uses any more.
+    if (previous && previous !== change.image && !catalog.imageInUse(previous)) {
+      await deleteImage(imagesDir, previous);
+    }
+  }
+
+  /**
+   * An edit route for `entity`: parses the form, stores any image, applies the text
+   * edits (`edit`) and the image, then redirects back.
+   */
+  const editRoute =
+    (
+      entity: ImageEntity,
+      edit: (id: string, body: FormBody) => void,
+      fallback: (id: string) => string,
+    ): Handler<AuthEnv> =>
     async (c) => {
-      const entity = c.req.param('entity');
-      if (!isImageEntity(entity)) return c.html(<NotFoundPage auth={c.var.auth} />, 404);
-      const id = c.req.param('id');
+      const id = c.req.param('id') ?? '';
       const body = await c.req.parseBody();
-      let image: string | undefined;
-      if (body['remove'] === undefined) {
-        const file = body['image'];
-        if (!(file instanceof File)) {
-          return c.html(
-            <MessagePage
-              auth={c.var.auth}
-              title="Upload failed"
-              message="Choose an image to upload."
-            />,
-            400,
-          );
-        }
-        try {
-          image = await saveImage(imagesDir, new Uint8Array(await file.arrayBuffer()));
-        } catch (error) {
-          if (!(error instanceof ImageError)) throw error;
-          return c.html(
-            <MessagePage auth={c.var.auth} title="Upload failed" message={error.message} />,
-            400,
-          );
-        }
+      let image: ImageChange;
+      try {
+        image = await imageChange(body);
+      } catch (error) {
+        if (!(error instanceof ImageError)) throw error;
+        return c.html(
+          <MessagePage auth={c.var.auth} title="Not saved" message={error.message} />,
+          400,
+        );
       }
-      const previous = catalog.setImage(entity, id, image, ACTOR);
-      // Content-named files can be shared, so only delete one nothing uses any more.
-      if (previous && previous !== image && !catalog.imageInUse(previous)) {
-        await deleteImage(imagesDir, previous);
-      }
-      return c.redirect(safeNext(formField(body, 'next')), 303);
-    },
+      edit(id, body);
+      await applyImage(entity, id, image);
+      return redirectBack(c, body, fallback(id));
+    };
+
+  app.post(
+    '/sessions/:id/edit',
+    requireAdmin,
+    editBodyLimit,
+    editRoute(
+      'session',
+      (id, body) => {
+        const hidden = visibility(formField(body, 'hidden'));
+        const title = formField(body, 'title');
+        const description = formField(body, 'description');
+        catalog.updateSession(
+          id,
+          {
+            ...(title !== undefined && { title }),
+            ...(description !== undefined && { description }),
+            // Sessions have no recorder-side hidden flag, so "default" means visible.
+            ...(hidden !== undefined && { hidden: hidden === true }),
+          },
+          ACTOR,
+        );
+      },
+      (id) => sessionUrl(id),
+    ),
   );
 
-  app.post('/sessions/:id/edit', requireAdmin, async (c) => {
-    const id = c.req.param('id');
-    const body = await c.req.parseBody();
-    const hidden = visibility(formField(body, 'hidden'));
-    catalog.updateSession(
-      id,
-      {
-        ...(formField(body, 'title') !== undefined && { title: formField(body, 'title') ?? null }),
-        ...(formField(body, 'description') !== undefined && {
-          description: formField(body, 'description') ?? null,
-        }),
-        // Sessions have no recorder-side hidden flag, so "default" means visible.
-        ...(hidden !== undefined && { hidden: hidden === true }),
+  app.post(
+    '/sets/:id/edit',
+    requireAdmin,
+    editBodyLimit,
+    editRoute(
+      'set',
+      (id, body) => {
+        const text = (name: string) => {
+          const value = formField(body, name);
+          return value === undefined ? {} : { [name]: value };
+        };
+        const tags = formField(body, 'tags');
+        const hidden = visibility(formField(body, 'hidden'));
+        catalog.updateSet(
+          id,
+          {
+            ...text('title'),
+            ...text('displayName'),
+            ...text('description'),
+            ...(tags !== undefined && { tags: splitList(tags, /,/) }),
+            ...(hidden !== undefined && { hidden }),
+          },
+          ACTOR,
+        );
       },
-      ACTOR,
-    );
-    return redirectBack(c, body, `/sessions/${encodeURIComponent(id)}`);
-  });
+      (id) => {
+        const set = catalog.getSet(id, true);
+        return set ? setUrl(set) : '/';
+      },
+    ),
+  );
 
-  app.post('/sets/:id/edit', requireAdmin, async (c) => {
-    const id = c.req.param('id');
-    const body = await c.req.parseBody();
-    const text = (name: string) => {
-      const value = formField(body, name);
-      return value === undefined ? {} : { [name]: value };
-    };
-    const tags = formField(body, 'tags');
-    const hidden = visibility(formField(body, 'hidden'));
-    catalog.updateSet(
-      id,
-      {
-        ...text('title'),
-        ...text('displayName'),
-        ...text('description'),
-        ...(tags !== undefined && { tags: splitList(tags, /,/) }),
-        ...(hidden !== undefined && { hidden }),
+  app.post(
+    '/streamers/:id/edit',
+    requireAdmin,
+    editBodyLimit,
+    editRoute(
+      'streamer',
+      (userId, body) => {
+        const displayName = formField(body, 'displayName');
+        const bio = formField(body, 'bio');
+        const links = formField(body, 'links');
+        catalog.updateStreamer(
+          userId,
+          {
+            ...(displayName !== undefined && { displayName }),
+            ...(bio !== undefined && { bio }),
+            ...(links !== undefined && { links: splitList(links, /\r?\n/) }),
+          },
+          ACTOR,
+        );
       },
-      ACTOR,
-    );
-    const set = catalog.getSet(id, true);
-    return redirectBack(c, body, set ? setUrl(set) : '/');
-  });
-
-  app.post('/streamers/:userId/edit', requireAdmin, async (c) => {
-    const userId = c.req.param('userId');
-    const body = await c.req.parseBody();
-    const displayName = formField(body, 'displayName');
-    const bio = formField(body, 'bio');
-    const links = formField(body, 'links');
-    catalog.updateStreamer(
-      userId,
-      {
-        ...(displayName !== undefined && { displayName }),
-        ...(bio !== undefined && { bio }),
-        ...(links !== undefined && { links: splitList(links, /\r?\n/) }),
-      },
-      ACTOR,
-    );
-    return redirectBack(c, body, searchUrl({ userId }));
-  });
+      (userId) => searchUrl({ userId }),
+    ),
+  );
 
   app.get('/admin', requireAdmin, (c) =>
     c.html(

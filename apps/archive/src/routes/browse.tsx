@@ -12,7 +12,7 @@ import {
   type SessionSummary,
 } from '../catalog/catalog.ts';
 import { isUuid } from '../catalog/ids.ts';
-import { AlbumPage, SetDetailPage } from '../views/album.tsx';
+import { AlbumPage, SetDetailPage, SetInline } from '../views/album.tsx';
 import { HomePage, type Album } from '../views/home.tsx';
 import { setUrl, type SearchFilters } from '../views/links.ts';
 import { NotFoundPage } from '../views/pages.tsx';
@@ -120,25 +120,38 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
     return c.html(<AlbumPage auth={auth} album={albumOf(session, auth)} />);
   });
 
+  /** The set at `/sessions/:id/sets/:uuid`, if the viewer may see it there. */
+  const setAt = (auth: AuthState, sessionId: string, uuid: string) => {
+    const set = isUuid(uuid) ? catalog.getSetByUuid(uuid, auth.isAdmin) : undefined;
+    const session = set && catalog.getSession(set.sessionId, auth.isAdmin);
+    if (set?.sessionId !== sessionId || !session) return undefined;
+    return { set, session, siblings: catalog.listSessionSets(set.sessionId, auth.isAdmin) };
+  };
+
   app.get('/sessions/:id/sets/:uuid', (c) => {
     const auth = c.var.auth;
-    const uuid = c.req.param('uuid');
-    const set = isUuid(uuid) ? catalog.getSetByUuid(uuid, auth.isAdmin) : undefined;
-    if (set?.sessionId !== c.req.param('id')) {
-      return c.html(<NotFoundPage auth={auth} />, 404);
-    }
-    const siblings = catalog.listSessionSets(set.sessionId, auth.isAdmin);
+    const found = setAt(auth, c.req.param('id'), c.req.param('uuid'));
+    if (!found) return c.html(<NotFoundPage auth={auth} />, 404);
+    const { set, session, siblings } = found;
     const index = siblings.findIndex((s) => s.id === set.id);
     return c.html(
       <SetDetailPage
         auth={auth}
         set={set}
+        session={session}
         albumSets={siblings}
         previous={index > 0 ? siblings[index - 1] : undefined}
         next={siblings[index + 1]}
         streamer={auth.isAdmin ? catalog.getStreamer(set.userId, true) : undefined}
       />,
     );
+  });
+
+  // The fragment a set row expands into.
+  app.get('/sessions/:id/sets/:uuid/inline', (c) => {
+    const found = setAt(c.var.auth, c.req.param('id'), c.req.param('uuid'));
+    if (!found) return c.body(null, 404);
+    return c.html(<SetInline set={found.set} albumSets={found.siblings} />);
   });
 
   // Older set links: by recorder set ID, and the short share link.

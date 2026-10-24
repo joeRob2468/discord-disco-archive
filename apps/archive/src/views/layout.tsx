@@ -12,7 +12,8 @@ export interface LayoutProps {
 
 /**
  * Applies the saved theme before first paint (dark unless the viewer chose light), and
- * handles the theme toggle, admin edit dialogs (`data-dialog`) and "Copy link" buttons. Delegated on `document`, so it
+ * handles the theme toggle, admin edit dialogs (`data-dialog`), set rows that expand
+ * into an inline set page (`data-expand`, fetched by htmx) and "Copy link" buttons. Delegated on `document`, so it
  * survives hx-boost swaps.
  */
 const PAGE_SCRIPT = `
@@ -26,6 +27,20 @@ const PAGE_SCRIPT = `
       root.dataset.theme = next;
       try { localStorage.setItem('theme', next); } catch {}
       return;
+    }
+    // A plain click expands the row; modified clicks still open the link as usual.
+    const expand = event.target.closest('[data-expand]');
+    if (expand && !(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) {
+      const box = expand.closest('[data-set-row]')?.querySelector('[data-set-inline]');
+      if (box) {
+        event.preventDefault();
+        const open = box.hidden;
+        box.hidden = !open;
+        expand.setAttribute('aria-expanded', String(open));
+        if (open) htmx.ajax('GET', expand.dataset.expand, { target: box, swap: 'innerHTML' });
+        else box.replaceChildren();
+        return;
+      }
     }
     const opener = event.target.closest('[data-dialog]');
     if (opener) {
@@ -195,6 +210,8 @@ const CONTROL_ICONS = {
   play: 'M7 4.5v15l12-7.5z',
   pause: 'M6 4h4v16H6zM14 4h4v16h-4z',
   volume: 'M4 9v6h4l5 4V5L8 9zM16 8.5a5 5 0 0 1 0 7',
+  stop: 'M6 6h12v12H6z',
+  queue: 'M3 5h13v2H3zM3 10h13v2H3zM3 15h8v2H3zM15 14v7l6-3.5z',
 } as const;
 
 function ControlIcon({
@@ -227,6 +244,20 @@ function PlayerBar() {
       aria-label="Player"
     >
       <audio id="player-audio" preload="metadata" />
+      <div
+        id="player-queue"
+        hidden
+        class="panel absolute right-3 bottom-full mb-2 flex max-h-[60vh] w-[min(26rem,calc(100vw-1.5rem))] flex-col rounded-2xl p-2 sm:right-6"
+        aria-label="Queue"
+      >
+        <div class="flex items-center justify-between px-2 py-1">
+          <h2 class="font-bold">Queue</h2>
+          <button id="player-queue-clear" type="button" class="btn btn-ghost btn-xs">
+            Clear upcoming
+          </button>
+        </div>
+        <ol id="player-queue-list" class="flex flex-col gap-0.5 overflow-y-auto" />
+      </div>
       <div class="mx-auto grid max-w-[1400px] grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[1fr_2fr_1fr]">
         <div class="flex min-w-0 items-center gap-3">
           <div id="player-art" class="size-12 shrink-0 rounded-lg shadow" />
@@ -241,6 +272,15 @@ function PlayerBar() {
         </div>
         <div class="flex flex-col items-center gap-1">
           <div class="flex items-center gap-2">
+            <button
+              id="player-stop"
+              type="button"
+              class="btn btn-ghost btn-circle btn-sm"
+              aria-label="Stop"
+              title="Stop"
+            >
+              <ControlIcon name="stop" class="size-4" />
+            </button>
             <button
               id="player-prev"
               type="button"
@@ -265,6 +305,17 @@ function PlayerBar() {
               aria-label="Next"
             >
               <ControlIcon name="next" class="size-4" />
+            </button>
+            <button
+              id="player-queue-toggle"
+              type="button"
+              class="btn btn-ghost btn-circle btn-sm"
+              aria-label="Queue"
+              title="Queue"
+              aria-expanded="false"
+              aria-controls="player-queue"
+            >
+              <ControlIcon name="queue" class="size-4" />
             </button>
           </div>
           <div class="hidden w-full items-center gap-2 text-xs tabular-nums sm:flex">

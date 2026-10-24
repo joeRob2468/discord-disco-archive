@@ -111,6 +111,22 @@ describe('archive app', () => {
       expect(html).toContain('href="https://example.com/owl"');
     });
 
+    it('shows the session on a set page, and expands sets inline', async () => {
+      const app = build();
+      const page = await (await app.request(setPage('session-1', 'set-2'))).text();
+      expect(page).toContain('From the session');
+      expect(page).toContain('Set 2 of 2');
+      expect(page).toContain(`href="${setPage('session-1', 'set-1')}"`);
+
+      const inline = await app.request(`${setPage('session-1', 'set-2')}/inline`);
+      expect(inline.status).toBe(200);
+      const html = await inline.text();
+      expect(html).not.toContain('<html');
+      expect(html).toContain('Open set page');
+      expect(html).toContain('data-enqueue=');
+      expect((await app.request(`${setPage('session-2', 'set-2')}/inline`)).status).toBe(404);
+    });
+
     it('no longer serves the old streamer and tag pages', async () => {
       const app = build();
       for (const old of ['/streamers', `/streamers/${DJ_A}`, '/tags']) {
@@ -226,47 +242,63 @@ describe('archive app', () => {
       return cookieFrom(response);
     };
 
-    it('uploads and removes album covers, set art and DJ pictures', async () => {
+    it('saves album covers, set art and DJ pictures with the edit form', async () => {
       const dataDir = await mkdtemp(path.join(tmpdir(), 'dsr-data-'));
       try {
         const app = build({ ...adminEnv, ARCHIVE_DATA_DIR: dataDir });
         const cookie = await loginAsAdmin(app);
-        const upload = (entity: string, id: string, body: FormData) =>
+        const edit = (route: string, body: FormData) =>
           app.request(
-            new Request(`${ORIGIN}/admin/images/${entity}/${id}`, {
+            new Request(`${ORIGIN}${route}`, {
               method: 'POST',
               headers: { Origin: ORIGIN, Cookie: cookie },
               body,
             }),
           );
-        const form = (bytes: Uint8Array) => {
+        const form = (fields: Record<string, string>, image?: Uint8Array | string) => {
           const body = new FormData();
-          body.set('image', new File([bytes], 'cover.png', { type: 'image/png' }));
+          for (const [key, value] of Object.entries(fields)) body.set(key, value);
+          // Like a browser with no file chosen: an empty file part.
+          body.set(
+            'image',
+            new File([image ?? ''], image ? 'cover.png' : '', { type: 'image/png' }),
+          );
           return body;
         };
 
-        const cover = form(PNG);
-        cover.set('next', '/sessions/session-1');
-        const uploaded = await upload('session', 'session-1', cover);
-        expect(uploaded.status).toBe(303);
-        expect(uploaded.headers.get('location')).toBe('/sessions/session-1');
+        const saved = await edit(
+          '/sessions/session-1/edit',
+          form({ title: 'Covered', next: '/sessions/session-1' }, PNG),
+        );
+        expect(saved.status).toBe(303);
+        expect(saved.headers.get('location')).toBe('/sessions/session-1');
         const album = await (
           await app.request('/sessions/session-1', { headers: { Cookie: cookie } })
         ).text();
+        expect(album).toContain('Covered');
         const src = /src="(\/images\/[0-9a-f]{32}\.png)"/.exec(album)?.[1];
         expect(src).toBeDefined();
         const image = await app.request(src ?? '', { headers: { Cookie: cookie } });
         expect(image.headers.get('content-type')).toBe('image/png');
 
-        // Not an image: refused, whatever the browser says it is.
-        const fake = new FormData();
-        fake.set('image', new File(['<svg/>'], 'x.png', { type: 'image/png' }));
-        expect((await upload('set', 'set-1', fake)).status).toBe(400);
-        expect((await upload('nope', 'set-1', form(PNG))).status).toBe(404);
+        // No file chosen: the text saves and the cover stays.
+        expect((await edit('/sessions/session-1/edit', form({ title: 'Kept' }))).status).toBe(303);
+        expect(await readdir(path.join(dataDir, 'images'))).toHaveLength(1);
 
-        const remove = new FormData();
-        remove.set('remove', '1');
-        expect((await upload('session', 'session-1', remove)).status).toBe(303);
+        // Not an image: refused, whatever the browser says it is, and nothing is saved.
+        const refused = await edit('/sets/set-1/edit', form({ title: 'Nope' }, '<svg/>'));
+        expect(refused.status).toBe(400);
+        expect(new Catalog(db).getSet('set-1', true)?.title).toBeUndefined();
+
+        expect((await edit('/streamers/' + DJ_A + '/edit', form({}, PNG))).status).toBe(303);
+        expect((await edit('/sessions/session-1/edit', form({ removeImage: '1' }))).status).toBe(
+          303,
+        );
+        // The DJ picture is the same bytes, so the shared file stays until it's unused.
+        expect(await readdir(path.join(dataDir, 'images'))).toHaveLength(1);
+        expect(
+          (await edit('/streamers/' + DJ_A + '/edit', form({ removeImage: '1' }))).status,
+        ).toBe(303);
         expect(await readdir(path.join(dataDir, 'images'))).toEqual([]);
       } finally {
         await rm(dataDir, { recursive: true, force: true });
