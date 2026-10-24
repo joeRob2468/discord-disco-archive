@@ -15,18 +15,17 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 | Logout / captcha alerts        | ✅ deployed; the healthy path is verified, a real logout or captcha hasn't been seen   |
 | Rejoin after a voice drop      | ✅ verified live (disconnected mid-set, rejoined in 6 s)                               |
 | Stream restart grace           | ✅ verified live (drop and return joined into one set)                                 |
-| Partial tagging                | ✅ built; **the fix for a stop while a set is held (`1e47bf7`) isn't deployed yet**    |
+| Partial tagging                | ✅ deployed; needs a real event to judge (see Next)                                    |
 | Video                          | ⏸️ not built (deferred)                                                                |
 | Resume after recorder restart  | ⏭️ skipped                                                                             |
 
 ## Next
 
-1. Deploy `1e47bf7`: `ssh <server> 'cd ~/.services/discord-stream-recorder && git pull && docker compose up -d --build recorder'`.
-2. **Dry run with friends** (the user's). Watch for:
+1. **Dry run with friends** (the user's). Watch for:
    - "capture is shorter than the time it ran" warnings: the first segment of some sets was 1–3 s short (later segments weren't), likely audio missed while ffmpeg starts.
    - Partial tags: a set only escapes the tag if it opens with at least 2 s of silence.
    - AFK moves of the recorder (exempt it from any AFK bot).
-3. Open the archive from outside the home network once.
+2. Open the archive from outside the home network once.
 
 ## Environment notes
 
