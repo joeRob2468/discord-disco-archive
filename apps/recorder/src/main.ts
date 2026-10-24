@@ -126,7 +126,15 @@ const preflight = async (): Promise<string | undefined> => {
   return state === 'ok' ? undefined : `Can't record: ${HEALTH_PROBLEMS[state]}. ${FIX_HINT}`;
 };
 
-const client = await startBot({ config: config.discord, sessions, logger, preflight });
+const client = await startBot({
+  config: config.discord,
+  sessions,
+  logger,
+  preflight,
+  onRecorderLeftVoice: (channelId) => {
+    controller.recorderLeftVoice(channelId);
+  },
+});
 clientRef.current = client;
 
 // Raw captures and dropped export formats are cleaned up at startup, then hourly.

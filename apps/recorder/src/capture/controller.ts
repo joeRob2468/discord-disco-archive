@@ -6,6 +6,10 @@
  *
  * Browser steps are slow and must not interleave, so every event goes through one
  * queue and runs to completion before the next starts.
+ *
+ * If the recorder drops out of voice on its own (network, AFK move, kick), it closes the
+ * current set, rejoins with a few retries, and picks the current target up again as a
+ * new set.
  */
 import { stat } from 'node:fs/promises';
 import type { Logger } from '@dsr/core';
@@ -56,7 +60,16 @@ export interface ControllerDeps {
   postProcess: (record: SessionRecord, setId: string) => Promise<void>;
   logger: Logger;
   now?: () => Date;
+  /** Waits before each rejoin attempt; the first is usually 0. */
+  rejoinDelaysMs?: readonly number[];
 }
+
+const REJOIN_DELAYS_MS = [0, 10_000, 30_000, 60_000];
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 interface ActiveCapture {
   setId: string;
@@ -87,6 +100,9 @@ export class RecordingController {
   #record: SessionRecord | undefined;
   #capture: ActiveCapture | undefined;
   #inVoice = false;
+  /** Set while we leave on purpose, so our own leave isn't taken for a drop. */
+  #leaving = false;
+  readonly #rejoinDelaysMs: readonly number[];
 
   constructor(deps: ControllerDeps) {
     this.#page = deps.page;
@@ -96,6 +112,7 @@ export class RecordingController {
     this.#logger = deps.logger;
     this.#now = deps.now ?? (() => new Date());
     this.#postProcess = deps.postProcess;
+    this.#rejoinDelaysMs = deps.rejoinDelaysMs ?? REJOIN_DELAYS_MS;
   }
 
   sessionStarted(session: SessionInfo): void {
@@ -104,6 +121,18 @@ export class RecordingController {
 
   targetChanged(change: TargetChange, session: SessionInfo): void {
     this.#enqueue('target change', () => this.#switch(change, session));
+  }
+
+  /**
+   * The bot saw the recorder account leave `channelId` (disconnected or moved). Ignored
+   * unless it's the active session's channel and we didn't leave on purpose.
+   */
+  recorderLeftVoice(channelId: string): void {
+    const session = this.#sessions.active;
+    if (session?.channelId !== channelId || this.#leaving || !this.#inVoice) return;
+    this.#inVoice = false;
+    this.#logger.warn({ channelId }, 'recorder dropped out of voice');
+    this.#enqueue('rejoin', () => this.#rejoin(session));
   }
 
   sessionEnded(session: SessionInfo): void {
@@ -130,15 +159,7 @@ export class RecordingController {
     this.#logger.info({ dir: this.#record.paths.dir }, 'session folder created');
 
     try {
-      await openChannel(this.#page, session.guildId, session.channelId);
-      // Deafen before joining so voice chat never plays, even briefly.
-      await muteAndDeafen(this.#page);
-      await joinVoice(this.#page, session.channelId);
-      this.#inVoice = true;
-      if (!(await isMutedAndDeafened(this.#page))) {
-        throw new Error('not muted and deafened after joining');
-      }
-      this.#logger.info({ channelId: session.channelId }, 'joined voice, muted and deafened');
+      await this.#join(session);
     } catch (error) {
       this.#logger.error({ err: error, channelId: session.channelId }, 'could not join voice');
       await this.#leave();
@@ -150,6 +171,88 @@ export class RecordingController {
     }
   }
 
+  async #join(session: SessionInfo): Promise<void> {
+    await openChannel(this.#page, session.guildId, session.channelId);
+    // Deafen before joining so voice chat never plays, even briefly.
+    await muteAndDeafen(this.#page);
+    await joinVoice(this.#page, session.channelId);
+    this.#inVoice = true;
+    if (!(await isMutedAndDeafened(this.#page))) {
+      throw new Error('not muted and deafened after joining');
+    }
+    this.#logger.info({ channelId: session.channelId }, 'joined voice, muted and deafened');
+  }
+
+  async #rejoin(session: SessionInfo): Promise<void> {
+    const lostAt = this.#now();
+    const target = this.#capture?.target;
+    // The set ends at the drop; what's after it was never heard.
+    await this.#stopCapture(true);
+    this.#notify(
+      session.channelId,
+      '⚠️ The recorder dropped out of voice' +
+        (target ? `, so **${target.displayName}**'s set is cut here` : '') +
+        '. Rejoining…',
+    );
+
+    const stillActive = (): boolean => this.#sessions.active?.channelId === session.channelId;
+    let attempt = 0;
+    for (const delay of this.#rejoinDelaysMs) {
+      attempt += 1;
+      if (delay > 0) await sleep(delay);
+      if (!stillActive()) {
+        this.#logger.info('session ended while rejoining; not rejoining');
+        return;
+      }
+      try {
+        await this.#join(session);
+        break;
+      } catch (error) {
+        this.#inVoice = false;
+        this.#logger.warn({ err: error, attempt }, 'rejoin attempt failed');
+      }
+    }
+    const gapSeconds = Math.round((this.#now().getTime() - lostAt.getTime()) / 1000);
+    if (!this.#inVoice) {
+      this.#logger.error({ attempts: attempt, gapSeconds }, 'could not rejoin voice');
+      this.#notify(
+        session.channelId,
+        "⚠️ The recorder couldn't get back into voice, so nothing is being recorded. " +
+          'Run `/record stop`, then `/record start` again.',
+      );
+      return;
+    }
+
+    this.#logger.info({ attempts: attempt, gapSeconds }, 'rejoined voice');
+    const current = this.#sessions.status()?.target;
+    const resumed = current && (await this.#openStream(current, true, session));
+    this.#notify(
+      session.channelId,
+      `✅ Back in voice after ${String(gapSeconds)} s` +
+        (resumed ? `; recording **${current.displayName}** again as a new set.` : '.'),
+    );
+  }
+
+  /** Open `target`'s stream and start a set. Returns false (and says so) if it fails. */
+  async #openStream(target: Target, partial: boolean, session: SessionInfo): Promise<boolean> {
+    try {
+      await watchStream(this.#page, target);
+      const wasMuted = await unmuteStream(this.#page, target);
+      const volume = await setStreamVolume(this.#page, target, this.#config.streamVolume);
+      this.#logger.info({ target: target.displayName, wasMuted, volume }, 'stream opened');
+    } catch (error) {
+      this.#logger.error({ err: error, target: target.displayName }, 'could not open stream');
+      this.#notify(
+        session.channelId,
+        `⚠️ Couldn't open **${target.displayName}**'s stream, so it isn't being recorded. ` +
+          'Try `/record switch` to retry.',
+      );
+      return false;
+    }
+    await this.#startCapture(target, partial, session);
+    return true;
+  }
+
   async #switch(change: TargetChange, session: SessionInfo): Promise<void> {
     await this.#stopCapture(change.reason === 'session-stopped');
     if (change.from && this.#inVoice) await stopWatching(this.#page);
@@ -159,21 +262,7 @@ export class RecordingController {
       return;
     }
 
-    try {
-      await watchStream(this.#page, change.to);
-      const wasMuted = await unmuteStream(this.#page, change.to);
-      const volume = await setStreamVolume(this.#page, change.to, this.#config.streamVolume);
-      this.#logger.info({ target: change.to.displayName, wasMuted, volume }, 'stream opened');
-    } catch (error) {
-      this.#logger.error({ err: error, target: change.to.displayName }, 'could not open stream');
-      this.#notify(
-        session.channelId,
-        `⚠️ Couldn't open **${change.to.displayName}**'s stream, so it isn't being recorded. ` +
-          'Try `/record switch` to retry.',
-      );
-      return;
-    }
-    await this.#startCapture(change.to, change.reason === 'already-live', session);
+    await this.#openStream(change.to, change.reason === 'already-live', session);
   }
 
   async #end(session: SessionInfo): Promise<void> {
@@ -202,13 +291,16 @@ export class RecordingController {
   }
 
   async #leave(): Promise<void> {
+    this.#leaving = true;
     try {
       await stopWatching(this.#page);
       await leaveVoice(this.#page);
     } catch (error) {
       this.#logger.warn({ err: error }, 'could not leave voice cleanly');
+    } finally {
+      this.#inVoice = false;
+      this.#leaving = false;
     }
-    this.#inVoice = false;
   }
 
   async #startCapture(target: Target, partial: boolean, session: SessionInfo): Promise<void> {

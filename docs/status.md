@@ -25,7 +25,7 @@ _Last updated: 2026-10-23 (session 3)_
 | 6   | Video                 | ⏸️ deferred        | Tabled on 2026-10-23 as a future optimisation; audio-only for now. Still open when it's picked up: x11grab capture, full-screen stream, the `--no-sandbox` info bar.                                                                                                                          |
 | 7   | Archive site          | 🧪 merged, testing | On `main`. Runs locally against the real recordings: browse, streamers, search, set pages, M4A player with range requests, MP3/FLAC/M4A downloads, raw WAV playback and download until leveling finishes. Not yet: the Docker image, admin edits on real data.                                |
 | 8   | Deploy to home server | ✅ done            |                                                                                                                                                                                                                                                                                               |
-| 9   | Hardening             | 🚧 9a built        |                                                                                                                                                                                                                                                                                               |
+| 9   | Hardening             | 🚧 9b built        |                                                                                                                                                                                                                                                                                               |
 
 ## Implemented on `main`
 
@@ -79,7 +79,9 @@ daisyUI 5 + Tailwind 4 + htmx, on the existing server-rendered architecture; pla
 
 Stages, each stopped for testing (decided 2026-10-23): **9a** logout/captcha detection and alerts, **9b** rejoin after the recorder is disconnected, **9c** stream restart grace (segments joined directly, dropout cut), **9d** resume after a recorder restart from `state.json`, **9e** dry run with friends. Alerts go to the active session's chat only (no admin DMs or alert channel), so a problem while idle is logged and surfaces at the next `/record start`.
 
-- **9a built (2026-10-23), not yet deployed:** `browser/health.ts` checks the web client (login page or form, or a visible hCaptcha iframe) at startup, every 5 min, and as a pre-flight in `/record start`, which now refuses with the reason instead of failing mid-join. State changes are logged once and announced in an active session's chat (problem and recovery). Sets that fail processing are announced in their session's chat too. The captcha selector is unverified (research.md).
+- **9a verified (2026-10-23):** deployed; startup check reports the client healthy and a `/record start`/`stop` test ran normally (no false alarm). The logout and captcha paths themselves weren't triggered (logging the account out risks a captcha on re-login).
+- **9a details:** `browser/health.ts` checks the web client (login page or form, or a visible hCaptcha iframe) at startup, every 5 min, and as a pre-flight in `/record start`, which now refuses with the reason instead of failing mid-join. State changes are logged once and announced in an active session's chat (problem and recovery). Sets that fail processing are announced in their session's chat too. The captcha selector is unverified (research.md).
+- **9b built (2026-10-23), not yet deployed:** the bot passes the recorder account's own voice moves to the controller. Leaving the session's channel unasked (disconnect, AFK move, kick) ends the current set as partial (it's still processed), posts a ⚠️ notice, retries the join after 0/10/30/60 s, then reopens the current target as a new partial set and posts ✅ with the gap; if every retry fails, it says to `/record stop` and start again. Its own leaves (session end, failed join) are ignored. Covered by `capture/controller.test.ts` with the browser and ffmpeg mocked; untested live.
 
 ## Milestone 8 (deploy): done
 
@@ -102,7 +104,7 @@ Chromium plays Discord's stream audio in mono, so the recorder now uses Firefox 
 
 ## Dev environment state (end of session 2, 2026-10-23)
 
-- **Resume here:** milestone 9; 9a is built and waiting for deploy and a test (see "Milestone 9" above). Earlier note: See "Next: archive UI rewrite" above. Starting the archive migrates `docker-data/archive/archive.db` to schema v4.
+- **Resume here:** milestone 9; 9b is built and waiting for deploy and a live test (disconnect the recorder from voice mid-set) (see "Milestone 9" above). Earlier note: See "Next: archive UI rewrite" above. Starting the archive migrates `docker-data/archive/archive.db` to schema v4.
 - The recorder runs in Docker (`docker compose up -d recorder`, currently stopped); `/record` works from the container. It uses **Firefox** (`BROWSER_CHANNEL=firefox` in `.env`), logged in as "Recorder Account" in `docker-data/recorder/profile-firefox`, with Discord notification sounds disabled. The old Chrome profile is in `docker-data/recorder/profile`.
 - `.env` is filled in (bot token, guild ID, recorder user ID, `COMMAND_DEFAULT_PERMISSION=Everyone`, `VNC_PASSWORD`, `PUID`/`PGID` 1000, and the archive's viewer and admin passwords and session secret). Never print it.
 - The bot application is "Recorder Bot" (private), invited with View Channels + Send Messages. Test server: the user's; test voice channel: "👻Halloween Disco👻" (formerly "Test Room"). Test accounts: Val Mason (desktop client) and 🎃 (web client).

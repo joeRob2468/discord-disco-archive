@@ -22,9 +22,12 @@ export interface BotDeps {
   logger: Logger;
   /** Why the recorder can't record right now (e.g. logged out), checked by `/record start`. */
   preflight?: () => Promise<string | undefined>;
+  /** The recorder account left a voice channel (disconnected, moved or kicked). */
+  onRecorderLeftVoice?: (channelId: string) => void;
 }
 
-export async function startBot({ config, sessions, logger, preflight }: BotDeps): Promise<Client> {
+export async function startBot(deps: BotDeps): Promise<Client> {
+  const { config, sessions, logger, preflight, onRecorderLeftVoice } = deps;
   // Neither intent is privileged: Guilds (channels, roles) and GuildVoiceStates (Go Live).
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
@@ -49,8 +52,18 @@ export async function startBot({ config, sessions, logger, preflight }: BotDeps)
 
   client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     if (newState.guild.id !== config.guildId) return;
-    // The recorder account is never a DJ, even if someone tests by streaming from it.
-    if (newState.id === config.recorderUserId) return;
+    // The recorder account is never a DJ, even if someone tests by streaming from it. Its
+    // own moves matter, though: leaving the session's channel unasked means a drop.
+    if (newState.id === config.recorderUserId) {
+      if (oldState.channelId && oldState.channelId !== newState.channelId) {
+        logger.info(
+          { from: oldState.channelId, to: newState.channelId ?? null },
+          'recorder account left a voice channel',
+        );
+        onRecorderLeftVoice?.(oldState.channelId);
+      }
+      return;
+    }
     for (const event of toStreamEvents(oldState, newState)) {
       logger.info(event, event.type === 'start' ? 'stream started' : 'stream ended');
       if (event.type === 'start')

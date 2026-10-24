@@ -124,7 +124,7 @@ One recorder can only watch one stream with clean audio. Chrome mixes everything
 Edge cases the controller must handle:
 
 - **The DJ's stream drops and restarts mid-set.** Treat a restart by the same user within `RESTART_GRACE_SECONDS` as the same set. Record it as a new segment and join the segments in post-processing.
-- **The recorder gets disconnected** (network issue or AFK move). Rejoin the channel and resume watching if a stream is still live. Log the gap.
+- **The recorder gets disconnected** (network issue, AFK move or kick). Built in 9b: the bot sees the recorder account leave the session's channel; the controller ends the current set as partial, announces it, retries the join (0, 10, 30, 60 s), and records the current target again as a new set, announcing the gap. Leaves it asked for itself are ignored.
 - **Someone runs `/record stop` mid-set.** Finalise the file, mark it `partial`, and still post-process it.
 - **Two or more people stream at once.** Handled by the [handover rules](#which-stream-to-record-handover).
 - **Login or captcha prompt.** Stop and alert. Never try to solve captchas or type credentials automatically.

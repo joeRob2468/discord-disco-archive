@@ -47,6 +47,10 @@ That profile folder is equivalent to the account's password: don't copy it anywh
 
 If the bot is offline in Discord, check `DISCORD_BOT_TOKEN` in `.env` and that the container is running (`docker compose ps`).
 
+### The recorder dropped out of voice
+
+The chat gets "⚠️ The recorder dropped out of voice… Rejoining…", then "✅ Back in voice after N s" once it has rejoined (it tries for about 2 minutes) and is recording the current DJ again as a new set. The set before the drop is kept as a partial set. If it says it couldn't get back in, check noVNC (logged out? captcha?), then `/record stop` and `/record start`. In the log: `recorder dropped out of voice`, `rejoin attempt failed`, `rejoined voice` or `could not rejoin voice`.
+
 ### A set is stuck "processing" or "failed"
 
 The archive's Admin → Overview lists these with the failure reason. Sets left `processing` usually mean the recorder stopped mid-encode. Re-run leveling for a finished session:
