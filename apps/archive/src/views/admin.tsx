@@ -1,6 +1,6 @@
 /**
  * The admin panel: an overview (totals, storage use, sets that need attention), every
- * set as a filterable table with quick hide buttons, and the edit activity log.
+ * set as a filterable table with quick archive buttons, and the edit activity log.
  */
 import type { SetStatus } from '@dsr/core';
 import type { Child } from 'hono/jsx';
@@ -85,7 +85,7 @@ export function OverviewPage(props: {
         <Stat
           label="Sets"
           value={String(overview.sets)}
-          detail={overview.hiddenSets > 0 ? `${String(overview.hiddenSets)} hidden` : undefined}
+          detail={overview.hiddenSets > 0 ? `${String(overview.hiddenSets)} archived` : undefined}
         />
         <Stat label="DJs" value={String(overview.djs)} />
         <Stat label="Recorded" value={formatHours(overview.seconds)} />
@@ -162,7 +162,7 @@ export function adminSetsUrl(filters: AdminSetFilters): string {
   return withQuery('/admin/sets', {
     q: filters.q,
     status: filters.status,
-    visibility: filters.hidden === undefined ? undefined : filters.hidden ? 'hidden' : 'visible',
+    visibility: filters.hidden === undefined ? undefined : filters.hidden ? 'archived' : 'visible',
     sort: filters.sort.by,
     dir: filters.sort.dir,
     page: filters.page && filters.page > 1 ? String(filters.page) : undefined,
@@ -171,14 +171,14 @@ export function adminSetsUrl(filters: AdminSetFilters): string {
 
 const totalBytes = (set: SetSummary): number => sum(...Object.values(set.fileSizes));
 
-/** Hide or unhide in one click; "as recorded" is in the edit dialog. */
-function HideButton({ set, next }: { set: SetSummary; next: string }) {
+/** Archive or unarchive in one click; "as recorded" is in the edit dialog. */
+function ArchiveButton({ set, next }: { set: SetSummary; next: string }) {
   return (
     <form class="inline" method="post" action={`/sets/${encodeURIComponent(set.id)}/edit`}>
       <input type="hidden" name="next" value={next} />
       <input type="hidden" name="hidden" value={set.hidden ? 'visible' : 'hidden'} />
       <button class="btn btn-ghost btn-sm" type="submit">
-        {set.hidden ? 'Unhide' : 'Hide'}
+        {set.hidden ? 'Unarchive' : 'Archive'}
       </button>
     </form>
   );
@@ -240,7 +240,7 @@ function SetsTable({ list, filters }: { list: Page<SetSummary>; filters: AdminSe
                 {formatBytes(totalBytes(set))}
               </td>
               <td class="text-right whitespace-nowrap">
-                <HideButton set={set} next={current} />
+                <ArchiveButton set={set} next={current} />
                 <EditButton kind="set" id={set.id} />
                 <EditSetDialog set={set} next={current} />
               </td>
@@ -317,12 +317,12 @@ export function AdminSetsPage(props: {
           name="visibility"
           aria-label="Visibility"
         >
-          <option value="">Visible and hidden</option>
+          <option value="">Visible and archived</option>
           <option value="visible" selected={filters.hidden === false}>
             Visible
           </option>
-          <option value="hidden" selected={filters.hidden === true}>
-            Hidden
+          <option value="archived" selected={filters.hidden === true}>
+            Archived
           </option>
         </select>
       </form>

@@ -73,7 +73,7 @@ export function NotFoundPage({ auth }: { auth: AuthState }) {
     <Layout title="Not found" auth={auth}>
       <div class="panel mx-auto max-w-md rounded-3xl p-6">
         <h1 class="text-xl font-bold">Not found</h1>
-        <p class="text-base-content/70 mt-2">There's nothing here, or it's been hidden.</p>
+        <p class="text-base-content/70 mt-2">There's nothing here, or it's been archived.</p>
         <a class="btn btn-ghost mt-4" href="/">
           ← Back to the archive
         </a>

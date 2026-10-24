@@ -10,6 +10,7 @@ import { setStatusSchema } from '@dsr/core';
 import { safeNext, type AuthEnv } from '../auth/auth.ts';
 import { SET_SORTS, type Catalog, type ImageEntity } from '../catalog/catalog.ts';
 import { deleteImage, IMAGE_MAX_BYTES, ImageError, saveImage } from '../images.ts';
+import { DeleteError, deleteSessionFolder, deleteSetFiles } from '../recordings.ts';
 import {
   ActivityPage,
   AdminSetsPage,
@@ -67,7 +68,11 @@ type ImageChange = { image: string | undefined } | undefined;
  * `use()` would apply to the parent's routes too. Unknown IDs throw `NotFoundError`,
  * which the app's error handler turns into a 404.
  */
-export function adminRoutes(catalog: Catalog, imagesDir: string): Hono<AuthEnv> {
+export function adminRoutes(
+  catalog: Catalog,
+  imagesDir: string,
+  recordingsDir: string,
+): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
 
   /** Store an uploaded image (validated first, so a bad file changes nothing). */
@@ -141,6 +146,51 @@ export function adminRoutes(catalog: Catalog, imagesDir: string): Hono<AuthEnv> 
       (id) => sessionUrl(id),
     ),
   );
+
+  /** Run a permanent delete; a refusal (still recording) becomes a message page. */
+  async function deleting(
+    c: Context<AuthEnv>,
+    run: () => Promise<void>,
+  ): Promise<Response | undefined> {
+    try {
+      await run();
+      return undefined;
+    } catch (error) {
+      if (!(error instanceof DeleteError)) throw error;
+      return c.html(
+        <MessagePage auth={c.var.auth} title="Not deleted" message={error.message} />,
+        409,
+      );
+    }
+  }
+
+  app.post('/sets/:id/delete', requireAdmin, async (c) => {
+    const set = catalog.getSet(c.req.param('id'), true);
+    if (!set) return c.html(<NotFoundPage auth={c.var.auth} />, 404);
+    const body = await c.req.parseBody();
+    const force = formField(body, 'force') === '1';
+    const refused = await deleting(c, () =>
+      deleteSetFiles(recordingsDir, set.sessionDir, set.id, force),
+    );
+    if (refused) return refused;
+    for (const image of catalog.deleteSet(set.id, ACTOR)) await deleteImage(imagesDir, image);
+    return redirectBack(c, body, sessionUrl(set.sessionId));
+  });
+
+  app.post('/sessions/:id/delete', requireAdmin, async (c) => {
+    const session = catalog.getSession(c.req.param('id'), true);
+    if (!session) return c.html(<NotFoundPage auth={c.var.auth} />, 404);
+    const body = await c.req.parseBody();
+    const force = formField(body, 'force') === '1';
+    const refused = await deleting(c, () =>
+      deleteSessionFolder(recordingsDir, session.dir, session.endedAt !== undefined, force),
+    );
+    if (refused) return refused;
+    for (const image of catalog.deleteSession(session.id, ACTOR)) {
+      await deleteImage(imagesDir, image);
+    }
+    return redirectBack(c, body, '/sessions');
+  });
 
   // Reorder an album: `move=up|down` with `set=<id>`, or `move=reset`.
   app.post('/sessions/:id/order', requireAdmin, async (c) => {
@@ -227,7 +277,7 @@ export function adminRoutes(catalog: Catalog, imagesDir: string): Hono<AuthEnv> 
     const filters: AdminSetFilters = {
       q: textParam(c.req.query('q')),
       status: status.success ? status.data : undefined,
-      hidden: visibility === 'hidden' ? true : visibility === 'visible' ? false : undefined,
+      hidden: visibility === 'archived' ? true : visibility === 'visible' ? false : undefined,
       sort: sortParam(SET_SORTS, c.req.query('sort'), c.req.query('dir'), 'date', setDefaultDir),
       page: pageParam(c.req.query('page')),
     };

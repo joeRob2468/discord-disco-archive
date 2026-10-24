@@ -8,7 +8,7 @@ These are the rules for working in this repo, for people and coding agents alike
 - **Dependencies point one way:** `apps/*` → `packages/*`. Packages never import apps. `@dsr/media` doesn't depend on `@dsr/core`.
 - **Config:** each app has exactly one `src/config.ts`, a zod schema read through `@dsr/core`'s `parseEnv`, split into sections so a module only needs its own keys. Nothing else reads `process.env` (the logger's `LOG_LEVEL` is the one exception). Every key is documented in `.env.example` and in docs/plan.md's configuration table.
 - **Data contracts:**
-  - `session.json` and `state.json` (schemas in `@dsr/core/session.ts`) are the recorder → archive contract. Only the recorder writes them, always with `writeJsonFileAtomic`.
+  - `session.json` and `state.json` (schemas in `@dsr/core/session.ts`) are the recorder → archive contract. Only the recorder writes them, always with `writeJsonFileAtomic`. The one exception: the archive's admin delete (`apps/archive/src/recordings.ts`) removes a set's entry, also atomically, and only for sessions that have ended unless forced.
   - `archive.db` belongs to the archive. Sync writes only `recorded_*` and structural columns; edits write only edit columns.
   - Any schema change needs `SCHEMA_VERSION` handling (JSON) or a new migration (SQLite). Never edit a shipped migration.
 - **Archive layering:** routes → `Catalog` → SQL. Routes never run SQL or open files directly. Media is served only through paths the catalog returns, after the path-containment check.

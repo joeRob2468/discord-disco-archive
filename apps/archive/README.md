@@ -1,6 +1,6 @@
 # @dsr/archive
 
-The web archive of recorded sessions: browse, search, play and download sets, and edit or hide them as an admin. It uses Hono, server-rendered with `hono/jsx` (htmx and one player script, no client-side framework), plus SQLite (`better-sqlite3`). Recordings are mounted **read-only**; the database lives in `/config` (`ARCHIVE_DATA_DIR`).
+The web archive of recorded sessions: browse, search, play and download sets, and edit, archive or delete them as an admin. It uses Hono, server-rendered with `hono/jsx` (htmx and one player script, no client-side framework), plus SQLite (`better-sqlite3`). Recordings are only read, except by admin deletes (`src/recordings.ts`); the database lives in `/config` (`ARCHIVE_DATA_DIR`).
 
 The design (features, access, data model) is in [docs/plan.md, "Archive site"](../../docs/plan.md#archive-site) and ["Data storage"](../../docs/plan.md#data-storage-sessionjson-plus-the-archive-database).
 
@@ -20,6 +20,7 @@ The design (features, access, data model) is in [docs/plan.md, "Archive site"](.
 | `src/routes/`            | `browse.tsx` (GET pages), `admin.tsx` (admin panel, edit posts, image uploads), `session.tsx` (login/logout), `media.ts` (file streaming), `params.ts` (input parsing).                                        |
 | `src/views/`             | `layout.tsx` (shell, menu, player bar), page views (`home`, `search`, `album`, `tables`, `admin`, `pages`), `cards.tsx`, `edit.tsx` (admin dialogs), `play.tsx`, `art.ts`, `links.ts`, `format.ts`, `app.css`. |
 | `src/client/`            | The player script (TypeScript, DOM tsconfig), bundled into `dist/player.js`.                                                                                                                                   |
+| `src/recordings.ts`      | Permanent deletes: a set's files and `session.json` entry, or a session folder. The only writes to the recordings volume.                                                                                      |
 | `src/test/fixtures.ts`   | Temporary recordings volume with `session.json` and media, for tests.                                                                                                                                          |
 
 ## Rules

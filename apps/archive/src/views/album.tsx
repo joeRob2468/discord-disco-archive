@@ -35,7 +35,7 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
           <h1 class="mt-1 text-3xl font-extrabold break-words sm:text-4xl">
             {session.title}
             {session.hidden && (
-              <span class="badge badge-error badge-sm ml-2 align-middle">hidden</span>
+              <span class="badge badge-error badge-sm ml-2 align-middle">archived</span>
             )}
           </h1>
           <div class="mt-3 flex flex-wrap items-center gap-3">

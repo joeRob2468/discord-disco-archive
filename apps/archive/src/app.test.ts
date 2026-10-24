@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -373,7 +373,7 @@ describe('archive app', () => {
       const byLength = await get('/admin/sets?sort=length&dir=desc');
       expect(byLength.indexOf('Café Sunrise')).toBeLessThan(byLength.indexOf('Night Owl II'));
 
-      const next = '/admin/sets?visibility=hidden';
+      const next = '/admin/sets?visibility=archived';
       const hide = await app.request(post('/sets/set-2/edit', { hidden: 'hidden', next }, cookie));
       expect(hide.status).toBe(303);
       expect(hide.headers.get('location')).toBe(next);
@@ -382,7 +382,7 @@ describe('archive app', () => {
       const table = hidden.slice(hidden.indexOf('id="admin-sets"'));
       expect(table).toContain('Café Sunrise');
       expect(table).not.toContain('Night Owl');
-      expect(table).toContain('Unhide');
+      expect(table).toContain('Unarchive');
       expect(await get('/admin/sets?status=failed')).toContain('No sets match.');
     });
 
@@ -416,6 +416,70 @@ describe('archive app', () => {
       expect((await app.request(post('/sessions/session-1/order', { move: 'reset' }))).status).toBe(
         404,
       );
+    });
+
+    it('deletes a set: files, session.json entry and catalog row', async () => {
+      const app = build(adminEnv);
+      const cookie = await loginAsAdmin(app);
+      const sessionDir = path.join(recordings.dir, '2026-11-14_halloween-disco');
+      const deleted = await app.request(
+        post('/sets/set-2/delete', { next: '/sessions/session-1' }, cookie),
+      );
+      expect(deleted.status).toBe(303);
+      expect(deleted.headers.get('location')).toBe('/sessions/session-1');
+      expect(await readdir(path.join(sessionDir, 'leveled'))).toEqual([
+        'set-1.flac',
+        'set-1.m4a',
+        'set-1.mp3',
+      ]);
+      const json = JSON.parse(await readFile(path.join(sessionDir, 'session.json'), 'utf8')) as {
+        sets: { id: string }[];
+      };
+      expect(json.sets.map((set) => set.id)).toEqual(['set-1']);
+      expect(new Catalog(db).getSet('set-2', true)).toBeUndefined();
+      // A resync doesn't bring it back.
+      await syncCatalog(db, recordings.dir);
+      expect(new Catalog(db).getSet('set-2', true)).toBeUndefined();
+      expect(
+        await (await app.request('/admin/activity', { headers: { Cookie: cookie } })).text(),
+      ).toContain('deleted');
+    });
+
+    it('refuses to delete while recording, unless forced', async () => {
+      await recordings.write(
+        'live',
+        makeSession({
+          id: 'session-live',
+          endedAt: undefined,
+          sets: [
+            makeSet({ id: 'set-live', userId: DJ_A, status: 'recording', endedAt: undefined }),
+          ],
+        }),
+        true,
+      );
+      await syncCatalog(db, recordings.dir);
+      const app = build(adminEnv);
+      const cookie = await loginAsAdmin(app);
+      expect((await app.request(post('/sets/set-live/delete', {}, cookie))).status).toBe(409);
+      expect((await app.request(post('/sessions/session-live/delete', {}, cookie))).status).toBe(
+        409,
+      );
+      expect(await readdir(recordings.dir)).toContain('live');
+
+      const forced = await app.request(
+        post('/sessions/session-live/delete', { force: '1' }, cookie),
+      );
+      expect(forced.status).toBe(303);
+      expect(forced.headers.get('location')).toBe('/sessions');
+      expect(await readdir(recordings.dir)).not.toContain('live');
+      expect(new Catalog(db).getSession('session-live', true)).toBeUndefined();
+    });
+
+    it('only lets admins delete', async () => {
+      const app = build(adminEnv);
+      expect((await app.request(post('/sets/set-1/delete', {}))).status).toBe(404);
+      expect((await app.request(post('/sessions/session-1/delete', {}))).status).toBe(404);
+      expect(await readdir(recordings.dir)).toContain('2026-11-14_halloween-disco');
     });
 
     it('rejects cross-site form posts', async () => {

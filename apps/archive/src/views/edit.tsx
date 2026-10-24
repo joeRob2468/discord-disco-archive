@@ -7,6 +7,8 @@
 import type { Child } from 'hono/jsx';
 import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/catalog.ts';
 import { imageUrl } from './art.ts';
+import { formatBytes } from './format.ts';
+import { sessionUrl, setUrl } from './links.ts';
 
 const dialogId = (kind: string, id: string): string => `edit-${kind}-${id.replace(/[^\w-]/g, '_')}`;
 
@@ -28,7 +30,8 @@ export function EditButton({
   );
 }
 
-function Dialog(props: { id: string; title: string; action: string; children?: Child }) {
+/** A daisyUI modal with a title and a close button. */
+function Modal(props: { id: string; title: string; children?: Child }) {
   return (
     <dialog id={props.id} class="modal">
       <div class="modal-box bg-base-200 max-w-xl rounded-3xl">
@@ -40,24 +43,139 @@ function Dialog(props: { id: string; title: string; action: string; children?: C
             </button>
           </form>
         </div>
-        <form
-          class="flex flex-col gap-3"
-          method="post"
-          action={props.action}
-          enctype="multipart/form-data"
-        >
-          {props.children}
-          <div class="modal-action mt-2">
-            <button class="btn btn-primary" type="submit">
-              Save
-            </button>
-          </div>
-        </form>
+        {props.children}
       </div>
       <form method="dialog" class="modal-backdrop" hx-boost="false">
         <button>Close</button>
       </form>
     </dialog>
+  );
+}
+
+/** An edit form in a modal. `remove` opens the item's delete confirmation, if any. */
+function Dialog(props: {
+  id: string;
+  title: string;
+  action: string;
+  remove?: { dialog: string; label: string };
+  children?: Child;
+}) {
+  return (
+    <Modal id={props.id} title={props.title}>
+      <form
+        class="flex flex-col gap-3"
+        method="post"
+        action={props.action}
+        enctype="multipart/form-data"
+      >
+        {props.children}
+        <div class="modal-action mt-2 justify-between">
+          {props.remove ? (
+            <button
+              class="btn btn-ghost text-error"
+              type="button"
+              data-dialog={props.remove.dialog}
+            >
+              {props.remove.label}
+            </button>
+          ) : (
+            <span />
+          )}
+          <button class="btn btn-primary" type="submit">
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Confirm a permanent delete. The server refuses while the session is still recording
+ * unless "Force delete" is ticked.
+ */
+function DeleteDialog(props: {
+  id: string;
+  title: string;
+  action: string;
+  next: string;
+  children?: Child;
+}) {
+  return (
+    <Modal id={props.id} title={props.title}>
+      <form class="flex flex-col gap-3 text-sm" method="post" action={props.action}>
+        <input type="hidden" name="next" value={props.next} />
+        {props.children}
+        <p class="text-error font-semibold">
+          This can't be undone. To keep it but take it off the site, archive it instead.
+        </p>
+        <label class="flex items-center gap-2">
+          <input class="checkbox checkbox-sm" type="checkbox" name="force" value="1" />
+          Force delete, even if the recorder says the session is still recording
+        </label>
+        <div class="modal-action mt-2">
+          <button class="btn btn-error" type="submit">
+            Delete permanently
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+const FILE_LABELS: Record<string, string> = {
+  rawAudio: 'Raw capture (WAV)',
+  rawVideo: 'Raw video (MKV)',
+  master: 'Master (FLAC)',
+  mp3: 'MP3',
+  m4a: 'AAC (M4A)',
+  mp4: 'Video (MP4)',
+};
+
+export function DeleteSetDialog({ set, next }: { set: SetSummary; next: string }) {
+  const files = Object.entries(set.files);
+  return (
+    <DeleteDialog
+      id={dialogId('delete-set', set.id)}
+      title="Delete set?"
+      action={`/sets/${encodeURIComponent(set.id)}/delete`}
+      next={next}
+    >
+      <p>
+        <strong>{set.title ?? set.name}</strong> from {set.sessionTitle}: its files are deleted and
+        it's removed from the session's <code>session.json</code>.
+      </p>
+      {files.length > 0 && (
+        <ul class="text-base-content/70 list-disc pl-5">
+          {files.map(([key, file]) => {
+            const bytes = set.fileSizes[key as keyof SetSummary['files']];
+            return (
+              <li>
+                {FILE_LABELS[key] ?? key}: <code class="break-all">{file}</code>
+                {bytes !== undefined && ` (${formatBytes(bytes)})`}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </DeleteDialog>
+  );
+}
+
+export function DeleteSessionDialog({ session, next }: { session: SessionSummary; next: string }) {
+  return (
+    <DeleteDialog
+      id={dialogId('delete-session', session.id)}
+      title="Delete session?"
+      action={`/sessions/${encodeURIComponent(session.id)}/delete`}
+      next={next}
+    >
+      <p>
+        <strong>{session.title}</strong>: the whole folder{' '}
+        <code class="break-all">{session.dir}</code> is deleted, with all {session.totalSets} of its
+        sets and their files.
+      </p>
+    </DeleteDialog>
   );
 }
 
@@ -103,87 +221,98 @@ function ImageField(props: { label: string; current: string | undefined; hint?: 
 }
 
 export function EditSetDialog({ set, next }: { set: SetSummary; next: string }) {
+  // After deleting from the set's own page, land on its album instead.
+  const afterDelete = next === setUrl(set) ? sessionUrl(set.sessionId) : next;
   return (
-    <Dialog
-      id={dialogId('set', set.id)}
-      title="Edit set"
-      action={`/sets/${encodeURIComponent(set.id)}/edit`}
-    >
-      <input type="hidden" name="next" value={next} />
-      <Field label="Set title">
-        <input class="input w-full" name="title" value={set.title ?? ''} maxlength={120} />
-      </Field>
-      <Field label="DJ name for this set" hint={`blank = ${set.recordedName}`}>
-        <input
-          class="input w-full"
-          name="displayName"
-          value={set.editedName ?? ''}
-          maxlength={80}
+    <>
+      <DeleteSetDialog set={set} next={afterDelete} />
+      <Dialog
+        id={dialogId('set', set.id)}
+        title="Edit set"
+        remove={{ dialog: dialogId('delete-set', set.id), label: 'Delete set…' }}
+        action={`/sets/${encodeURIComponent(set.id)}/edit`}
+      >
+        <input type="hidden" name="next" value={next} />
+        <Field label="Set title">
+          <input class="input w-full" name="title" value={set.title ?? ''} maxlength={120} />
+        </Field>
+        <Field label="DJ name for this set" hint={`blank = ${set.recordedName}`}>
+          <input
+            class="input w-full"
+            name="displayName"
+            value={set.editedName ?? ''}
+            maxlength={80}
+          />
+        </Field>
+        <Field label="Description / tracklist">
+          <textarea class="textarea min-h-28 w-full" name="description" maxlength={5000}>
+            {set.description ?? ''}
+          </textarea>
+        </Field>
+        <Field label="Tags" hint="comma-separated">
+          <input class="input w-full" name="tags" value={set.tags.join(', ')} />
+        </Field>
+        <Field label="Visibility">
+          <select class="select w-full" name="hidden">
+            <option value="default" selected={set.hiddenOverride === undefined}>
+              As recorded
+            </option>
+            <option value="visible" selected={set.hiddenOverride === false}>
+              Visible
+            </option>
+            <option value="hidden" selected={set.hiddenOverride === true}>
+              Archived
+            </option>
+          </select>
+        </Field>
+        <ImageField
+          label="Set art"
+          current={set.image}
+          hint="Without its own art, a set uses its album cover."
         />
-      </Field>
-      <Field label="Description / tracklist">
-        <textarea class="textarea min-h-28 w-full" name="description" maxlength={5000}>
-          {set.description ?? ''}
-        </textarea>
-      </Field>
-      <Field label="Tags" hint="comma-separated">
-        <input class="input w-full" name="tags" value={set.tags.join(', ')} />
-      </Field>
-      <Field label="Visibility">
-        <select class="select w-full" name="hidden">
-          <option value="default" selected={set.hiddenOverride === undefined}>
-            As recorded
-          </option>
-          <option value="visible" selected={set.hiddenOverride === false}>
-            Visible
-          </option>
-          <option value="hidden" selected={set.hiddenOverride === true}>
-            Hidden
-          </option>
-        </select>
-      </Field>
-      <ImageField
-        label="Set art"
-        current={set.image}
-        hint="Without its own art, a set uses its album cover."
-      />
-    </Dialog>
+      </Dialog>
+    </>
   );
 }
 
 export function EditSessionDialog({ session, next }: { session: SessionSummary; next: string }) {
+  const afterDelete = next === sessionUrl(session.id) ? '/sessions' : next;
   return (
-    <Dialog
-      id={dialogId('session', session.id)}
-      title="Edit session"
-      action={`/sessions/${encodeURIComponent(session.id)}/edit`}
-    >
-      <input type="hidden" name="next" value={next} />
-      <Field label="Title" hint={`blank = ${session.recordedTitle ?? session.channelName}`}>
-        <input
-          class="input w-full"
-          name="title"
-          value={session.editedTitle ?? ''}
-          maxlength={120}
-        />
-      </Field>
-      <Field label="Description">
-        <textarea class="textarea min-h-28 w-full" name="description" maxlength={5000}>
-          {session.description ?? ''}
-        </textarea>
-      </Field>
-      <Field label="Visibility">
-        <select class="select w-full" name="hidden">
-          <option value="visible" selected={!session.hidden}>
-            Visible
-          </option>
-          <option value="hidden" selected={session.hidden}>
-            Hidden (hides every set in it)
-          </option>
-        </select>
-      </Field>
-      <ImageField label="Album cover" current={session.image} />
-    </Dialog>
+    <>
+      <DeleteSessionDialog session={session} next={afterDelete} />
+      <Dialog
+        id={dialogId('session', session.id)}
+        title="Edit session"
+        remove={{ dialog: dialogId('delete-session', session.id), label: 'Delete session…' }}
+        action={`/sessions/${encodeURIComponent(session.id)}/edit`}
+      >
+        <input type="hidden" name="next" value={next} />
+        <Field label="Title" hint={`blank = ${session.recordedTitle ?? session.channelName}`}>
+          <input
+            class="input w-full"
+            name="title"
+            value={session.editedTitle ?? ''}
+            maxlength={120}
+          />
+        </Field>
+        <Field label="Description">
+          <textarea class="textarea min-h-28 w-full" name="description" maxlength={5000}>
+            {session.description ?? ''}
+          </textarea>
+        </Field>
+        <Field label="Visibility">
+          <select class="select w-full" name="hidden">
+            <option value="visible" selected={!session.hidden}>
+              Visible
+            </option>
+            <option value="hidden" selected={session.hidden}>
+              Archived (archives every set in it)
+            </option>
+          </select>
+        </Field>
+        <ImageField label="Album cover" current={session.image} />
+      </Dialog>
+    </>
   );
 }
 

@@ -787,6 +787,48 @@ export class Catalog {
   }
 
   /**
+   * Forget a set whose files were deleted (plays and tags go with it). Returns the image
+   * files that nothing uses any more, for the caller to delete.
+   */
+  deleteSet(id: string, actor: string): string[] {
+    const row = this.#db
+      .prepare(`SELECT name, session_title, image FROM set_view WHERE id = ?`)
+      .get(id) as { name: string; session_title: string; image: string | null } | undefined;
+    if (!row) throw new NotFoundError('set', id);
+    this.#db.transaction(() => {
+      this.#db.prepare(`DELETE FROM sets WHERE id = ?`).run(id);
+      reindexSets(this.#db, [id]);
+      this.#audit(
+        actor,
+        'set',
+        id,
+        { deleted: `${row.name} (${row.session_title})` },
+        { deleted: true },
+      );
+    })();
+    return this.#unusedImages([row.image]);
+  }
+
+  /** Forget a session whose folder was deleted, with all its sets. Returns unused images. */
+  deleteSession(id: string, actor: string): string[] {
+    const session = this.#db
+      .prepare(`SELECT display_title, image FROM session_view WHERE id = ?`)
+      .get(id) as { display_title: string; image: string | null } | undefined;
+    if (!session) throw new NotFoundError('session', id);
+    const sets = this.#setIds(`session_id = ?`, id);
+    const setImages = this.#db
+      .prepare(`SELECT image FROM sets WHERE session_id = ? AND image IS NOT NULL`)
+      .pluck()
+      .all(id) as string[];
+    this.#db.transaction(() => {
+      this.#db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
+      reindexSets(this.#db, sets);
+      this.#audit(actor, 'session', id, { deleted: session.display_title }, { deleted: true });
+    })();
+    return this.#unusedImages([session.image, ...setImages]);
+  }
+
+  /**
    * Move a set one place earlier (`-1`) or later (`1`) in its album. Every set in the
    * session gets an explicit place, so the order no longer follows start times.
    */
@@ -859,6 +901,12 @@ export class Catalog {
   }
 
   // --- Helpers ----------------------------------------------------------------------------
+
+  #unusedImages(images: (string | null)[]): string[] {
+    return [...new Set(images)].filter(
+      (image): image is string => image !== null && !this.imageInUse(image),
+    );
+  }
 
   /** Every set of a session (hidden ones too), in album order. */
   #albumOrder(sessionId: string): string[] {

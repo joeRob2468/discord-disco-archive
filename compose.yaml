@@ -44,7 +44,8 @@ services:
       ARCHIVE_DATA_DIR: /config
     volumes:
       - ${APP_DATA_DIR:-./docker-data}/archive:/config
-      - ${RECORDINGS_HOST_DIR:-./data/recordings}:/recordings:ro
+      # Writable only so admins can delete sets and sessions; nothing else is written.
+      - ${RECORDINGS_HOST_DIR:-./data/recordings}:/recordings
     ports:
       - 127.0.0.1:${ARCHIVE_PORT:-3000}:${ARCHIVE_PORT:-3000}
     healthcheck:

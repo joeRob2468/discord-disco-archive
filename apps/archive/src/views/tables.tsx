@@ -119,7 +119,7 @@ export function SessionsPage(props: {
                     class="size-10 shrink-0 rounded-lg"
                   />
                   <span class="font-semibold">{session.title}</span>
-                  {session.unlisted && <span class="badge badge-error badge-sm">hidden</span>}
+                  {session.unlisted && <span class="badge badge-error badge-sm">archived</span>}
                 </a>
               </td>
               <td class="whitespace-nowrap">{formatDate(session.startedAt)}</td>
