@@ -13,6 +13,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { createAuth, type AuthEnv } from './auth/auth.ts';
 import { NotFoundError, type Catalog } from './catalog/catalog.ts';
 import type { ArchiveConfig } from './config.ts';
+import { imagesDir } from './images.ts';
 import { adminRoutes } from './routes/admin.tsx';
 import { browseRoutes } from './routes/browse.tsx';
 import { mediaRoutes } from './routes/media.ts';
@@ -82,8 +83,8 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
 
   app.route('/', sessionRoutes(auth));
   app.route('/', browseRoutes(catalog));
-  app.route('/', adminRoutes(catalog));
-  app.route('/', mediaRoutes(catalog, config.recordingsDir));
+  app.route('/', adminRoutes(catalog, imagesDir(config.dataDir)));
+  app.route('/', mediaRoutes(catalog, config.recordingsDir, imagesDir(config.dataDir)));
 
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();

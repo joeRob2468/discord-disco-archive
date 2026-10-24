@@ -3,12 +3,14 @@
  * works. Files are looked up through the catalog, so hidden sets stay hidden and request
  * paths never touch the filesystem directly.
  */
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import type { SetFiles } from '@dsr/core';
 import { Hono } from 'hono';
 import type { AuthEnv } from '../auth/auth.ts';
 import type { Catalog, SetSummary } from '../catalog/catalog.ts';
+import { IMAGE_NAME, imageMime } from '../images.ts';
 import { formatDate } from '../views/format.ts';
 
 // serveStatic's MIME table lacks some of these (e.g. .m4a), and browsers need the right
@@ -38,8 +40,27 @@ function contentDisposition(filename: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-export function mediaRoutes(catalog: Catalog, recordingsDir: string): Hono<AuthEnv> {
+export function mediaRoutes(
+  catalog: Catalog,
+  recordingsDir: string,
+  imagesDir: string,
+): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
+
+  // Uploaded images. Names are content hashes, so a URL's bytes never change.
+  app.get('/images/:name', async (c) => {
+    const name = c.req.param('name');
+    if (!IMAGE_NAME.test(name)) return c.notFound();
+    try {
+      const bytes = await readFile(path.join(imagesDir, name));
+      c.header('Content-Type', imageMime(name));
+      c.header('Cache-Control', 'private, max-age=31536000, immutable');
+      return c.body(bytes);
+    } catch {
+      // Missing file (e.g. removed by an admin): a plain 404.
+      return c.notFound();
+    }
+  });
   const root = path.resolve(recordingsDir);
 
   app.get('/media/:setId/:format', async (c, next) => {

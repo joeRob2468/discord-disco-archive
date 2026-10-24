@@ -4,7 +4,7 @@
  */
 import type { AuthState } from '../auth/auth.ts';
 import type { SetSummary } from '../catalog/catalog.ts';
-import { Art, DjAvatar, SetListRow, StatusBadges } from './cards.tsx';
+import { Art, DjAvatar, ImageForm, SetListRow, setArt, StatusBadges } from './cards.tsx';
 import { Downloads, EditSessionForm, EditSetForm, mediaUrl } from './components.tsx';
 import { formatDate, formatDateTime, formatDuration, plural } from './format.ts';
 import { djsOf, totalSeconds, type Album } from './home.tsx';
@@ -19,6 +19,7 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
       <section class="panel flex flex-col gap-6 rounded-3xl p-5 sm:flex-row sm:items-end sm:p-6">
         <Art
           seed={session.id}
+          image={session.image}
           class="aspect-square w-full shrink-0 rounded-2xl shadow-2xl sm:w-56"
         />
         <div class="min-w-0">
@@ -35,7 +36,12 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
             <div class="flex -space-x-2">
               {djs.slice(0, 6).map((set) => (
                 <div class="ring-base-200 rounded-full ring-2">
-                  <DjAvatar userId={set.userId} name={set.name} size="size-8 text-xs" />
+                  <DjAvatar
+                    userId={set.userId}
+                    name={set.name}
+                    image={set.streamerImage}
+                    size="size-8 text-xs"
+                  />
                 </div>
               ))}
             </div>
@@ -78,6 +84,18 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
         </div>
       </section>
 
+      {auth.isAdmin && (
+        <section class="panel mt-8 flex flex-col gap-3 rounded-3xl p-5">
+          <h2 class="text-lg font-bold">Images</h2>
+          <ImageForm
+            entity="session"
+            id={session.id}
+            label="Album cover"
+            current={session.image}
+            back={sessionUrl(session.id)}
+          />
+        </section>
+      )}
       {auth.isAdmin && <EditSessionForm session={session} />}
     </Layout>
   );
@@ -100,7 +118,11 @@ export function SetDetailPage(props: {
   return (
     <Layout title={`${set.title ?? set.name} · ${set.sessionTitle}`} auth={auth}>
       <section class="panel flex flex-col gap-6 rounded-3xl p-5 sm:flex-row sm:items-end sm:p-6">
-        <Art seed={set.uuid} class="aspect-square w-full shrink-0 rounded-2xl shadow-2xl sm:w-56" />
+        <Art
+          seed={set.uuid}
+          image={setArt(set)}
+          class="aspect-square w-full shrink-0 rounded-2xl shadow-2xl sm:w-56"
+        />
         <div class="min-w-0 flex-1">
           <p class="text-base-content/60 text-xs font-semibold tracking-widest uppercase">
             Set{' '}
@@ -113,7 +135,12 @@ export function SetDetailPage(props: {
             <StatusBadges set={set} />
           </h1>
           <a class="plain mt-3 flex items-center gap-2" href={searchUrl({ userId: set.userId })}>
-            <DjAvatar userId={set.userId} name={set.name} size="size-8 text-xs" />
+            <DjAvatar
+              userId={set.userId}
+              name={set.name}
+              image={set.streamerImage}
+              size="size-8 text-xs"
+            />
             <span class="font-semibold">{set.name}</span>
           </a>
           <p class="text-base-content/60 mt-2 text-sm">
@@ -154,6 +181,28 @@ export function SetDetailPage(props: {
         )}
       </nav>
 
+      {auth.isAdmin && (
+        <section class="panel mt-8 flex flex-col gap-3 rounded-3xl p-5">
+          <h2 class="text-lg font-bold">Images</h2>
+          <ImageForm
+            entity="set"
+            id={set.id}
+            label="Set art"
+            current={set.image}
+            back={setUrl(set)}
+          />
+          <ImageForm
+            entity="streamer"
+            id={set.userId}
+            label={`${set.name}'s picture`}
+            current={set.streamerImage}
+            back={setUrl(set)}
+          />
+          <p class="text-base-content/60 text-xs">
+            Without its own art, a set uses its album cover. PNG, JPEG or WebP, up to 5 MB.
+          </p>
+        </section>
+      )}
       {auth.isAdmin && <EditSetForm set={set} />}
     </Layout>
   );

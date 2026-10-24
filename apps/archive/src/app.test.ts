@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import { Catalog } from './catalog/catalog.ts';
@@ -7,6 +10,7 @@ import { openMemoryDatabase, type Db } from './db/database.ts';
 import {
   createRecordings,
   DJ_A,
+  PNG,
   makeSession,
   makeSet,
   standardFixture,
@@ -167,6 +171,53 @@ describe('archive app', () => {
       expect(response.status).toBe(303);
       return cookieFrom(response);
     };
+
+    it('uploads and removes album covers, set art and DJ pictures', async () => {
+      const dataDir = await mkdtemp(path.join(tmpdir(), 'dsr-data-'));
+      try {
+        const app = build({ ...adminEnv, ARCHIVE_DATA_DIR: dataDir });
+        const cookie = await loginAsAdmin(app);
+        const upload = (entity: string, id: string, body: FormData) =>
+          app.request(
+            new Request(`${ORIGIN}/admin/images/${entity}/${id}`, {
+              method: 'POST',
+              headers: { Origin: ORIGIN, Cookie: cookie },
+              body,
+            }),
+          );
+        const form = (bytes: Uint8Array) => {
+          const body = new FormData();
+          body.set('image', new File([bytes], 'cover.png', { type: 'image/png' }));
+          return body;
+        };
+
+        const cover = form(PNG);
+        cover.set('next', '/sessions/session-1');
+        const uploaded = await upload('session', 'session-1', cover);
+        expect(uploaded.status).toBe(303);
+        expect(uploaded.headers.get('location')).toBe('/sessions/session-1');
+        const album = await (
+          await app.request('/sessions/session-1', { headers: { Cookie: cookie } })
+        ).text();
+        const src = /src="(\/images\/[0-9a-f]{32}\.png)"/.exec(album)?.[1];
+        expect(src).toBeDefined();
+        const image = await app.request(src ?? '', { headers: { Cookie: cookie } });
+        expect(image.headers.get('content-type')).toBe('image/png');
+
+        // Not an image: refused, whatever the browser says it is.
+        const fake = new FormData();
+        fake.set('image', new File(['<svg/>'], 'x.png', { type: 'image/png' }));
+        expect((await upload('set', 'set-1', fake)).status).toBe(400);
+        expect((await upload('nope', 'set-1', form(PNG))).status).toBe(404);
+
+        const remove = new FormData();
+        remove.set('remove', '1');
+        expect((await upload('session', 'session-1', remove)).status).toBe(303);
+        expect(await readdir(path.join(dataDir, 'images'))).toEqual([]);
+      } finally {
+        await rm(dataDir, { recursive: true, force: true });
+      }
+    });
 
     it('rejects a wrong password', async () => {
       const response = await build(adminEnv).request(post('/login', { password: 'nope' }));

@@ -208,6 +208,21 @@ export function LoginPage(props: { next: string; error?: string | undefined }) {
   );
 }
 
+/** A short message with a way back, e.g. a failed upload. */
+export function MessagePage(props: { auth: AuthState; title: string; message: string }) {
+  return (
+    <Layout title={props.title} auth={props.auth}>
+      <div class="panel mx-auto max-w-md rounded-3xl p-6">
+        <h1 class="text-xl font-bold">{props.title}</h1>
+        <p class="text-base-content/70 mt-2">{props.message}</p>
+        <button class="btn btn-ghost mt-4" type="button" onclick="history.back()">
+          ← Back
+        </button>
+      </div>
+    </Layout>
+  );
+}
+
 export function NotFoundPage({ auth }: { auth: AuthState }) {
   return (
     <Layout title="Not found" auth={auth}>

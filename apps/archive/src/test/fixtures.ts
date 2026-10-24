@@ -9,6 +9,11 @@ export const CHANNEL = '100000000000000002';
 export const DJ_A = '200000000000000001';
 export const DJ_B = '200000000000000002';
 
+/** The start of a PNG file: enough for type detection. */
+export const PNG = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+]);
+
 export function makeSet(
   overrides: Partial<StreamSet> & Pick<StreamSet, 'id' | 'userId'>,
 ): StreamSet {

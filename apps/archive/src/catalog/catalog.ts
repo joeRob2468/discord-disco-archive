@@ -34,6 +34,8 @@ export interface SessionSummary {
   unlisted: boolean;
   visibleSets: number;
   totalSets: number;
+  /** Album cover file name (see `images.ts`), if uploaded. */
+  image: string | undefined;
 }
 
 export interface SetSummary {
@@ -67,6 +69,10 @@ export interface SetSummary {
   tags: string[];
   /** Times played (see `recordPlay`). */
   plays: number;
+  /** Uploaded image file names: this set's art, its album cover, its DJ's picture. */
+  image: string | undefined;
+  sessionImage: string | undefined;
+  streamerImage: string | undefined;
 }
 
 export interface StreamerSummary {
@@ -79,6 +85,8 @@ export interface StreamerSummary {
   links: string[];
   setCount: number;
   lastPlayedAt: string | undefined;
+  /** Uploaded picture file name, if any. */
+  image: string | undefined;
 }
 
 export interface TagCount {
@@ -151,12 +159,16 @@ interface SessionRow {
   unlisted: number;
   visible_sets: number;
   total_sets: number;
+  image: string | null;
 }
 
 interface SetRow {
   id: string;
   uuid: string;
   plays: number;
+  image: string | null;
+  session_image: string | null;
+  streamer_image: string | null;
   session_id: string;
   session_title: string;
   session_started_at: string;
@@ -190,6 +202,7 @@ interface StreamerRow {
   links: string;
   set_count: number;
   last_played_at: string | null;
+  image: string | null;
 }
 
 const opt = <T>(value: T | null): T | undefined => value ?? undefined;
@@ -211,6 +224,7 @@ function toSession(row: SessionRow): SessionSummary {
     unlisted: row.unlisted === 1,
     visibleSets: row.visible_sets,
     totalSets: row.total_sets,
+    image: opt(row.image),
   };
 }
 
@@ -220,6 +234,9 @@ function toSet(row: SetRow): SetSummary {
     id: row.id,
     uuid: row.uuid,
     plays: row.plays,
+    image: opt(row.image),
+    sessionImage: opt(row.session_image),
+    streamerImage: opt(row.streamer_image),
     sessionId: row.session_id,
     sessionTitle: row.session_title,
     sessionStartedAt: row.session_started_at,
@@ -259,6 +276,7 @@ function toStreamer(row: StreamerRow): StreamerSummary {
     links: JSON.parse(row.links) as string[],
     setCount: row.set_count,
     lastPlayedAt: opt(row.last_played_at),
+    image: opt(row.image),
   };
 }
 
@@ -297,12 +315,21 @@ export function normalizeLinks(links: readonly string[]): string[] {
 }
 
 const STREAMER_SELECT = `
-  SELECT st.user_id, st.recorded_name, st.display_name, st.avatar_url, st.bio, st.links,
+  SELECT st.user_id, st.recorded_name, st.display_name, st.avatar_url, st.bio, st.links, st.image,
          COALESCE(st.display_name, st.recorded_name) AS name,
          count(v.id) AS set_count,
          max(v.session_started_at) AS last_played_at
   FROM streamers st
   LEFT JOIN set_view v ON v.user_id = st.user_id AND (@all OR NOT v.unlisted)`;
+
+export type ImageEntity = 'streamer' | 'session' | 'set';
+
+// Fixed table and key names per entity; never built from request input.
+const IMAGE_TABLES = {
+  streamer: { table: 'streamers', key: 'user_id' },
+  session: { table: 'sessions', key: 'id' },
+  set: { table: 'sets', key: 'id' },
+} as const satisfies Record<ImageEntity, { table: string; key: string }>;
 
 export class Catalog {
   readonly #db: Db;
@@ -600,6 +627,43 @@ export class Catalog {
       this.#audit(actor, 'streamer', userId, current, next);
       reindexSets(this.#db, this.#setIds(`user_id = ?`, userId));
     })();
+  }
+
+  /**
+   * Set or clear the uploaded image of a DJ, session or set. Returns the previous file
+   * name, so the caller can delete the file once nothing uses it.
+   */
+  setImage(
+    entity: ImageEntity,
+    id: string,
+    image: string | undefined,
+    actor: string,
+  ): string | undefined {
+    const { table, key } = IMAGE_TABLES[entity];
+    const current = this.#db.prepare(`SELECT image FROM ${table} WHERE ${key} = ?`).get(id) as
+      { image: string | null } | undefined;
+    if (!current) throw new NotFoundError(entity, id);
+    this.#db.transaction(() => {
+      this.#db
+        .prepare(`UPDATE ${table} SET image = ?, updated_at = ? WHERE ${key} = ?`)
+        .run(image ?? null, now(), id);
+      this.#audit(actor, entity, id, { image: current.image }, { image: image ?? null });
+    })();
+    return opt(current.image);
+  }
+
+  /** Whether any DJ, session or set still uses this image file. */
+  imageInUse(image: string): boolean {
+    return (
+      this.#db
+        .prepare(
+          `SELECT EXISTS (SELECT 1 FROM streamers WHERE image = @image)
+               OR EXISTS (SELECT 1 FROM sessions WHERE image = @image)
+               OR EXISTS (SELECT 1 FROM sets WHERE image = @image)`,
+        )
+        .pluck()
+        .get({ image }) === 1
+    );
   }
 
   // --- Helpers ----------------------------------------------------------------------------

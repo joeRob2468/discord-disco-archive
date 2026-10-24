@@ -260,7 +260,7 @@ The first UI was a plain server-rendered site. It's being rebuilt before deploy,
 - **Search** is its own page, `/search`: every set in one list, filtered live by text, DJ (`?streamer=`) and session (`?session=`).
 - **Albums:** each session is an album at `/sessions/<uuid>` with cover, DJs, length and a numbered tracklist. Sessions with no sets aren't shown.
 - **Sets** live under their session: `/sessions/<uuid>/sets/<set uuid>`. Set UUIDs are version 5 UUIDs of the session and set IDs, so they survive a database rebuild. Older `/sets/<id>` and `/t/<uuid>` links redirect.
-- **Artwork:** gradients seeded by ID until admins upload images (DJ pictures, set art, album covers).
+- **Artwork:** admins upload DJ pictures, set art and album covers (PNG, JPEG or WebP up to 5 MB, the type checked from the file's bytes). They're stored in the archive's data directory (`images/`, named by content hash, never in the read-only recordings) and served at `/images/<name>`. Set art falls back to the album cover, then a gradient seeded by ID; DJs without a picture get a gradient with initials.
 
 Stages, each stopped for testing: (1) build setup, layout, theme, login; (2) the existing pages restyled as tables and cards; (3) the player and queue; (4) the admin panel and stats.
 

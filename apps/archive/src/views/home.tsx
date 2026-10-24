@@ -4,7 +4,7 @@
  */
 import type { AuthState } from '../auth/auth.ts';
 import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/catalog.ts';
-import { Art, DjAvatar } from './cards.tsx';
+import { Art, DjAvatar, setArt } from './cards.tsx';
 import { formatDate, formatDuration, plural } from './format.ts';
 import { Layout } from './layout.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
@@ -73,7 +73,12 @@ function StreamersRow({ streamers }: { streamers: StreamerSummary[] }) {
             href={searchUrl({ userId: streamer.userId })}
           >
             <div class="group-hover:bg-base-content/30 rounded-full p-0.5">
-              <DjAvatar userId={streamer.userId} name={streamer.name} size="size-16 text-2xl" />
+              <DjAvatar
+                userId={streamer.userId}
+                name={streamer.name}
+                image={streamer.image}
+                size="size-16 text-2xl"
+              />
             </div>
             <span class="w-full truncate text-xs">{streamer.name}</span>
           </a>
@@ -91,7 +96,7 @@ export function AlbumCard({ album }: { album: Album }) {
       href={sessionUrl(session.id)}
     >
       <div class="relative">
-        <Art seed={session.id} class="aspect-[16/9] rounded-2xl" />
+        <Art seed={session.id} image={session.image} class="aspect-[16/9] rounded-2xl" />
         <span class="badge badge-sm absolute top-3 left-3 border-0 bg-black/40 text-white backdrop-blur">
           {formatDate(session.startedAt)}
         </span>
@@ -104,7 +109,12 @@ export function AlbumCard({ album }: { album: Album }) {
               .slice(0, 5)
               .map((set) => (
                 <div class="ring-base-200 rounded-full ring-2">
-                  <DjAvatar userId={set.userId} name={set.name} size="size-7 text-xs" />
+                  <DjAvatar
+                    userId={set.userId}
+                    name={set.name}
+                    image={set.streamerImage}
+                    size="size-7 text-xs"
+                  />
                 </div>
               ))}
           </div>
@@ -129,13 +139,18 @@ function PopularSets({ sets }: { sets: SetSummary[] }) {
             href={setUrl(set)}
           >
             <div class="relative">
-              <Art seed={set.uuid} class="aspect-[4/3] rounded-2xl" />
+              <Art seed={set.uuid} image={setArt(set)} class="aspect-[4/3] rounded-2xl" />
               <span class="badge badge-sm absolute top-2 left-2 border-0 bg-black/40 text-white backdrop-blur">
                 {plural(set.plays, 'play')}
               </span>
             </div>
             <div class="mt-3 flex items-center gap-2 px-1">
-              <DjAvatar userId={set.userId} name={set.name} size="size-8 text-sm" />
+              <DjAvatar
+                userId={set.userId}
+                name={set.name}
+                image={set.streamerImage}
+                size="size-8 text-sm"
+              />
               <div class="min-w-0">
                 <p class="truncate font-semibold">{set.title ?? set.name}</p>
                 <p class="text-base-content/60 truncate text-xs">
