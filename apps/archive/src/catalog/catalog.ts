@@ -5,6 +5,7 @@
  */
 import { setFilesSchema, type SetFiles, type SetStatus } from '@dsr/core';
 import { now, type Db } from '../db/database.ts';
+import { writeAudit } from './audit.ts';
 import { reindexSets, toMatchQuery } from './search.ts';
 
 export const PAGE_SIZE = 24;
@@ -164,9 +165,13 @@ export interface Sort<K extends string> {
 
 export interface AuditEntry {
   at: string;
+  /** `admin` for archive edits, `recorder` for changes seen in session.json. */
   actor: string;
   entity: string;
   entityId: string;
+  /** The subject's current name, if it still exists. */
+  label: string | undefined;
+  exists: boolean;
   changes: Record<string, { from: unknown; to: unknown }>;
 }
 
@@ -661,23 +666,37 @@ export class Catalog {
     return toPage(rows.map(toSet), total, page);
   }
 
-  recentAudit(limit: number): AuditEntry[] {
+  /** Newest first; `actor` limits it to admin edits or the recorder's changes. */
+  recentAudit(limit: number, actor?: string): AuditEntry[] {
     const rows = this.#db
       .prepare(
-        `SELECT at, actor, entity, entity_id, changes FROM audit_log ORDER BY id DESC LIMIT ?`,
+        `SELECT a.at, a.actor, a.entity, a.entity_id, a.changes,
+                CASE a.entity
+                  WHEN 'set' THEN (SELECT COALESCE(v.title, v.name) || ' · ' || v.session_title
+                                   FROM set_view v WHERE v.id = a.entity_id)
+                  WHEN 'session' THEN (SELECT display_title FROM session_view WHERE id = a.entity_id)
+                  WHEN 'streamer' THEN (SELECT COALESCE(display_name, recorded_name)
+                                        FROM streamers WHERE user_id = a.entity_id)
+                END AS label
+         FROM audit_log a
+         WHERE @actor IS NULL OR a.actor = @actor
+         ORDER BY a.id DESC LIMIT @limit`,
       )
-      .all(limit) as {
+      .all({ limit, actor: actor ?? null }) as {
       at: string;
       actor: string;
       entity: string;
       entity_id: string;
       changes: string;
+      label: string | null;
     }[];
     return rows.map((row) => ({
       at: row.at,
       actor: row.actor,
       entity: row.entity,
       entityId: row.entity_id,
+      label: opt(row.label),
+      exists: row.label !== null,
       changes: JSON.parse(row.changes) as AuditEntry['changes'],
     }));
   }
@@ -927,16 +946,6 @@ export class Catalog {
     before: Record<string, unknown>,
     after: Record<string, unknown>,
   ): void {
-    const changes: AuditEntry['changes'] = {};
-    for (const [key, to] of Object.entries(after)) {
-      const from = before[key];
-      if (JSON.stringify(from) !== JSON.stringify(to)) changes[key] = { from, to };
-    }
-    if (Object.keys(changes).length === 0) return;
-    this.#db
-      .prepare(
-        `INSERT INTO audit_log (at, actor, entity, entity_id, changes) VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(now(), actor, entity, entityId, JSON.stringify(changes));
+    writeAudit(this.#db, actor, entity, entityId, before, after);
   }
 }

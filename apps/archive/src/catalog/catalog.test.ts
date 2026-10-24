@@ -166,6 +166,68 @@ describe('catalog', () => {
   });
 
   describe('sync', () => {
+    it("logs the recorder's changes in the activity feed", async () => {
+      const recorderEntries = () =>
+        catalog
+          .recentAudit(50)
+          .filter((e) => e.actor === 'recorder')
+          .map((e) => [e.entity, e.entityId, e.changes]);
+      // The fixture's first sync: every session and set is new.
+      expect(recorderEntries()).toContainEqual([
+        'set',
+        'set-2',
+        { recorded: { from: null, to: 'Café Sunrise, ready' } },
+      ]);
+      const before = catalog.recentAudit(50).length;
+
+      // Unchanged: nothing new.
+      await syncCatalog(db, recordings.dir);
+      expect(catalog.recentAudit(50)).toHaveLength(before);
+
+      // Retitled, cleaned up (raw gone) and a set failing, as the recorder would write it.
+      await recordings.write(
+        '2026-11-21_disco-room',
+        makeSession({
+          id: 'session-2',
+          title: 'Disco Room Finale',
+          startedAt: '2026-11-21T20:00:00.000Z',
+          sets: [
+            makeSet({
+              id: 'set-3',
+              userId: DJ_A,
+              displayName: 'Night Owl II',
+              status: 'failed',
+              error: 'ffmpeg exited 1',
+              files: { rawAudio: 'raw/set-3.wav' },
+            }),
+          ],
+        }),
+      );
+      await recordings.remove('2026-11-14_halloween-disco');
+      await syncCatalog(db, recordings.dir);
+      const latest = recorderEntries().slice(0, 5);
+      expect(latest).toContainEqual([
+        'session',
+        'session-2',
+        { title: { from: null, to: 'Disco Room Finale' } },
+      ]);
+      expect(latest).toContainEqual([
+        'set',
+        'set-3',
+        {
+          status: { from: 'ready', to: 'failed' },
+          error: { from: null, to: 'ffmpeg exited 1' },
+          files: { from: ['m4a', 'master', 'mp3'], to: ['rawAudio'] },
+        },
+      ]);
+      expect(latest).toContainEqual([
+        'session',
+        'session-1',
+        { missing: { from: false, to: true } },
+      ]);
+      expect(latest).toContainEqual(['set', 'set-1', { missing: { from: false, to: true } }]);
+    });
+
     it('imports sessions newest first, with titles falling back to the channel name', () => {
       const page = catalog.listSessions(1, false);
       expect(page.total).toBe(2);
@@ -266,7 +328,8 @@ describe('catalog', () => {
       );
       catalog.updateSet('set-1', { title: 'Spooky Mix' }, 'admin'); // no-op, not logged
 
-      const [entry, ...rest] = catalog.recentAudit(10);
+      // The sync's own "recorded" entries come first; only one admin entry follows.
+      const [entry, ...rest] = catalog.recentAudit(10).filter((e) => e.actor === 'admin');
       expect(rest).toHaveLength(0);
       expect(entry).toMatchObject({
         actor: 'admin',

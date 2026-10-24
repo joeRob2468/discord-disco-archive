@@ -87,7 +87,7 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
     await next();
   });
 
-  app.route('/', sessionRoutes(auth));
+  app.route('/', sessionRoutes(auth, logger?.child({ module: 'auth' })));
   app.route('/', browseRoutes(catalog));
   app.route(
     '/',

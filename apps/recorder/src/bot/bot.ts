@@ -84,6 +84,22 @@ export async function startBot({ config, sessions, logger }: BotDeps): Promise<C
   client.on(Events.Error, (error) => {
     logger.error({ err: error }, 'discord client error');
   });
+  // Gateway connection changes: a bot that's quietly offline misses /record and Go Live events.
+  client.on(Events.ShardDisconnect, (event, shardId) => {
+    logger.warn({ shardId, code: event.code }, 'discord gateway disconnected');
+  });
+  client.on(Events.ShardReconnecting, (shardId) => {
+    logger.warn({ shardId }, 'discord gateway reconnecting');
+  });
+  client.on(Events.ShardResume, (shardId, replayedEvents) => {
+    logger.info({ shardId, replayedEvents }, 'discord gateway resumed');
+  });
+  client.on(Events.ShardError, (error, shardId) => {
+    logger.error({ err: error, shardId }, 'discord gateway error');
+  });
+  client.on(Events.Warn, (message) => {
+    logger.warn({ message }, 'discord client warning');
+  });
 
   await client.login(config.botToken);
   return client;

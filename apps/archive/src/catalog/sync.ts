@@ -3,6 +3,10 @@
  * structural columns are written; archive edits are left alone. Sessions or sets that
  * disappear from disk are flagged `missing` rather than deleted, so their edits survive
  * a folder being moved back.
+ *
+ * What changed since the last sync (new sessions and sets, titles from `/record title`,
+ * processing results, files removed by the recorder's cleanup) goes into the activity
+ * log as the recorder's doing, so the admin feed shows those next to archive edits.
  */
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -16,8 +20,12 @@ import {
   type StreamSet,
 } from '@dsr/core';
 import { now, type Db } from '../db/database.ts';
+import { writeAudit } from './audit.ts';
 import { reindexAll } from './search.ts';
 import { setUuid } from './ids.ts';
+
+/** Actor for changes the recorder made (seen in session.json) in the activity log. */
+const RECORDER = 'recorder';
 
 export interface SyncResult {
   sessions: number;
@@ -129,9 +137,55 @@ export async function syncCatalog(
     sizes.set(set.id, await fileSizes(path.join(root, dir), set.files));
   }
 
+  const previousSessions = new Map(
+    (
+      db.prepare(`SELECT id, recorded_title, ended_at, missing FROM sessions`).all() as {
+        id: string;
+        recorded_title: string | null;
+        ended_at: string | null;
+        missing: number;
+      }[]
+    ).map((row) => [row.id, row]),
+  );
+  const previousSets = new Map(
+    (
+      db.prepare(`SELECT id, status, recorded_error, files, missing FROM sets`).all() as {
+        id: string;
+        status: string;
+        recorded_error: string | null;
+        files: string;
+        missing: number;
+      }[]
+    ).map((row) => [row.id, row]),
+  );
+  const fileKinds = (files: object): string[] => Object.keys(files).sort();
+
   const syncedAt = now();
   db.transaction(() => {
     for (const { dir, session } of loaded) {
+      const before = previousSessions.get(session.id);
+      writeAudit(
+        db,
+        RECORDER,
+        'session',
+        session.id,
+        before
+          ? {
+              recorded: true,
+              title: before.recorded_title,
+              ended: before.ended_at !== null,
+              missing: before.missing === 1,
+            }
+          : { recorded: false },
+        {
+          recorded: true,
+          ...(before && {
+            title: session.title ?? null,
+            ended: session.endedAt !== undefined,
+            missing: false,
+          }),
+        },
+      );
       upsertSession.run({
         id: session.id,
         dir,
@@ -152,6 +206,29 @@ export async function syncCatalog(
         name: set.displayName,
         avatarUrl: set.avatarUrl ?? null,
       });
+      const before = previousSets.get(set.id);
+      writeAudit(
+        db,
+        RECORDER,
+        'set',
+        set.id,
+        before
+          ? {
+              status: before.status,
+              error: before.recorded_error,
+              files: fileKinds(JSON.parse(before.files) as object),
+              missing: before.missing === 1,
+            }
+          : { recorded: null },
+        before
+          ? {
+              status: set.status,
+              error: set.error ?? null,
+              files: fileKinds(set.files),
+              missing: false,
+            }
+          : { recorded: `${set.displayName}, ${set.status}` },
+      );
       upsertSet.run({
         id: set.id,
         uuid: setUuid(sessionId, set.id),
@@ -172,6 +249,18 @@ export async function syncCatalog(
 
     const seenSessions = JSON.stringify(loaded.map(({ session }) => session.id));
     const seenSets = JSON.stringify(sets.map(({ set }) => set.id));
+    const seenSessionIds = new Set(loaded.map(({ session }) => session.id));
+    const seenSetIds = new Set(sets.map(({ set }) => set.id));
+    for (const [id, row] of previousSessions) {
+      if (row.missing === 0 && !seenSessionIds.has(id)) {
+        writeAudit(db, RECORDER, 'session', id, { missing: false }, { missing: true });
+      }
+    }
+    for (const [id, row] of previousSets) {
+      if (row.missing === 0 && !seenSetIds.has(id)) {
+        writeAudit(db, RECORDER, 'set', id, { missing: false }, { missing: true });
+      }
+    }
     db.prepare(
       `UPDATE sessions SET missing = 1 WHERE id NOT IN (SELECT value FROM json_each(?))`,
     ).run(seenSessions);

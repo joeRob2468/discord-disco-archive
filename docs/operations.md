@@ -80,9 +80,9 @@ The archive syncs on file changes and every `ARCHIVE_SYNC_INTERVAL_SECONDS`. `do
 
 Admin → Overview shows storage by kind. Raw captures (about 1.3 GB/h) go 48 h after leveling; the recorder logs `retention: removed files` when its hourly sweep deletes them. Failed sets keep their raw capture until fixed or deleted from the archive's admin pages.
 
-### Who deleted what
+### What happened, and who did it
 
-Admin → Activity lists every edit and delete. Permanent deletes are also in the archive log: `docker compose logs archive | grep -E 'set deleted|session deleted|delete refused'` (with the set or session, its folder, and whether it was forced).
+Admin → Activity lists every content change: archive edits and deletes (**admin**) and what the recorder did (**recorder**: new sets, titles, processing results, raw captures cleaned up). Everything else is in the container logs, e.g. `logged in`, `login failed: wrong password` (with the client IP), `edited`, `command refused`, `discord gateway disconnected`/`resumed`, and `uncaught exception; exiting` before a crash. Permanent deletes are also in the archive log: `docker compose logs archive | grep -E 'set deleted|session deleted|delete refused'` (with the set or session, its folder, and whether it was forced).
 
 ### The archive database is lost or corrupted
 

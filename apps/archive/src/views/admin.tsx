@@ -341,16 +341,92 @@ function entryLink(entry: AuditEntry): string {
 
 const ENTITY_LABELS: Record<string, string> = { session: 'Session', set: 'Set', streamer: 'DJ' };
 
-export function ActivityPage({ auth, entries }: { auth: AuthState; entries: AuditEntry[] }) {
+const FIELD_LABELS: Record<string, string> = {
+  display_name: 'name',
+  hidden: 'archived',
+  recorded: 'recorded',
+  files: 'files',
+};
+
+/** A changed value, readably: lists joined, empty as a dash, archive state in words. */
+function formatValue(field: string, value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  if (field === 'hidden') return value === 1 || value === true ? 'archived' : 'visible';
+  if (Array.isArray(value)) return value.length === 0 ? '—' : value.join(', ');
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  return JSON.stringify(value);
+}
+
+function Change({ field, change }: { field: string; change: { from: unknown; to: unknown } }) {
+  // One-sided events read better as a sentence than as "from → to".
+  if (field === 'deleted') return <div class="text-error text-sm">Deleted permanently</div>;
+  if (field === 'recorded') {
+    return (
+      <div class="text-sm">Recorded {change.to === true ? '' : formatValue(field, change.to)}</div>
+    );
+  }
+  if (field === 'order') {
+    return <div class="text-sm">Sets reordered</div>;
+  }
+  return (
+    <div class="text-sm break-words">
+      <span class="font-semibold">{FIELD_LABELS[field] ?? field.replace(/_/g, ' ')}</span>:{' '}
+      <span class="text-base-content/60">{formatValue(field, change.from)}</span> →{' '}
+      <span>{formatValue(field, change.to)}</span>
+    </div>
+  );
+}
+
+/** What the entry is about: its current name, or what it was called before it went. */
+function Subject({ entry }: { entry: AuditEntry }) {
+  const kind = ENTITY_LABELS[entry.entity] ?? entry.entity;
+  const gone = entry.changes['deleted']?.from;
+  const name = entry.label ?? (typeof gone === 'string' ? gone : entry.entityId);
+  return (
+    <div class="min-w-0">
+      <p class="text-base-content/60 text-xs">{kind}</p>
+      {entry.exists ? (
+        <a href={entryLink(entry)}>{name}</a>
+      ) : (
+        <span class="text-base-content/70">{name}</span>
+      )}
+    </div>
+  );
+}
+
+const ACTOR_FILTERS = [
+  [undefined, 'Everything'],
+  ['admin', 'Archive edits'],
+  ['recorder', 'Recorder'],
+] as const;
+
+export function ActivityPage(props: {
+  auth: AuthState;
+  entries: AuditEntry[];
+  actor: 'admin' | 'recorder' | undefined;
+}) {
+  const { auth, entries, actor } = props;
   return (
     <AdminLayout auth={auth} title="Activity" tab="/admin/activity">
+      <div class="mb-4 flex flex-wrap gap-2">
+        {ACTOR_FILTERS.map(([value, label]) => (
+          <a
+            class={`btn btn-sm rounded-xl ${actor === value ? 'btn-primary' : 'btn-ghost'}`}
+            href={withQuery('/admin/activity', { actor: value })}
+          >
+            {label}
+          </a>
+        ))}
+      </div>
       {entries.length === 0 ? (
-        <p class="text-base-content/60">No edits yet.</p>
+        <p class="text-base-content/60">Nothing yet.</p>
       ) : (
         <TablePanel>
           <thead>
             <tr>
               <th>When</th>
+              <th>Who</th>
               <th>What</th>
               <th>Changes</th>
             </tr>
@@ -360,22 +436,32 @@ export function ActivityPage({ auth, entries }: { auth: AuthState; entries: Audi
               <tr class="align-top">
                 <td class="whitespace-nowrap">{formatDateTime(entry.at)}</td>
                 <td>
-                  <a href={entryLink(entry)}>{ENTITY_LABELS[entry.entity] ?? entry.entity}</a>
+                  <span
+                    class={`badge badge-sm ${entry.actor === 'recorder' ? 'badge-info badge-soft' : 'badge-ghost'}`}
+                  >
+                    {entry.actor}
+                  </span>
                 </td>
-                <td class="flex flex-col gap-1">
-                  {Object.entries(entry.changes).map(([field, change]) => (
-                    <div class="text-sm break-all">
-                      <strong>{field}</strong>:{' '}
-                      <code class="text-base-content/60">{JSON.stringify(change.from)}</code> →{' '}
-                      <code>{JSON.stringify(change.to)}</code>
-                    </div>
-                  ))}
+                <td>
+                  <Subject entry={entry} />
+                </td>
+                <td>
+                  <div class="flex flex-col gap-1">
+                    {Object.entries(entry.changes).map(([field, change]) => (
+                      <Change field={field} change={change} />
+                    ))}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </TablePanel>
       )}
+      <p class="text-base-content/60 mt-2 text-xs">
+        The recorder's entries come from its session.json files: new sessions and sets, titles,
+        processing results and its cleanup of raw captures. Logins and errors are only in the
+        container logs.
+      </p>
     </AdminLayout>
   );
 }

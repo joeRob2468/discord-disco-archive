@@ -7,6 +7,16 @@ import { loadConfig } from './config.ts';
 import { openDatabase } from './db/database.ts';
 
 const logger = createLogger('archive');
+
+// Log crashes as JSON before exiting, so they show in `docker compose logs` like the rest.
+process.on('uncaughtException', (error) => {
+  logger.fatal({ err: error }, 'uncaught exception; exiting');
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ err: reason }, 'unhandled promise rejection; exiting');
+  process.exit(1);
+});
 const config = loadConfig();
 
 const db = openDatabase(config.dataDir);

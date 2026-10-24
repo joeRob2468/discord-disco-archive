@@ -32,13 +32,30 @@ async function replyPrivately(interaction: Interaction, content: string): Promis
   await interaction.reply({ content, flags: MessageFlags.Ephemeral, ...NO_PINGS });
 }
 
+/** Turn a command down, privately, and log why. */
+async function refuse(interaction: Interaction, logger: Logger, reason: string): Promise<void> {
+  logger.info(
+    {
+      subcommand: interaction.options.getSubcommand(false),
+      userId: interaction.user.id,
+      reason,
+    },
+    'command refused',
+  );
+  await replyPrivately(interaction, reason);
+}
+
 export async function handleRecordCommand(
   interaction: Interaction,
   deps: HandlerDeps,
 ): Promise<void> {
   const { allowedRoleIds } = deps.config;
   if (allowedRoleIds.length > 0 && !interaction.member.roles.cache.hasAny(...allowedRoleIds)) {
-    await replyPrivately(interaction, "You don't have a role that's allowed to use `/record`.");
+    await refuse(
+      interaction,
+      deps.logger,
+      "You don't have a role that's allowed to use `/record`.",
+    );
     return;
   }
 
@@ -60,22 +77,25 @@ export async function handleRecordCommand(
   }
 }
 
-async function start(interaction: Interaction, { sessions, config }: HandlerDeps): Promise<void> {
+async function start(
+  interaction: Interaction,
+  { sessions, config, logger }: HandlerDeps,
+): Promise<void> {
   const invokedIn = interaction.channel;
   const target = resolveTargetChannel({
     optionChannelId: interaction.options.getChannel('channel')?.id,
     invokedInVoiceChannelId: invokedIn?.isVoiceBased() ? invokedIn.id : undefined,
     callerVoiceChannelId: interaction.member.voice.channelId ?? undefined,
   });
-  if (!target.ok) return replyPrivately(interaction, target.reason);
+  if (!target.ok) return refuse(interaction, logger, target.reason);
 
   const channel = interaction.guild.channels.cache.get(target.channelId);
   if (!channel?.isVoiceBased()) {
-    return replyPrivately(interaction, "I can't see that voice channel.");
+    return refuse(interaction, logger, "I can't see that voice channel.");
   }
 
   const problems = await checkRecorderAccess(interaction.guild, channel, config.recorderUserId);
-  if (problems.length > 0) return replyPrivately(interaction, problems.join('\n'));
+  if (problems.length > 0) return refuse(interaction, logger, problems.join('\n'));
 
   const liveNow = channel.members
     .filter((member) => member.voice.streaming === true && member.id !== config.recorderUserId)
@@ -91,7 +111,7 @@ async function start(interaction: Interaction, { sessions, config }: HandlerDeps
     },
     liveNow,
   );
-  if (!result.ok) return replyPrivately(interaction, result.reason);
+  if (!result.ok) return refuse(interaction, logger, result.reason);
   if (result.alreadyRunning) {
     return replyPrivately(
       interaction,
@@ -101,9 +121,9 @@ async function start(interaction: Interaction, { sessions, config }: HandlerDeps
   await reply(interaction, messages.sessionStarted(result.session, sessions.status()?.target));
 }
 
-async function stop(interaction: Interaction, { sessions }: HandlerDeps): Promise<void> {
+async function stop(interaction: Interaction, { sessions, logger }: HandlerDeps): Promise<void> {
   const session = sessions.stop();
-  if (!session) return replyPrivately(interaction, 'No recording session is active.');
+  if (!session) return refuse(interaction, logger, 'No recording session is active.');
   await reply(interaction, messages.sessionStopped(session, new Date()));
 }
 
@@ -115,10 +135,13 @@ async function status(interaction: Interaction, { sessions }: HandlerDeps): Prom
   );
 }
 
-async function switchTarget(interaction: Interaction, { sessions }: HandlerDeps): Promise<void> {
+async function switchTarget(
+  interaction: Interaction,
+  { sessions, logger }: HandlerDeps,
+): Promise<void> {
   const user = interaction.options.getUser('user', true);
   const result = sessions.switchTo(user.id, interaction.user.id);
-  if (!result.ok) return replyPrivately(interaction, result.reason);
+  if (!result.ok) return refuse(interaction, logger, result.reason);
   if (!result.change) {
     return replyPrivately(interaction, `Already recording <@${user.id}>.`);
   }
@@ -126,9 +149,10 @@ async function switchTarget(interaction: Interaction, { sessions }: HandlerDeps)
   await replyPrivately(interaction, `Switching to <@${user.id}>.`);
 }
 
-async function title(interaction: Interaction, { sessions }: HandlerDeps): Promise<void> {
+async function title(interaction: Interaction, { sessions, logger }: HandlerDeps): Promise<void> {
   const text = interaction.options.getString('text', true).trim();
   const session = sessions.setTitle(text);
-  if (!session) return replyPrivately(interaction, 'No recording session is active.');
+  if (!session) return refuse(interaction, logger, 'No recording session is active.');
+  logger.info({ title: text, userId: interaction.user.id }, 'session title changed');
   await reply(interaction, messages.titleChanged(text));
 }

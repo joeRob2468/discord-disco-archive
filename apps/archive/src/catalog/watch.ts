@@ -24,6 +24,8 @@ export function watchCatalog(
 ): CatalogWatcher {
   let running: Promise<void> | undefined;
   let queued = false;
+  /** Last counts, so a sync that changed something is logged at info, the rest at debug. */
+  let last = '';
 
   const sync = async (): Promise<void> => {
     if (running) {
@@ -33,7 +35,15 @@ export function watchCatalog(
     running = (async () => {
       try {
         const result = await syncCatalog(db, recordingsDir, logger);
-        logger.debug(result, 'catalog synced');
+        const counts = {
+          sessions: result.sessions,
+          sets: result.sets,
+          invalid: result.invalid.length,
+        };
+        const key = JSON.stringify(counts);
+        if (key === last) logger.debug(counts, 'catalog synced');
+        else logger.info(counts, 'catalog synced: recordings changed');
+        last = key;
       } catch (error) {
         logger.error({ err: error }, 'catalog sync failed');
       } finally {

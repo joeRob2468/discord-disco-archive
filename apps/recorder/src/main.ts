@@ -18,6 +18,16 @@ import { sweepRecordings } from './pipeline/retention.ts';
 import { SessionManager } from './session/session-manager.ts';
 
 const logger = createLogger('recorder');
+
+// Log crashes as JSON before exiting, so they show in `docker compose logs` like the rest.
+process.on('uncaughtException', (error) => {
+  logger.fatal({ err: error }, 'uncaught exception; exiting');
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ err: reason }, 'unhandled promise rejection; exiting');
+  process.exit(1);
+});
 const config = loadConfig();
 
 const context = await launchBrowser(config.browser);

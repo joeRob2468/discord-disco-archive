@@ -60,6 +60,9 @@ const editBodyLimit = bodyLimit({
   onError: (c) => c.text('Images must be 5 MB or smaller.', 413),
 });
 
+/** Form fields that aren't edits: where to go next, and the image controls. */
+const NON_EDIT_FIELDS = new Set(['next', 'image', 'removeImage']);
+
 /** What an edit form asks for its image: a new upload, removal, or no change. */
 type ImageChange = { image: string | undefined } | undefined;
 
@@ -113,6 +116,7 @@ export function adminRoutes(
         image = await imageChange(body);
       } catch (error) {
         if (!(error instanceof ImageError)) throw error;
+        logger?.warn({ entity, id, reason: error.message }, 'image rejected; edit not saved');
         return c.html(
           <MessagePage auth={c.var.auth} title="Not saved" message={error.message} />,
           400,
@@ -120,6 +124,10 @@ export function adminRoutes(
       }
       edit(id, body);
       await applyImage(entity, id, image);
+      // Field names only; the values are in the activity log.
+      const fields = Object.keys(body).filter((key) => !NON_EDIT_FIELDS.has(key));
+      const imageNote = image && (image.image ? 'uploaded' : 'removed');
+      logger?.info({ entity, id, fields, ...(imageNote && { image: imageNote }) }, 'edited');
       return redirectBack(c, body, fallback(id));
     };
 
@@ -222,6 +230,7 @@ export function adminRoutes(
     else if ((move === 'up' || move === 'down') && setId) {
       catalog.moveSet(id, setId, move === 'up' ? -1 : 1, ACTOR);
     }
+    logger?.info({ sessionId: id, move, setId }, 'album reordered');
     return redirectBack(c, body, sessionUrl(id));
   });
 
@@ -305,9 +314,13 @@ export function adminRoutes(
     return c.html(<AdminSetsPage auth={c.var.auth} list={list} filters={filters} />);
   });
 
-  app.get('/admin/activity', requireAdmin, (c) =>
-    c.html(<ActivityPage auth={c.var.auth} entries={catalog.recentAudit(200)} />),
-  );
+  app.get('/admin/activity', requireAdmin, (c) => {
+    const actor = c.req.query('actor');
+    const filter = actor === 'admin' || actor === 'recorder' ? actor : undefined;
+    return c.html(
+      <ActivityPage auth={c.var.auth} entries={catalog.recentAudit(200, filter)} actor={filter} />,
+    );
+  });
 
   return app;
 }

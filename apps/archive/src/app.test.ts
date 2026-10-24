@@ -442,7 +442,13 @@ describe('archive app', () => {
       expect(new Catalog(db).getSet('set-2', true)).toBeUndefined();
       expect(
         await (await app.request('/admin/activity', { headers: { Cookie: cookie } })).text(),
-      ).toContain('deleted');
+      ).toContain('Deleted permanently');
+      // The feed filters by who made the change.
+      const recorderOnly = await (
+        await app.request('/admin/activity?actor=recorder', { headers: { Cookie: cookie } })
+      ).text();
+      expect(recorderOnly).toContain('Recorded');
+      expect(recorderOnly).not.toContain('Deleted permanently');
     });
 
     it('refuses to delete while recording, unless forced', async () => {
