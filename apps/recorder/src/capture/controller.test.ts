@@ -211,7 +211,19 @@ describe('RecordingController: restart grace', () => {
     sessions.stop();
     await controller.idle();
     expect(media.concatAudio).toHaveBeenCalledWith([outputs[0], outputs[1]], expect.any(String));
-    expect(await onlySet()).toMatchObject({ status: 'processing' });
+    expect(await onlySet()).toMatchObject({
+      status: 'processing',
+      cut: { start: true, end: true },
+    });
+  });
+
+  it("doesn't count a stop while held as cutting the set's end", async () => {
+    sessions.streamEnded(CHANNEL, DJ.userId);
+    await controller.idle();
+    sessions.stop();
+    await controller.idle();
+    // The set ended when its stream did, before the stop.
+    expect(await onlySet()).toMatchObject({ cut: { start: true, end: false } });
   });
 
   it('ends the held set when the grace window runs out', async () => {

@@ -469,7 +469,8 @@ export class RecordingController {
     const error = held ? undefined : await this.#stopSegment(capture);
     if (capture.parts.length > 1) await this.#joinSegments(capture);
     await this.#record?.endSet(capture.setId, held ?? this.#now(), {
-      partial,
+      // A held set ended when its stream did, so a stop now didn't cut it.
+      partial: held ? false : partial,
       ...(error !== undefined && { error }),
     });
     this.#logger.info(
