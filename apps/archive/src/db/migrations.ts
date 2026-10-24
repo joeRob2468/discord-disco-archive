@@ -111,4 +111,34 @@ export const migrations: readonly string[] = [
     tokenize = 'unicode61 remove_diacritics 2'
   );
   `,
+  /* 2: set UUIDs for URLs, play counts */ `
+  ALTER TABLE sets ADD COLUMN uuid TEXT; -- set by sync: v5 of session id + set id
+  CREATE UNIQUE INDEX sets_uuid ON sets(uuid);
+
+  -- One row per play (counted by the player after ~30 s of listening).
+  CREATE TABLE plays (
+    set_id              TEXT NOT NULL REFERENCES sets(id) ON DELETE CASCADE,
+    at                  TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX plays_set_at ON plays(set_id, at);
+
+  DROP VIEW set_view;
+  CREATE VIEW set_view AS
+  SELECT
+    s.id, s.uuid, s.session_id, s.user_id, s.position, s.started_at, s.ended_at,
+    s.partial, s.status, s.files, s.title, s.description, s.recorded_name,
+    COALESCE(s.display_name, st.display_name, s.recorded_name) AS name,
+    s.display_name AS edited_name, s.hidden AS hidden_override,
+    st.avatar_url,
+    COALESCE(s.hidden, s.recorded_hidden) AS hidden,
+    (COALESCE(s.hidden, s.recorded_hidden) OR se.hidden OR s.missing OR se.missing) AS unlisted,
+    COALESCE(se.title, se.recorded_title, se.channel_name) AS session_title,
+    se.started_at AS session_started_at,
+    se.dir AS session_dir,
+    (SELECT group_concat(tag, ',') FROM set_tags t WHERE t.set_id = s.id) AS tags,
+    (SELECT count(*) FROM plays p WHERE p.set_id = s.id) AS plays
+  FROM sets s
+  JOIN sessions se ON se.id = s.session_id
+  JOIN streamers st ON st.user_id = s.user_id;
+  `,
 ];

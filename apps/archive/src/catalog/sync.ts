@@ -15,6 +15,7 @@ import {
 } from '@dsr/core';
 import { now, type Db } from '../db/database.ts';
 import { reindexAll } from './search.ts';
+import { setUuid } from './ids.ts';
 
 export interface SyncResult {
   sessions: number;
@@ -83,12 +84,12 @@ export async function syncCatalog(
       avatar_url = COALESCE(excluded.avatar_url, streamers.avatar_url)`);
 
   const upsertSet = db.prepare(`
-    INSERT INTO sets (id, session_id, user_id, position, recorded_name, started_at, ended_at,
-                      partial, status, files, recorded_hidden, missing)
-    VALUES (@id, @sessionId, @userId, @position, @name, @startedAt, @endedAt,
-            @partial, @status, @files, @hidden, 0)
+    INSERT INTO sets (id, uuid, session_id, user_id, position, recorded_name, started_at,
+                      ended_at, partial, status, files, recorded_hidden, missing)
+    VALUES (@id, @uuid, @sessionId, @userId, @position, @name, @startedAt,
+            @endedAt, @partial, @status, @files, @hidden, 0)
     ON CONFLICT (id) DO UPDATE SET
-      session_id = excluded.session_id, user_id = excluded.user_id,
+      uuid = excluded.uuid, session_id = excluded.session_id, user_id = excluded.user_id,
       position = excluded.position, recorded_name = excluded.recorded_name,
       started_at = excluded.started_at, ended_at = excluded.ended_at,
       partial = excluded.partial, status = excluded.status, files = excluded.files,
@@ -127,6 +128,7 @@ export async function syncCatalog(
       });
       upsertSet.run({
         id: set.id,
+        uuid: setUuid(sessionId, set.id),
         sessionId,
         userId: set.userId,
         position,

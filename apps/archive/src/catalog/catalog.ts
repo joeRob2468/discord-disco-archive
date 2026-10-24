@@ -38,6 +38,8 @@ export interface SessionSummary {
 
 export interface SetSummary {
   id: string;
+  /** Public ID for URLs (`/t/<uuid>`); see `ids.ts`. */
+  uuid: string;
   sessionId: string;
   sessionTitle: string;
   sessionStartedAt: string;
@@ -63,6 +65,8 @@ export interface SetSummary {
   hiddenOverride: boolean | undefined;
   unlisted: boolean;
   tags: string[];
+  /** Times played (see `recordPlay`). */
+  plays: number;
 }
 
 export interface StreamerSummary {
@@ -94,6 +98,7 @@ export interface SearchParams {
   q?: string | undefined;
   tag?: string | undefined;
   userId?: string | undefined;
+  sessionId?: string | undefined;
   /** Inclusive `YYYY-MM-DD` bounds on the session date. */
   from?: string | undefined;
   to?: string | undefined;
@@ -150,6 +155,8 @@ interface SessionRow {
 
 interface SetRow {
   id: string;
+  uuid: string;
+  plays: number;
   session_id: string;
   session_title: string;
   session_started_at: string;
@@ -211,6 +218,8 @@ function toSet(row: SetRow): SetSummary {
   const endedAt = opt(row.ended_at);
   return {
     id: row.id,
+    uuid: row.uuid,
+    plays: row.plays,
     sessionId: row.session_id,
     sessionTitle: row.session_title,
     sessionStartedAt: row.session_started_at,
@@ -343,6 +352,44 @@ export class Catalog {
     return row && toSet(row);
   }
 
+  getSetByUuid(uuid: string, includeUnlisted: boolean): SetSummary | undefined {
+    const row = this.#db
+      .prepare(`SELECT * FROM set_view WHERE uuid = @uuid AND (@all OR NOT unlisted)`)
+      .get({ uuid, all: includeUnlisted ? 1 : 0 }) as SetRow | undefined;
+    return row && toSet(row);
+  }
+
+  /** Count a play of a visible set. Returns false if there's no such set. */
+  recordPlay(uuid: string): boolean {
+    const result = this.#db
+      .prepare(
+        `INSERT INTO plays (set_id, at)
+         SELECT id, @at FROM set_view WHERE uuid = @uuid AND NOT unlisted`,
+      )
+      .run({ uuid, at: now() });
+    return result.changes > 0;
+  }
+
+  /**
+   * Most-played sets over the last `days` days; sets never played in that window rank by
+   * all-time plays, then newest first, so the list is never empty while sets exist.
+   */
+  popularSets(limit: number, days: number, includeUnlisted: boolean): SetSummary[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT v.* FROM set_view v
+         WHERE (@all OR NOT v.unlisted)
+         ORDER BY (SELECT count(*) FROM plays p
+                   WHERE p.set_id = v.id
+                     -- plays.at is ISO 8601 (now()), so compare in the same format.
+                     AND p.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', @window)) DESC,
+                  v.plays DESC, v.started_at DESC
+         LIMIT @limit`,
+      )
+      .all({ limit, window: `-${String(days)} days`, all: includeUnlisted ? 1 : 0 }) as SetRow[];
+    return rows.map(toSet);
+  }
+
   recentSets(limit: number, includeUnlisted: boolean): SetSummary[] {
     const rows = this.#db
       .prepare(
@@ -398,6 +445,7 @@ export class Catalog {
       conditions.push('v.id IN (SELECT set_id FROM set_search WHERE set_search MATCH @match)');
     if (params.tag) conditions.push('v.id IN (SELECT set_id FROM set_tags WHERE tag = @tag)');
     if (params.userId) conditions.push('v.user_id = @userId');
+    if (params.sessionId) conditions.push('v.session_id = @sessionId');
     if (params.from) conditions.push('date(v.session_started_at) >= @from');
     if (params.to) conditions.push('date(v.session_started_at) <= @to');
     const where = conditions.join(' AND ');
@@ -407,6 +455,7 @@ export class Catalog {
       match: match ?? null,
       tag: params.tag ?? null,
       userId: params.userId ?? null,
+      sessionId: params.sessionId ?? null,
       from: params.from ?? null,
       to: params.to ?? null,
     };

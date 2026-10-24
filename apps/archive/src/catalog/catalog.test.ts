@@ -10,6 +10,7 @@ import {
   type RecordingsFixture,
 } from '../test/fixtures.ts';
 import { Catalog, NotFoundError, normalizeLinks, normalizeTags } from './catalog.ts';
+import { setUuid } from './ids.ts';
 import { syncCatalog } from './sync.ts';
 
 describe('catalog', () => {
@@ -28,6 +29,29 @@ describe('catalog', () => {
   afterEach(async () => {
     db.close();
     await recordings.cleanup();
+  });
+
+  describe('set UUIDs and plays', () => {
+    it('gives every set a stable UUID it can be found by', () => {
+      const set = catalog.getSet('set-1', false);
+      expect(set?.uuid).toBe(setUuid('session-1', 'set-1'));
+      expect(catalog.getSetByUuid(set?.uuid ?? '', false)?.id).toBe('set-1');
+    });
+
+    it('counts plays and ranks popular sets by them', () => {
+      const uuid = (id: string) => catalog.getSet(id, false)?.uuid ?? '';
+      expect(catalog.recordPlay(uuid('set-1'))).toBe(true);
+      expect(catalog.recordPlay(uuid('set-3'))).toBe(true);
+      expect(catalog.recordPlay(uuid('set-3'))).toBe(true);
+      expect(catalog.recordPlay('00000000-0000-5000-8000-000000000000')).toBe(false);
+      expect(catalog.getSet('set-3', false)?.plays).toBe(2);
+      expect(catalog.popularSets(2, 30, false).map((set) => set.id)).toEqual(['set-3', 'set-1']);
+    });
+
+    it('filters the set list by session', () => {
+      const page = catalog.search({ sessionId: 'session-1' }, false);
+      expect(page.items.map((set) => set.id).sort()).toEqual(['set-1', 'set-2']);
+    });
   });
 
   describe('sync', () => {
