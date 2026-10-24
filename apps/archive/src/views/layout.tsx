@@ -301,7 +301,7 @@ function PlayerBar() {
       hx-preserve="true"
       hidden
       data-state="paused"
-      class="bg-base-200 border-base-content/10 fixed inset-x-0 bottom-0 z-40 border-t px-3 py-2 shadow-2xl sm:px-6"
+      class="bg-base-200 border-base-content/10 fixed inset-x-0 bottom-0 z-40 border-t px-3 py-3 shadow-2xl sm:px-6"
       aria-label="Player"
     >
       <audio id="player-audio" preload="metadata" />
@@ -319,7 +319,7 @@ function PlayerBar() {
         </div>
         <ol id="player-queue-list" class="flex flex-col gap-0.5 overflow-y-auto" />
       </div>
-      <div class="mx-auto grid max-w-[1400px] grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[1fr_2fr_1fr]">
+      <div class="mx-auto grid max-w-[1400px] grid-cols-[1fr_auto] items-center gap-x-3 gap-y-3 sm:grid-cols-[1fr_2fr_1fr]">
         <div class="flex min-w-0 items-center gap-3">
           <div id="player-art" class="size-12 shrink-0 rounded-lg shadow" />
           <div class="min-w-0">
@@ -332,7 +332,7 @@ function PlayerBar() {
           </div>
         </div>
         {/* On phones its two rows become grid items: controls beside the title, seek below. */}
-        <div class="contents sm:flex sm:flex-col sm:items-center sm:gap-1">
+        <div class="contents sm:flex sm:flex-col sm:items-center sm:gap-3">
           <div class="flex items-center gap-2">
             <button
               id="player-stop"

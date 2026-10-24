@@ -125,7 +125,7 @@ export function SetListRow({
       data-track-uuid={set.uuid}
       data-set-row
     >
-      <div class="group hover:bg-base-100 flex items-center gap-3 rounded-2xl p-2 pr-4 transition">
+      <div class="group hover:bg-base-100 flex items-center gap-2 rounded-2xl p-2 transition sm:gap-3 sm:pr-4">
         <div class="grid w-8 shrink-0 place-items-center">
           {number !== undefined && (
             <span class="text-base-content/50 pointer-coarse:hidden text-sm tabular-nums group-hover:hidden">
@@ -146,16 +146,22 @@ export function SetListRow({
           data-expand={`${setUrl(set)}/inline`}
           aria-expanded="false"
         >
-          <Art seed={set.uuid} image={setArt(set)} class="size-12 shrink-0 rounded-xl" />
+          <Art seed={set.uuid} image={setArt(set)} class="size-10 shrink-0 rounded-xl sm:size-12" />
           <div class="min-w-0 flex-1">
             <p class="playing-title truncate font-semibold">
               {set.title ?? set.name}
               {set.title && <span class="text-base-content/60 font-normal"> · {set.name}</span>}
               <StatusBadges set={set} />
             </p>
-            {number === undefined && (
+            {/* On phones the length moves here, leaving the title the row's width. */}
+            {number === undefined ? (
               <p class="text-base-content/60 truncate text-sm">
                 {set.sessionTitle} · {formatDate(set.sessionStartedAt)}
+                <span class="sm:hidden"> · {formatDuration(set.durationSeconds)}</span>
+              </p>
+            ) : (
+              <p class="text-base-content/60 truncate text-sm tabular-nums sm:hidden">
+                {formatDuration(set.durationSeconds)} · {plural(set.plays, 'play')}
               </p>
             )}
           </div>
@@ -163,7 +169,7 @@ export function SetListRow({
         <span class="text-base-content/60 hidden text-sm tabular-nums sm:block">
           {plural(set.plays, 'play')}
         </span>
-        <span class="w-14 text-right text-sm tabular-nums">
+        <span class="hidden w-14 text-right text-sm tabular-nums sm:block">
           {formatDuration(set.durationSeconds)}
         </span>
         {track && <QueueButton tracks={[track]} />}

@@ -130,11 +130,16 @@ function SessionCard(props: {
   const djs = djsOf(sets);
   return (
     <section class="panel mt-8 rounded-3xl p-4 sm:p-5">
-      <div class="flex flex-wrap items-center gap-4">
+      {/* Phones: cover and text on one row, buttons below. Wider: all on one row. */}
+      <div class="grid grid-cols-[auto_1fr] items-center gap-4 sm:flex">
         <a class="plain" href={sessionUrl(session.id)}>
-          <Art seed={session.id} image={session.image} class="size-20 rounded-2xl shadow-lg" />
+          <Art
+            seed={session.id}
+            image={session.image}
+            class="size-16 rounded-2xl shadow-lg sm:size-20"
+          />
         </a>
-        <div class="min-w-0 flex-1">
+        <div class="min-w-0 sm:flex-1">
           <p class="text-base-content/60 text-xs font-semibold tracking-widest uppercase">
             From the session
           </p>
@@ -146,7 +151,7 @@ function SessionCard(props: {
             {formatDuration(totalSeconds(sets))} · {djs.map((set) => set.name).join(', ')}
           </p>
         </div>
-        <div class="flex gap-2">
+        <div class="col-span-2 flex gap-2">
           <PlayButton
             queue={queue}
             label="Play all"
