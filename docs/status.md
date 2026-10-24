@@ -75,6 +75,11 @@ daisyUI 5 + Tailwind 4 + htmx, on the existing server-rendered architecture; pla
 - **Stage 2 done (2026-10-23):** (2a) set UUIDs (v5 of session and set ID, stable across rebuilds), a plays table, popular and session-filter queries; (2b) the new shell (icon rail, big search, "Now playing" placeholder panel, glowing backdrop) and home page (hero, DJ row, recent session cards, popular sets, live-filtered set list with removable filter chips; rows expand to play, download, copy link, and Edit for admins). `/search` redirects into the list. The old session, set and streamer pages remain only for admin edits until stage 4. Checked in Chromium at 1500 px and 390 px, including htmx filtering with and without a session filter.
 - **Stage 1 done (2026-10-23):** Tailwind 4.3 + daisyUI 5.7 built by the Tailwind CLI (`build:css`; `dev` watches it), htmx 2.0 with `hx-boost` (error pages swap in too), navbar with a phone drawer, dark default with a remembered light toggle, login card. The old page classes are mapped onto daisyUI in `app.css` until stage 2. Checked in Chromium at desktop and phone widths. Not yet: the archive Docker image (it now has a CSS build stage), and real passwords in `.env` (`ARCHIVE_ADMIN_PASSWORD` 12+ characters, `ARCHIVE_SESSION_SECRET` 32+).
 
+## Deploy prep (2026-10-23)
+
+- The archive Docker image builds and runs: healthy, every page 200 after login, MP3 range requests 206. It first failed to start (`tsx` not found: pnpm doesn't hoist, and the image ran from `/app`); it now runs from `apps/archive`, like the recorder.
+- Server runbook: [operations.md](operations.md).
+
 ## Storage reduction (2026-10-23)
 
 Finished sets now keep only the FLAC master and the MP3 (`EXPORT_FORMATS=mp3`); the recorder's hourly retention sweep (`pipeline/retention.ts`, also at startup) deletes raw captures 48 h after leveling (`RAW_RETENTION_HOURS=48`, replacing the never-implemented `RAW_RETENTION_DAYS`) and M4A files from finished sets. About 415 MB per finished hour instead of 1.8 GB. Unit tested; not yet run inside the recorder container.

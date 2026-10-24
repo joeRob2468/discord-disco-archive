@@ -35,6 +35,8 @@ RUN mkdir -p /config && chown node:node /config
 USER node
 ENV RECORDINGS_DIR=/recordings \
     ARCHIVE_DATA_DIR=/config \
-    TSX_TSCONFIG_PATH=apps/archive/tsconfig.json
+    TSX_TSCONFIG_PATH=tsconfig.json
 EXPOSE 3000
-CMD ["node", "--import", "tsx", "apps/archive/src/main.ts"]
+# Run from the package so its dependencies (tsx) resolve; pnpm doesn't hoist.
+WORKDIR /app/apps/archive
+CMD ["node", "--import", "tsx", "src/main.ts"]
