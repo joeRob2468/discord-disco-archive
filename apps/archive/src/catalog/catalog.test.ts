@@ -54,6 +54,90 @@ describe('catalog', () => {
     });
   });
 
+  describe('stats', () => {
+    const uuid = (id: string) => catalog.getSet(id, false)?.uuid ?? '';
+
+    it('totals each DJ and sorts by any column', () => {
+      catalog.recordPlay(uuid('set-2'));
+      const [owl, cafe] = catalog.listStreamers(false);
+      expect(owl).toMatchObject({
+        userId: DJ_A,
+        setCount: 2,
+        totalSeconds: 7200,
+        firstPlayedAt: '2026-11-14T21:00:00.000Z',
+        lastPlayedAt: '2026-11-21T21:00:00.000Z',
+        plays: 0,
+      });
+      expect(cafe).toMatchObject({ userId: DJ_B, totalSeconds: 5430, plays: 1 });
+      const byPlays = catalog.listStreamers(false, { by: 'plays', dir: 'desc' });
+      expect(byPlays.map((s) => s.userId)).toEqual([DJ_B, DJ_A]);
+    });
+
+    it('totals sessions over the sets the viewer can see', () => {
+      catalog.updateSet('set-2', { hidden: true }, 'test');
+      const visible = catalog.listSessionStats(false);
+      expect(visible.map((s) => [s.session.id, s.sets, s.djs, s.seconds])).toEqual([
+        ['session-2', 1, 1, 3600],
+        ['session-1', 1, 1, 3600],
+      ]);
+      const all = catalog.listSessionStats(true, { by: 'length', dir: 'desc' });
+      expect(all.map((s) => [s.session.id, s.sets, s.seconds])).toEqual([
+        ['session-1', 2, 9030],
+        ['session-2', 1, 3600],
+      ]);
+    });
+
+    it('records file sizes and failure reasons for the admin overview', async () => {
+      await recordings.write(
+        'failed',
+        makeSession({
+          id: 'session-3',
+          sets: [
+            makeSet({
+              id: 'set-4',
+              userId: DJ_B,
+              status: 'failed',
+              error: 'ffmpeg exited 1',
+              // The master was never written.
+              files: { rawAudio: 'raw/set-4.wav' },
+            }),
+          ],
+        }),
+        true,
+      );
+      await syncCatalog(db, recordings.dir);
+      catalog.updateSet('set-1', { hidden: true }, 'test');
+
+      // Fixture files contain `media:<path>`.
+      const bytes = (file: string) => `media:${file}`.length;
+      expect(catalog.getSet('set-4', true)?.fileSizes).toEqual({
+        rawAudio: bytes('raw/set-4.wav'),
+      });
+      const overview = catalog.overview();
+      expect(overview).toMatchObject({ sessions: 3, sets: 4, hiddenSets: 1, djs: 2 });
+      expect(overview.storage.rawAudio).toBe(bytes('raw/set-4.wav'));
+      expect(overview.storage.mp3).toBe(
+        ['set-1', 'set-2', 'set-3'].reduce((n, id) => n + bytes(`leveled/${id}.mp3`), 0),
+      );
+      expect(catalog.unfinishedSets().map((set) => [set.id, set.error])).toEqual([
+        ['set-4', 'ffmpeg exited 1'],
+      ]);
+    });
+
+    it('filters sets by status and visibility, and sorts them', () => {
+      catalog.updateSet('set-3', { hidden: true }, 'test');
+      const ids = (page: { items: { id: string }[] }) => page.items.map((set) => set.id);
+      expect(ids(catalog.search({ hidden: true }, true))).toEqual(['set-3']);
+      expect(ids(catalog.search({ status: 'failed' }, true))).toEqual([]);
+      expect(ids(catalog.search({ sort: { by: 'length', dir: 'desc' } }, true))).toEqual([
+        'set-2',
+        'set-3',
+        'set-1',
+      ]);
+      expect(ids(catalog.search({ sort: { by: 'dj', dir: 'asc' } }, true))[0]).toBe('set-2');
+    });
+  });
+
   describe('sync', () => {
     it('imports sessions newest first, with titles falling back to the channel name', () => {
       const page = catalog.listSessions(1, false);

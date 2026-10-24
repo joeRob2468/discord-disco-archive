@@ -22,3 +22,19 @@ export function formatDuration(seconds: number | undefined): string {
 }
 
 export const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** `1.4 GB`, `320 MB`, `12 kB` (decimal units, like file managers). */
+export function formatBytes(bytes: number): string {
+  const units = ['B', 'kB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${value.toFixed(unit === 0 || value >= 100 ? 0 : 1)} ${units[unit] ?? 'B'}`;
+}
+
+/** `12.5 h` for long totals, else `1:02:03`. */
+export const formatHours = (seconds: number): string =>
+  seconds >= 36_000 ? `${(seconds / 3600).toFixed(1)} h` : formatDuration(seconds) || '0:00';

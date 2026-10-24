@@ -1,15 +1,24 @@
 /**
- * Admin-only edit endpoints (HTML form posts). Fields missing from a form are left
- * unchanged, so a one-field form (e.g. the quick Hide button) only touches that field.
+ * The admin panel and the admin-only edit endpoints (HTML form posts). Fields missing
+ * from a form are left unchanged, so a one-field form (e.g. the quick Hide button) only
+ * touches that field.
  */
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { safeNext, type AuthEnv } from '../auth/auth.ts';
-import type { Catalog, ImageEntity } from '../catalog/catalog.ts';
+import { setStatusSchema } from '@dsr/core';
+import { SET_SORTS, type Catalog, type ImageEntity } from '../catalog/catalog.ts';
 import { deleteImage, IMAGE_MAX_BYTES, ImageError, saveImage } from '../images.ts';
-import { ActivityPage, MessagePage, NotFoundPage } from '../views/pages.tsx';
-import { formField, splitList } from './params.ts';
-import { setUrl } from '../views/links.ts';
+import {
+  ActivityPage,
+  AdminSetsPage,
+  OverviewPage,
+  setDefaultDir,
+  type AdminSetFilters,
+} from '../views/admin.tsx';
+import { MessagePage, NotFoundPage } from '../views/pages.tsx';
+import { formField, pageParam, sortParam, splitList, textParam } from './params.ts';
+import { searchUrl, setUrl } from '../views/links.ts';
 
 const ACTOR = 'admin';
 
@@ -20,8 +29,15 @@ const visibility = (value: string | undefined): boolean | null | undefined => {
   return undefined;
 };
 
-/** Back to the page the form was on, if it's ours; otherwise `fallback`. */
-function redirectBack(c: Context, fallback: string): Response {
+type FormBody = Awaited<ReturnType<Context['req']['parseBody']>>;
+
+/**
+ * Back to the page the form was on: its `next` field (browsers send no Referer here,
+ * see Referrer-Policy), else a same-host Referer, else `fallback`.
+ */
+function redirectBack(c: Context, body: FormBody, fallback: string): Response {
+  const next = formField(body, 'next');
+  if (next !== undefined) return c.redirect(safeNext(next), 303);
   const referer = c.req.header('referer');
   if (referer) {
     const url = new URL(referer);
@@ -109,7 +125,7 @@ export function adminRoutes(catalog: Catalog, imagesDir: string): Hono<AuthEnv> 
       },
       ACTOR,
     );
-    return redirectBack(c, `/sessions/${encodeURIComponent(id)}`);
+    return redirectBack(c, body, `/sessions/${encodeURIComponent(id)}`);
   });
 
   app.post('/sets/:id/edit', requireAdmin, async (c) => {
@@ -133,7 +149,7 @@ export function adminRoutes(catalog: Catalog, imagesDir: string): Hono<AuthEnv> 
       ACTOR,
     );
     const set = catalog.getSet(id, true);
-    return redirectBack(c, set ? setUrl(set) : '/');
+    return redirectBack(c, body, set ? setUrl(set) : '/');
   });
 
   app.post('/streamers/:userId/edit', requireAdmin, async (c) => {
@@ -151,7 +167,31 @@ export function adminRoutes(catalog: Catalog, imagesDir: string): Hono<AuthEnv> 
       },
       ACTOR,
     );
-    return redirectBack(c, `/streamers/${encodeURIComponent(userId)}`);
+    return redirectBack(c, body, searchUrl({ userId }));
+  });
+
+  app.get('/admin', requireAdmin, (c) =>
+    c.html(
+      <OverviewPage
+        auth={c.var.auth}
+        overview={catalog.overview()}
+        unfinished={catalog.unfinishedSets()}
+      />,
+    ),
+  );
+
+  app.get('/admin/sets', requireAdmin, (c) => {
+    const status = setStatusSchema.safeParse(c.req.query('status'));
+    const visibility = c.req.query('visibility');
+    const filters: AdminSetFilters = {
+      q: textParam(c.req.query('q')),
+      status: status.success ? status.data : undefined,
+      hidden: visibility === 'hidden' ? true : visibility === 'visible' ? false : undefined,
+      sort: sortParam(SET_SORTS, c.req.query('sort'), c.req.query('dir'), 'date', setDefaultDir),
+      page: pageParam(c.req.query('page')),
+    };
+    const list = catalog.search(filters, true);
+    return c.html(<AdminSetsPage auth={c.var.auth} list={list} filters={filters} />);
   });
 
   app.get('/admin/activity', requireAdmin, (c) =>

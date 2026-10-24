@@ -212,15 +212,14 @@ Titles and display names are converted to safe file names (lowercase, `a-z0-9-`)
 
 ## Archive site
 
-`@dsr/archive` is a second TypeScript service in its own container. It's built with Hono and server-rendered with `hono/jsx`, with no client-side JavaScript. It mounts recordings **read-only** and keeps its own SQLite database in `/config` (see [Data storage](#data-storage-sessionjson-plus-the-archive-database)).
+`@dsr/archive` is a second TypeScript service in its own container. It's built with Hono and server-rendered with `hono/jsx`, using htmx and one player script rather than a client-side framework. It mounts recordings **read-only** and keeps its own SQLite database in `/config` (see [Data storage](#data-storage-sessionjson-plus-the-archive-database)).
 
 **Browsing**
 
 - **Home:** the latest sessions, recent sets and popular tags.
-- **Sessions:** paginated, newest first. A session page shows its title, date, channel, description and its sets in play order.
+- **Sessions** (`/sessions`): a table of every session with sets, sortable by title, date, DJ and set counts, length and plays. A session page shows its title, date, channel, description and its sets in play order.
 - **Sets:** a page with a player (`<video>` for mp4, otherwise `<audio>` for m4a or mp3), downloads (MP3, FLAC, AAC, MP4), notes or tracklist, tags, and previous/next within the session.
-- **Streamers:** everyone with a visible set, most recently active first. A streamer page shows the avatar, bio, links and a paginated list of their sets.
-- **Tags:** every tag with its count; each one links to a filtered search.
+- **DJs** (`/djs`): a table of everyone with a visible set (most recently active first), sortable by name, set count, time played, first and latest set, and plays. A DJ's sets are `/search?streamer=<id>`, headed by their picture, bio, links and totals. (The old `/streamers` pages and the `/tags` page were removed on 2026-10-23; tags are still matched by search.)
 - **Search:** full-text (FTS5) over DJ names, past recorded names, set and session titles, notes and tags. It matches word prefixes, ignores accents and is ranked by relevance. It can be combined with filters for streamer, tag and date range.
 - **Media:** served through the catalog, so hidden sets aren't downloadable either. Range requests make seeking work. `?download=1` names the file `DJ - Title (date).ext`.
 
@@ -229,7 +228,9 @@ Titles and display names are converted to safe file names (lowercase, `a-z0-9-`)
 - **Session:** title (overrides the recorded title or channel name), description, hidden.
 - **Set:** DJ name for this set (e.g. "A b2b B"), title, description or tracklist, tags, and visibility (default as recorded / visible / hidden).
 - **Streamer:** display name (applies to all their sets unless a set overrides it), bio, links (http/https only).
-- **Quick hide/unhide** buttons in set lists.
+- **Edit dialogs:** modals opened from the album, set and DJ pages and from the tables, each with its image upload. The form's `next` field returns to the page it was on.
+- **Admin panel** (`/admin`): totals (sessions, sets, hidden sets, DJs, hours recorded, plays), storage use (raw captures, FLAC masters, exports), and sets that are recording, processing or failed, with the recorder's failure reason. File sizes are stat-ed by the catalog sync (at startup and on changes) and stored in the database, so pages never touch the disk for them.
+- **Admin set table** (`/admin/sets`): every set, hidden or not, filtered live by text, status and visibility, sortable by any column, with quick hide/unhide.
 - **Activity log** (`/admin/activity`): every edit with the changed fields' before and after values.
 - **Name precedence:** set edit → streamer edit → recorded display name. A blank edit field means "use the recorded value".
 - **Unlisted items:** anything hidden, or missing from disk, is unlisted. Admins still see it, with a badge.
@@ -254,7 +255,7 @@ The first UI was a plain server-rendered site. It's being rebuilt before deploy,
 - **Tables with stats:** sessions, streamers and sets as sortable, filterable tables (via htmx): set counts, total time played, first and last played, durations.
 - **Admin panel:** rename streamers and edit set and session titles and tags (these routes already exist), hide sets, see failed and processing sets, storage use, and the activity log.
 
-**Redesigned UI (2026-10-23, user's reference image and follow-ups):** a dark dashboard look: solid panels on a dark page with one faint glow at the top; a large search bar and a menu button (Home, All sets, Activity for admins, light/dark, log in/out) at the top, closing on outside clicks; no logo, no sidebar. The login page shows only the login panel.
+**Redesigned UI (2026-10-23, user's reference image and follow-ups):** a dark dashboard look: solid panels on a dark page with one faint glow at the top; a large search bar and a menu button (Home, All sets, Sessions, DJs, Admin for admins, light/dark, log in/out) at the top, closing on outside clicks; no logo, no sidebar. The login page shows only the login panel.
 
 - **Player:** a Spotify-style bar fixed to the bottom (art, title, DJ · album linking to the set page, previous/play/next, seek, volume). It is `hx-preserve`d, so playback continues while browsing. Play buttons carry their list as a queue: an album's "Play all" and tracklist rows play through the album, search results and popular sets through their list, and a set page through its album. MP3 first, then M4A, then the raw capture. A set counts as played (`POST /api/plays/<uuid>`) after 30 s of actual listening. Media keys work through the Media Session API.
 

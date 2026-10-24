@@ -147,7 +147,7 @@ export function ImageForm({
   return (
     <div class="flex flex-wrap items-center gap-2">
       <form
-        class="ui flex flex-wrap items-center gap-2"
+        class="flex flex-wrap items-center gap-2"
         method="post"
         action={action}
         enctype="multipart/form-data"
@@ -167,7 +167,7 @@ export function ImageForm({
         </button>
       </form>
       {current && (
-        <form class="ui" method="post" action={action} hx-boost="false">
+        <form method="post" action={action} hx-boost="false">
           <input type="hidden" name="next" value={back} />
           <input type="hidden" name="remove" value="1" />
           <button class="btn btn-sm btn-ghost" type="submit">

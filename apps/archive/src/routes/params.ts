@@ -1,5 +1,6 @@
 /** Lenient parsing of query and form input: bad values are dropped, not errors. */
 import { snowflakeSchema } from '@dsr/core';
+import type { Sort, SortDir } from '../catalog/catalog.ts';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,3 +33,18 @@ export const splitList = (value: string, separator: RegExp): string[] =>
     .split(separator)
     .map((item) => item.trim())
     .filter((item) => item !== '');
+
+/**
+ * `?sort=<key>&dir=asc|desc` against a fixed set of keys. An unknown key falls back to
+ * `fallback`; a missing direction to the key's natural one (`defaultDir`).
+ */
+export function sortParam<K extends string>(
+  sorts: Readonly<Record<K, unknown>>,
+  sort: string | undefined,
+  dir: string | undefined,
+  fallback: K,
+  defaultDir: (key: K) => SortDir,
+): Sort<K> {
+  const by = sort !== undefined && Object.hasOwn(sorts, sort) ? (sort as K) : fallback;
+  return { by, dir: dir === 'asc' || dir === 'desc' ? dir : defaultDir(by) };
+}

@@ -2,7 +2,7 @@
 
 Progress tracker: what exists, where it lives, what's been verified, and what's next. Update it with every milestone. The design is in [plan.md](plan.md#milestones).
 
-_Last updated: 2026-10-23 (session 2)_
+_Last updated: 2026-10-23 (session 3)_
 
 ## Branches
 
@@ -68,6 +68,8 @@ Verified live on 2026-10-23 ("Set Test"): each set was processed about 10 s afte
 
 daisyUI 5 + Tailwind 4 + htmx, on the existing server-rendered architecture; plan in plan.md, "UI rewrite". Stages: (1) build setup, layout, dark theme, login page; (2) pages as tables and cards; (3) player with queue (MP3 default); (4) admin panel and stats. Deploy (milestone 8) comes after.
 
+- **Stage 4 built, user testing (2026-10-23):** public stats tables at `/sessions` and `/djs` (sortable by every column); `/search?streamer=` now heads the list with the DJ's picture, bio, links and totals. Admin panel at `/admin`: totals, storage use, and recording/processing/failed sets with the failure reason; `/admin/sets`, every set filtered live by text, status and visibility, sortable, with quick hide; `/admin/activity` restyled. Edits are modal dialogs (with the image uploads) on the album, set, DJ and table pages, returning to the page via a `next` field. Migration 4 stores each set's `error` and file sizes (stat-ed by sync, so pages don't touch the disk). The old `/streamers`, `/streamers/<id>` and `/tags` pages and the stage-1 CSS mapping are deleted (404, no redirects; user's call). Tests only so far (`pnpm check` green); not yet looked at in a browser.
+
 - **Redesign (2026-10-23):** the user asked for a dashboard look (dark glass panels, gradient hero, avatar row, cards, a side panel) with one searchable set list instead of per-set pages. Sets keep the name "sets". Sessions and DJs filter the list (`?session=<uuid>`, `?streamer=<id>`); `/t/<set uuid>` opens one shared set. Popular = play counts. Artwork is placeholder gradients seeded by ID.
 - **Stage 2 follow-up (2026-10-23):** sidebar removed (menu button by the search bar), larger muted glows, bare login page, `/search` page for the full list, album pages per session and set pages nested under them, old links redirected, empty sessions hidden. Admin image uploads added the same day: DJ pictures, set art and album covers (PNG/JPEG/WebP, max 5 MB, type checked from the file bytes, stored content-named under `<ARCHIVE_DATA_DIR>/images`, served at `/images/<name>`; set art falls back to the album cover, then a gradient). Then (same day) per review: logo removed, menu closes on outside click, darker plainer background with solid panels, and **stage 3, the player**: a bottom bar kept across page swaps, queues from albums, search and popular sets, play counting after 30 s, media keys. Checked in Chromium: Play all, navigating mid-play (audio continued), Next, and one counted play after 30 s. Next: stage 4, the admin panel.
 - **Stage 2 done (2026-10-23):** (2a) set UUIDs (v5 of session and set ID, stable across rebuilds), a plays table, popular and session-filter queries; (2b) the new shell (icon rail, big search, "Now playing" placeholder panel, glowing backdrop) and home page (hero, DJ row, recent session cards, popular sets, live-filtered set list with removable filter chips; rows expand to play, download, copy link, and Edit for admins). `/search` redirects into the list. The old session, set and streamer pages remain only for admin edits until stage 4. Checked in Chromium at 1500 px and 390 px, including htmx filtering with and without a session filter.
@@ -79,7 +81,7 @@ Chromium plays Discord's stream audio in mono, so the recorder now uses Firefox 
 
 ## Dev environment state (end of session 2, 2026-10-23)
 
-- **Resume here:** stage 4 of the archive UI rewrite (the admin panel), then the archive Docker image check, then milestone 8 (deploy). See "Next: archive UI rewrite" above.
+- **Resume here:** the user checks stage 4 (admin panel and stats) in the browser; then the archive Docker image check, then milestone 8 (deploy). See "Next: archive UI rewrite" above. Starting the archive migrates `docker-data/archive/archive.db` to schema v4.
 - The recorder runs in Docker (`docker compose up -d recorder`, currently stopped); `/record` works from the container. It uses **Firefox** (`BROWSER_CHANNEL=firefox` in `.env`), logged in as "Recorder Account" in `docker-data/recorder/profile-firefox`, with Discord notification sounds disabled. The old Chrome profile is in `docker-data/recorder/profile`.
 - `.env` is filled in (bot token, guild ID, recorder user ID, `COMMAND_DEFAULT_PERMISSION=Everyone`, `VNC_PASSWORD`, `PUID`/`PGID` 1000, and the archive's viewer and admin passwords and session secret). Never print it.
 - The bot application is "Recorder Bot" (private), invited with View Channels + Send Messages. Test server: the user's; test voice channel: "👻Halloween Disco👻" (formerly "Test Room"). Test accounts: Val Mason (desktop client) and 🎃 (web client).

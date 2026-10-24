@@ -4,13 +4,15 @@
  * disappear from disk are flagged `missing` rather than deleted, so their edits survive
  * a folder being moved back.
  */
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
+import path from 'node:path';
 import {
   readJsonFile,
   sessionPaths,
   sessionSchema,
   type Logger,
   type Session,
+  type SetFiles,
   type StreamSet,
 } from '@dsr/core';
 import { now, type Db } from '../db/database.ts';
@@ -56,6 +58,22 @@ async function loadSessions(
   return { loaded, invalid };
 }
 
+/** Byte sizes of a set's files that exist, for the admin panel's storage use. */
+async function fileSizes(sessionDir: string, files: SetFiles): Promise<Record<string, number>> {
+  const sizes: Record<string, number> = {};
+  for (const [key, relative] of Object.entries(files)) {
+    // Paths come from session.json; don't follow one out of its session folder.
+    const file = path.resolve(sessionDir, relative);
+    if (!file.startsWith(sessionDir + path.sep)) continue;
+    try {
+      sizes[key] = (await stat(file)).size;
+    } catch {
+      // Not written yet (still recording or encoding) or already deleted: no size.
+    }
+  }
+  return sizes;
+}
+
 export async function syncCatalog(
   db: Db,
   recordingsDir: string,
@@ -85,23 +103,31 @@ export async function syncCatalog(
 
   const upsertSet = db.prepare(`
     INSERT INTO sets (id, uuid, session_id, user_id, position, recorded_name, started_at,
-                      ended_at, partial, status, files, recorded_hidden, missing)
+                      ended_at, partial, status, recorded_error, files, file_sizes,
+                      recorded_hidden, missing)
     VALUES (@id, @uuid, @sessionId, @userId, @position, @name, @startedAt,
-            @endedAt, @partial, @status, @files, @hidden, 0)
+            @endedAt, @partial, @status, @error, @files, @fileSizes, @hidden, 0)
     ON CONFLICT (id) DO UPDATE SET
       uuid = excluded.uuid, session_id = excluded.session_id, user_id = excluded.user_id,
       position = excluded.position, recorded_name = excluded.recorded_name,
       started_at = excluded.started_at, ended_at = excluded.ended_at,
-      partial = excluded.partial, status = excluded.status, files = excluded.files,
-      recorded_hidden = excluded.recorded_hidden, missing = 0`);
+      partial = excluded.partial, status = excluded.status,
+      recorded_error = excluded.recorded_error, files = excluded.files,
+      file_sizes = excluded.file_sizes, recorded_hidden = excluded.recorded_hidden, missing = 0`);
 
-  const sets: { set: StreamSet; sessionId: string; position: number }[] = loaded.flatMap(
-    ({ session }) =>
+  const sets: { set: StreamSet; sessionId: string; dir: string; position: number }[] =
+    loaded.flatMap(({ dir, session }) =>
       [...session.sets]
         .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
-        .map((set, position) => ({ set, sessionId: session.id, position })),
-  );
+        .map((set, position) => ({ set, sessionId: session.id, dir, position })),
+    );
   sets.sort((a, b) => a.set.startedAt.localeCompare(b.set.startedAt));
+
+  const root = path.resolve(recordingsDir);
+  const sizes = new Map<string, Record<string, number>>();
+  for (const { set, dir } of sets) {
+    sizes.set(set.id, await fileSizes(path.join(root, dir), set.files));
+  }
 
   const syncedAt = now();
   db.transaction(() => {
@@ -137,7 +163,9 @@ export async function syncCatalog(
         endedAt: set.endedAt ?? null,
         partial: set.partial ? 1 : 0,
         status: set.status,
+        error: set.error ?? null,
         files: JSON.stringify(set.files),
+        fileSizes: JSON.stringify(sizes.get(set.id) ?? {}),
         hidden: set.hidden ? 1 : 0,
       });
     }

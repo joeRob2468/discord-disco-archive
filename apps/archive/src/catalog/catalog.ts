@@ -61,7 +61,11 @@ export interface SetSummary {
   durationSeconds: number | undefined;
   partial: boolean;
   status: SetStatus;
+  /** Why processing failed, from the recorder. */
+  error: string | undefined;
   files: SetFiles;
+  /** Bytes per file that exists on disk, as of the last sync. */
+  fileSizes: Partial<Record<keyof SetFiles, number>>;
   hidden: boolean;
   /** Visibility set in the archive; `undefined` follows the recorder. */
   hiddenOverride: boolean | undefined;
@@ -84,14 +88,75 @@ export interface StreamerSummary {
   bio: string | undefined;
   links: string[];
   setCount: number;
+  /** Total length of their sets. */
+  totalSeconds: number;
+  /** When their first and latest sets started. */
+  firstPlayedAt: string | undefined;
   lastPlayedAt: string | undefined;
+  /** Times their sets were played. */
+  plays: number;
   /** Uploaded picture file name, if any. */
   image: string | undefined;
 }
 
-export interface TagCount {
-  tag: string;
-  count: number;
+/** A session with totals over the sets the viewer can see. */
+export interface SessionStats {
+  session: SessionSummary;
+  sets: number;
+  djs: number;
+  seconds: number;
+  plays: number;
+}
+
+/** Archive-wide totals for the admin overview. Sizes are bytes per `SetFiles` key. */
+export interface Overview {
+  sessions: number;
+  sets: number;
+  hiddenSets: number;
+  djs: number;
+  seconds: number;
+  plays: number;
+  storage: Partial<Record<keyof SetFiles, number>>;
+}
+
+export type SortDir = 'asc' | 'desc';
+
+// Sort keys accepted from query strings, mapped to fixed SQL; never built from input.
+export const SET_SORTS = {
+  date: 'v.started_at',
+  dj: 'v.name COLLATE NOCASE',
+  title: 'COALESCE(v.title, v.name) COLLATE NOCASE',
+  session: 'v.session_title COLLATE NOCASE',
+  length: 'v.duration_seconds',
+  plays: 'v.plays',
+  size: '(SELECT COALESCE(sum(value), 0) FROM json_each(v.file_sizes))',
+  status: 'v.status',
+} as const;
+export type SetSort = keyof typeof SET_SORTS;
+
+export const SESSION_SORTS = {
+  date: 'se.started_at',
+  title: 'se.display_title COLLATE NOCASE',
+  sets: 'agg.sets',
+  djs: 'agg.djs',
+  length: 'agg.seconds',
+  plays: 'agg.plays',
+} as const;
+export type SessionSort = keyof typeof SESSION_SORTS;
+
+export const STREAMER_SORTS = {
+  name: 'name COLLATE NOCASE',
+  sets: 'set_count',
+  length: 'total_seconds',
+  first: 'first_played_at',
+  last: 'last_played_at',
+  plays: 'plays',
+} as const;
+export type StreamerSort = keyof typeof STREAMER_SORTS;
+
+export interface Sort<K extends string> {
+  by: K;
+  dir: SortDir;
 }
 
 export interface AuditEntry {
@@ -110,6 +175,11 @@ export interface SearchParams {
   /** Inclusive `YYYY-MM-DD` bounds on the session date. */
   from?: string | undefined;
   to?: string | undefined;
+  status?: SetStatus | undefined;
+  /** Admin filter on the set's own visibility. */
+  hidden?: boolean | undefined;
+  /** Default: relevance with `q`, otherwise newest first. */
+  sort?: Sort<SetSort> | undefined;
   page?: number | undefined;
 }
 
@@ -185,7 +255,9 @@ interface SetRow {
   ended_at: string | null;
   partial: number;
   status: SetStatus;
+  error: string | null;
   files: string;
+  file_sizes: string;
   hidden: number;
   hidden_override: number | null;
   unlisted: number;
@@ -201,7 +273,10 @@ interface StreamerRow {
   bio: string | null;
   links: string;
   set_count: number;
+  total_seconds: number;
+  first_played_at: string | null;
   last_played_at: string | null;
+  plays: number;
   image: string | null;
 }
 
@@ -257,7 +332,9 @@ function toSet(row: SetRow): SetSummary {
         : Math.round((Date.parse(endedAt) - Date.parse(row.started_at)) / 1000),
     partial: row.partial === 1,
     status: row.status,
+    error: opt(row.error),
     files: setFilesSchema.parse(JSON.parse(row.files)),
+    fileSizes: JSON.parse(row.file_sizes) as SetSummary['fileSizes'],
     hidden: row.hidden === 1,
     hiddenOverride: row.hidden_override === null ? undefined : row.hidden_override === 1,
     unlisted: row.unlisted === 1,
@@ -275,10 +352,16 @@ function toStreamer(row: StreamerRow): StreamerSummary {
     bio: opt(row.bio),
     links: JSON.parse(row.links) as string[],
     setCount: row.set_count,
+    totalSeconds: row.total_seconds,
+    firstPlayedAt: opt(row.first_played_at),
     lastPlayedAt: opt(row.last_played_at),
+    plays: row.plays,
     image: opt(row.image),
   };
 }
+
+const orderBy = (column: string, dir: SortDir): string =>
+  `${column} ${dir === 'asc' ? 'ASC' : 'DESC'}`;
 
 function toPage<T>(items: T[], total: number, page: number): Page<T> {
   return { items, total, page, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
@@ -318,7 +401,10 @@ const STREAMER_SELECT = `
   SELECT st.user_id, st.recorded_name, st.display_name, st.avatar_url, st.bio, st.links, st.image,
          COALESCE(st.display_name, st.recorded_name) AS name,
          count(v.id) AS set_count,
-         max(v.session_started_at) AS last_played_at
+         COALESCE(sum(v.duration_seconds), 0) AS total_seconds,
+         min(v.started_at) AS first_played_at,
+         max(v.started_at) AS last_played_at,
+         COALESCE(sum(v.plays), 0) AS plays
   FROM streamers st
   LEFT JOIN set_view v ON v.user_id = st.user_id AND (@all OR NOT v.unlisted)`;
 
@@ -417,23 +503,94 @@ export class Catalog {
     return rows.map(toSet);
   }
 
-  recentSets(limit: number, includeUnlisted: boolean): SetSummary[] {
+  /**
+   * Sessions with at least one set the viewer can see, with totals over those sets.
+   * Newest first by default.
+   */
+  listSessionStats(
+    includeUnlisted: boolean,
+    sort: Sort<SessionSort> = { by: 'date', dir: 'desc' },
+  ): SessionStats[] {
     const rows = this.#db
       .prepare(
-        `SELECT * FROM set_view WHERE @all OR NOT unlisted
-         ORDER BY started_at DESC LIMIT @limit`,
+        `SELECT se.*, agg.sets, agg.djs, agg.seconds, agg.plays
+         FROM session_view se
+         JOIN (SELECT v.session_id, count(*) AS sets, count(DISTINCT v.user_id) AS djs,
+                      COALESCE(sum(v.duration_seconds), 0) AS seconds, sum(v.plays) AS plays
+               FROM set_view v WHERE @all OR NOT v.unlisted GROUP BY v.session_id) agg
+           ON agg.session_id = se.id
+         WHERE @all OR NOT se.unlisted
+         ORDER BY ${orderBy(SESSION_SORTS[sort.by], sort.dir)}, se.started_at DESC`,
       )
-      .all({ limit, all: includeUnlisted ? 1 : 0 }) as SetRow[];
+      .all({ all: includeUnlisted ? 1 : 0 }) as (SessionRow & {
+      sets: number;
+      djs: number;
+      seconds: number;
+      plays: number;
+    })[];
+    return rows.map((row) => ({
+      session: toSession(row),
+      sets: row.sets,
+      djs: row.djs,
+      seconds: row.seconds,
+      plays: row.plays,
+    }));
+  }
+
+  /** Totals over everything on disk, hidden or not (admin only). */
+  overview(): Overview {
+    const counts = this.#db
+      .prepare(
+        `SELECT count(DISTINCT session_id) AS sessions, count(*) AS sets,
+                COALESCE(sum(unlisted), 0) AS hidden_sets, count(DISTINCT user_id) AS djs,
+                COALESCE(sum(duration_seconds), 0) AS seconds, COALESCE(sum(plays), 0) AS plays
+         FROM set_view WHERE NOT missing`,
+      )
+      .get() as {
+      sessions: number;
+      sets: number;
+      hidden_sets: number;
+      djs: number;
+      seconds: number;
+      plays: number;
+    };
+    const storage = this.#db
+      .prepare(
+        `SELECT f.key, sum(f.value) AS bytes
+         FROM set_view v, json_each(v.file_sizes) f WHERE NOT v.missing GROUP BY f.key`,
+      )
+      .all() as { key: keyof SetFiles; bytes: number }[];
+    return {
+      sessions: counts.sessions,
+      sets: counts.sets,
+      hiddenSets: counts.hidden_sets,
+      djs: counts.djs,
+      seconds: counts.seconds,
+      plays: counts.plays,
+      storage: Object.fromEntries(storage.map((row) => [row.key, row.bytes])),
+    };
+  }
+
+  /** Sets still recording, waiting for processing, or failed, newest first (admin only). */
+  unfinishedSets(): SetSummary[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT * FROM set_view WHERE status != 'ready' AND NOT missing ORDER BY started_at DESC`,
+      )
+      .all() as SetRow[];
     return rows.map(toSet);
   }
 
-  /** Streamers with at least one visible set, most recently active first. */
-  listStreamers(includeUnlisted: boolean): StreamerSummary[] {
+  /** Streamers with at least one visible set; by default most recently active first. */
+  listStreamers(
+    includeUnlisted: boolean,
+    sort: Sort<StreamerSort> = { by: 'last', dir: 'desc' },
+  ): StreamerSummary[] {
     const rows = this.#db
       .prepare(
         `${STREAMER_SELECT}
          GROUP BY st.user_id HAVING @all OR set_count > 0
-         ORDER BY last_played_at DESC`,
+         ORDER BY ${orderBy(STREAMER_SORTS[sort.by], sort.dir)}, last_played_at DESC`,
       )
       .all({ all: includeUnlisted ? 1 : 0 }) as StreamerRow[];
     return rows.map(toStreamer);
@@ -447,17 +604,6 @@ export class Catalog {
       )
       .get({ userId, all: includeUnlisted ? 1 : 0 }) as StreamerRow | undefined;
     return row && toStreamer(row);
-  }
-
-  listTags(includeUnlisted: boolean): TagCount[] {
-    return this.#db
-      .prepare(
-        `SELECT t.tag, count(*) AS count FROM set_tags t
-         JOIN set_view v ON v.id = t.set_id
-         WHERE @all OR NOT v.unlisted
-         GROUP BY t.tag ORDER BY count DESC, t.tag`,
-      )
-      .all({ all: includeUnlisted ? 1 : 0 }) as TagCount[];
   }
 
   /**
@@ -475,6 +621,8 @@ export class Catalog {
     if (params.sessionId) conditions.push('v.session_id = @sessionId');
     if (params.from) conditions.push('date(v.session_started_at) >= @from');
     if (params.to) conditions.push('date(v.session_started_at) <= @to');
+    if (params.status) conditions.push('v.status = @status');
+    if (params.hidden !== undefined) conditions.push('v.hidden = @hidden');
     const where = conditions.join(' AND ');
 
     const values = {
@@ -485,6 +633,8 @@ export class Catalog {
       sessionId: params.sessionId ?? null,
       from: params.from ?? null,
       to: params.to ?? null,
+      status: params.status ?? null,
+      hidden: params.hidden === undefined ? null : params.hidden ? 1 : 0,
     };
 
     const total = this.#db
@@ -492,9 +642,11 @@ export class Catalog {
       .pluck()
       .get(values) as number;
 
-    const order = match
-      ? `(SELECT bm25(set_search) FROM set_search WHERE set_search MATCH @match AND set_id = v.id)`
-      : 'v.started_at DESC';
+    const order = params.sort
+      ? `${orderBy(SET_SORTS[params.sort.by], params.sort.dir)}, v.started_at DESC`
+      : match
+        ? `(SELECT bm25(set_search) FROM set_search WHERE set_search MATCH @match AND set_id = v.id)`
+        : 'v.started_at DESC';
     const rows = this.#db
       .prepare(
         `SELECT v.* FROM set_view v WHERE ${where} ORDER BY ${order} LIMIT @limit OFFSET @offset`,

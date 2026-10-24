@@ -74,14 +74,48 @@ describe('archive app', () => {
       '/sessions/session-1',
       setPage('session-1', 'set-1'),
       '/search?q=owl',
-      '/streamers',
-      `/streamers/${DJ_A}`,
-      '/tags',
+      `/search?streamer=${DJ_A}`,
+      '/djs',
+      '/djs?sort=name&dir=asc',
+      '/sessions?sort=plays&dir=asc',
+      '/sessions?sort=nope',
       '/search?session=00000000-0000-4000-8000-000000000000',
     ])('renders %s', async (path) => {
       const response = await build().request(path);
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toMatch(/text\/html/);
+    });
+
+    it('shows session and DJ stats, sorted by any column', async () => {
+      const app = build();
+      const djs = await (await app.request('/djs?sort=name&dir=asc')).text();
+      expect(djs.indexOf('Café Sunrise')).toBeLessThan(djs.indexOf('Night Owl II'));
+      // DJ A: two one-hour sets.
+      expect(djs).toContain('2:00:00');
+      const reversed = await (await app.request('/djs?sort=name&dir=desc')).text();
+      expect(reversed.indexOf('Night Owl II')).toBeLessThan(reversed.indexOf('Café Sunrise'));
+
+      const sessions = await (await app.request('/sessions?sort=title&dir=asc')).text();
+      expect(sessions.indexOf('disco-room')).toBeLessThan(sessions.indexOf('Halloween Disco'));
+      expect(sessions).not.toContain('edit-session-');
+    });
+
+    it('shows the DJ above their sets', async () => {
+      new Catalog(db).updateStreamer(
+        DJ_A,
+        { bio: 'Spins at night.', links: ['https://example.com/owl'] },
+        'test',
+      );
+      const html = await (await build().request(`/search?streamer=${DJ_A}`)).text();
+      expect(html).toContain('Spins at night.');
+      expect(html).toContain('href="https://example.com/owl"');
+    });
+
+    it('no longer serves the old streamer and tag pages', async () => {
+      const app = build();
+      for (const old of ['/streamers', `/streamers/${DJ_A}`, '/tags']) {
+        expect((await app.request(old)).status).toBe(404);
+      }
     });
 
     it('filters the set list by search text', async () => {
@@ -123,7 +157,9 @@ describe('archive app', () => {
     it('returns 404 for unknown sets and hides admin routes', async () => {
       const app = build({ ARCHIVE_ADMIN_PASSWORD: ADMIN_PASSWORD, ARCHIVE_SESSION_SECRET: SECRET });
       expect((await app.request('/sets/nope')).status).toBe(404);
-      expect((await app.request('/admin/activity')).status).toBe(404);
+      for (const page of ['/admin', '/admin/sets', '/admin/activity']) {
+        expect((await app.request(page)).status).toBe(404);
+      }
       expect((await app.request(post('/sets/set-1/edit', { title: 'x' }))).status).toBe(404);
     });
   });
@@ -268,6 +304,65 @@ describe('archive app', () => {
         await app.request('/admin/activity', { headers: { Cookie: cookie } })
       ).text();
       expect(activity).toContain('Spooky Mix');
+    });
+
+    it('shows totals, storage use and sets that need attention', async () => {
+      await recordings.write(
+        'failed',
+        makeSession({
+          id: 'session-failed',
+          sets: [
+            makeSet({
+              id: 'set-failed',
+              userId: DJ_A,
+              status: 'failed',
+              error: 'loudnorm measurement failed',
+              files: { rawAudio: 'raw/set-failed.wav' },
+            }),
+          ],
+        }),
+        true,
+      );
+      await syncCatalog(db, recordings.dir);
+      const app = build(adminEnv);
+      const cookie = await loginAsAdmin(app);
+      const html = await (await app.request('/admin', { headers: { Cookie: cookie } })).text();
+      expect(html).toContain('loudnorm measurement failed');
+      // Fixture files are tiny text files: `media:raw/set-failed.wav` is 24 bytes.
+      expect(html).toContain('24 B');
+    });
+
+    it('lists every set for admins, filtered and sorted, with quick hide', async () => {
+      const app = build(adminEnv);
+      const cookie = await loginAsAdmin(app);
+      const get = async (path: string) =>
+        (await app.request(path, { headers: { Cookie: cookie } })).text();
+
+      const byLength = await get('/admin/sets?sort=length&dir=desc');
+      expect(byLength.indexOf('Café Sunrise')).toBeLessThan(byLength.indexOf('Night Owl II'));
+
+      const next = '/admin/sets?visibility=hidden';
+      const hide = await app.request(post('/sets/set-2/edit', { hidden: 'hidden', next }, cookie));
+      expect(hide.status).toBe(303);
+      expect(hide.headers.get('location')).toBe(next);
+
+      const hidden = await get(next);
+      const table = hidden.slice(hidden.indexOf('id="admin-sets"'));
+      expect(table).toContain('Café Sunrise');
+      expect(table).not.toContain('Night Owl');
+      expect(table).toContain('Unhide');
+      expect(await get('/admin/sets?status=failed')).toContain('No sets match.');
+    });
+
+    it('opens edit dialogs from the album and set pages', async () => {
+      const app = build(adminEnv);
+      const cookie = await loginAsAdmin(app);
+      const page = await (
+        await app.request(setPage('session-1', 'set-1'), { headers: { Cookie: cookie } })
+      ).text();
+      expect(page).toContain('data-dialog="edit-set-set-1"');
+      expect(page).toContain('<dialog id="edit-set-set-1"');
+      expect(page).toContain(`<dialog id="edit-streamer-${DJ_A}"`);
     });
 
     it('rejects cross-site form posts', async () => {

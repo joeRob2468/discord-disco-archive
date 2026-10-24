@@ -12,7 +12,7 @@ export interface LayoutProps {
 
 /**
  * Applies the saved theme before first paint (dark unless the viewer chose light), and
- * handles the theme toggle and "Copy link" buttons. Delegated on `document`, so it
+ * handles the theme toggle, admin edit dialogs (`data-dialog`) and "Copy link" buttons. Delegated on `document`, so it
  * survives hx-boost swaps.
  */
 const PAGE_SCRIPT = `
@@ -25,6 +25,11 @@ const PAGE_SCRIPT = `
       const next = root.dataset.theme === 'light' ? 'dark' : 'light';
       root.dataset.theme = next;
       try { localStorage.setItem('theme', next); } catch {}
+      return;
+    }
+    const opener = event.target.closest('[data-dialog]');
+    if (opener) {
+      document.getElementById(opener.dataset.dialog)?.showModal();
       return;
     }
     // Close open dropdowns when clicking anywhere outside them.
@@ -53,7 +58,9 @@ const PAGE_SCRIPT = `
 const ICONS = {
   menu: 'M4 6h16M4 12h16M4 18h16',
   home: 'M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
-  activity: 'M3 12h4l3 8 4-16 3 8h4',
+  sessions: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  djs: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+  admin: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
   theme: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z',
   login: 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
@@ -127,16 +134,28 @@ function Menu({ auth }: { auth: AuthState }) {
           </a>
         </li>
         {auth.canView && (
-          <li>
-            <a href="/search">
-              <Icon name="search" class="size-4" /> All sets
-            </a>
-          </li>
+          <>
+            <li>
+              <a href="/search">
+                <Icon name="search" class="size-4" /> All sets
+              </a>
+            </li>
+            <li>
+              <a href="/sessions">
+                <Icon name="sessions" class="size-4" /> Sessions
+              </a>
+            </li>
+            <li>
+              <a href="/djs">
+                <Icon name="djs" class="size-4" /> DJs
+              </a>
+            </li>
+          </>
         )}
         {auth.isAdmin && (
           <li>
-            <a href="/admin/activity">
-              <Icon name="activity" class="size-4" /> Activity
+            <a href="/admin">
+              <Icon name="admin" class="size-4" /> Admin
             </a>
           </li>
         )}
@@ -291,7 +310,7 @@ export function Layout({ title, auth, query, children }: LayoutProps) {
         <div class="min-w-0">
           <header class="mb-6 flex items-center gap-2">
             {auth.canView ? (
-              <form class="ui flex-1" action="/search" method="get" role="search">
+              <form class="flex-1" action="/search" method="get" role="search">
                 <label class="input panel h-12 w-full rounded-2xl border-0">
                   <Icon name="search" class="size-5 opacity-60" />
                   <input

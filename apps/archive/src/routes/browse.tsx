@@ -1,23 +1,24 @@
 /**
- * Read-only pages: home, search, sessions (as albums) and the sets inside them, DJs and
- * tags. Sets are addressed under their session by UUID; old set links redirect there.
+ * Read-only pages: home, search, sessions (as albums) and the sets inside them, and the
+ * session and DJ stats tables. Sets are addressed under their session by UUID; old set
+ * links redirect there.
  */
 import { Hono } from 'hono';
 import type { AuthEnv, AuthState } from '../auth/auth.ts';
-import type { Catalog, SessionSummary } from '../catalog/catalog.ts';
+import {
+  SESSION_SORTS,
+  STREAMER_SORTS,
+  type Catalog,
+  type SessionSummary,
+} from '../catalog/catalog.ts';
 import { isUuid } from '../catalog/ids.ts';
 import { AlbumPage, SetDetailPage } from '../views/album.tsx';
 import { HomePage, type Album } from '../views/home.tsx';
 import { setUrl, type SearchFilters } from '../views/links.ts';
-import {
-  NotFoundPage,
-  SessionsPage,
-  StreamerPage,
-  StreamersPage,
-  TagsPage,
-} from '../views/pages.tsx';
+import { NotFoundPage } from '../views/pages.tsx';
 import { SearchPage } from '../views/search.tsx';
-import { pageParam, snowflakeParam, textParam } from './params.ts';
+import { DjsPage, SessionsPage, sessionDefaultDir, streamerDefaultDir } from '../views/tables.tsx';
+import { pageParam, snowflakeParam, sortParam, textParam } from './params.ts';
 
 const RECENT_SESSIONS = 4;
 const POPULAR_SETS = 8;
@@ -70,16 +71,46 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
     return c.html(
       <SearchPage
         auth={auth}
-        data={{ list, filters, labels: { session: sessionInfo?.title, streamer: streamer?.name } }}
+        data={{
+          list,
+          filters,
+          labels: { session: sessionInfo?.title, streamer: streamer?.name },
+          streamer,
+        }}
       />,
     );
   });
 
   app.get('/sessions', (c) => {
     const auth = c.var.auth;
-    const page = catalog.listSessions(pageParam(c.req.query('page')), auth.isAdmin);
-    const items = page.items.filter((s) => hasSets(s, auth));
-    return c.html(<SessionsPage auth={auth} page={{ ...page, items }} />);
+    const sort = sortParam(
+      SESSION_SORTS,
+      c.req.query('sort'),
+      c.req.query('dir'),
+      'date',
+      sessionDefaultDir,
+    );
+    return c.html(
+      <SessionsPage
+        auth={auth}
+        sessions={catalog.listSessionStats(auth.isAdmin, sort)}
+        sort={sort}
+      />,
+    );
+  });
+
+  app.get('/djs', (c) => {
+    const auth = c.var.auth;
+    const sort = sortParam(
+      STREAMER_SORTS,
+      c.req.query('sort'),
+      c.req.query('dir'),
+      'last',
+      streamerDefaultDir,
+    );
+    return c.html(
+      <DjsPage auth={auth} streamers={catalog.listStreamers(auth.isAdmin, sort)} sort={sort} />,
+    );
   });
 
   app.get('/sessions/:id', (c) => {
@@ -105,6 +136,7 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
         albumSets={siblings}
         previous={index > 0 ? siblings[index - 1] : undefined}
         next={siblings[index + 1]}
+        streamer={auth.isAdmin ? catalog.getStreamer(set.userId, true) : undefined}
       />,
     );
   });
@@ -125,27 +157,6 @@ export function browseRoutes(catalog: Catalog): Hono<AuthEnv> {
     const uuid = c.req.param('uuid');
     if (!isUuid(uuid) || !catalog.recordPlay(uuid)) return c.body(null, 404);
     return c.body(null, 204);
-  });
-
-  app.get('/streamers', (c) => {
-    const auth = c.var.auth;
-    return c.html(<StreamersPage auth={auth} streamers={catalog.listStreamers(auth.isAdmin)} />);
-  });
-
-  app.get('/streamers/:userId', (c) => {
-    const auth = c.var.auth;
-    const streamer = catalog.getStreamer(c.req.param('userId'), auth.isAdmin);
-    if (!streamer) return c.html(<NotFoundPage auth={auth} />, 404);
-    const sets = catalog.search(
-      { userId: streamer.userId, page: pageParam(c.req.query('page')) },
-      auth.isAdmin,
-    );
-    return c.html(<StreamerPage auth={auth} streamer={streamer} sets={sets} />);
-  });
-
-  app.get('/tags', (c) => {
-    const auth = c.var.auth;
-    return c.html(<TagsPage auth={auth} tags={catalog.listTags(auth.isAdmin)} />);
   });
 
   return app;

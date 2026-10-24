@@ -3,10 +3,11 @@
  * tracklist of its sets. Each set has its own page under its session.
  */
 import type { AuthState } from '../auth/auth.ts';
-import type { SetSummary } from '../catalog/catalog.ts';
+import type { SetSummary, StreamerSummary } from '../catalog/catalog.ts';
 import { setArt } from './art.ts';
-import { Art, DjAvatar, ImageForm, SetListRow, StatusBadges } from './cards.tsx';
-import { Downloads, EditSessionForm, EditSetForm } from './components.tsx';
+import { Art, DjAvatar, SetListRow, StatusBadges } from './cards.tsx';
+import { Downloads } from './components.tsx';
+import { EditButton, EditSessionDialog, EditSetDialog, EditStreamerDialog } from './edit.tsx';
 import { formatDate, formatDateTime, formatDuration, plural } from './format.ts';
 import { djsOf, totalSeconds, type Album } from './home.tsx';
 import { Layout } from './layout.tsx';
@@ -71,6 +72,9 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
             >
               Copy link
             </button>
+            {auth.isAdmin && (
+              <EditButton kind="session" id={session.id} class="btn btn-ghost rounded-xl" />
+            )}
           </div>
         </div>
       </section>
@@ -84,19 +88,7 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
         </div>
       </section>
 
-      {auth.isAdmin && (
-        <section class="panel mt-8 flex flex-col gap-3 rounded-3xl p-5">
-          <h2 class="text-lg font-bold">Images</h2>
-          <ImageForm
-            entity="session"
-            id={session.id}
-            label="Album cover"
-            current={session.image}
-            back={sessionUrl(session.id)}
-          />
-        </section>
-      )}
-      {auth.isAdmin && <EditSessionForm session={session} />}
+      {auth.isAdmin && <EditSessionDialog session={session} next={sessionUrl(session.id)} />}
     </Layout>
   );
 }
@@ -108,8 +100,10 @@ export function SetDetailPage(props: {
   albumSets: SetSummary[];
   previous: SetSummary | undefined;
   next: SetSummary | undefined;
+  /** The set's DJ, for admins' Edit DJ dialog. */
+  streamer?: StreamerSummary | undefined;
 }) {
-  const { auth, set, albumSets, previous, next } = props;
+  const { auth, set, albumSets, previous, next, streamer } = props;
   const queue = queueOf(albumSets);
   const playable = queue.some((track) => track.uuid === set.uuid);
   const raw = !set.files.mp3 && !set.files.m4a && set.files.rawAudio !== undefined;
@@ -160,6 +154,12 @@ export function SetDetailPage(props: {
             <button class="btn btn-ghost btn-sm" type="button" data-copy={setUrl(set)}>
               Copy link
             </button>
+            {auth.isAdmin && (
+              <>
+                <EditButton kind="set" id={set.id} label="Edit set" />
+                {streamer && <EditButton kind="streamer" id={set.userId} label="Edit DJ" />}
+              </>
+            )}
           </div>
           {raw && <p class="text-base-content/60 mt-2 text-xs">Raw capture, not leveled yet.</p>}
           <div class="mt-3">
@@ -185,29 +185,8 @@ export function SetDetailPage(props: {
         )}
       </nav>
 
-      {auth.isAdmin && (
-        <section class="panel mt-8 flex flex-col gap-3 rounded-3xl p-5">
-          <h2 class="text-lg font-bold">Images</h2>
-          <ImageForm
-            entity="set"
-            id={set.id}
-            label="Set art"
-            current={set.image}
-            back={setUrl(set)}
-          />
-          <ImageForm
-            entity="streamer"
-            id={set.userId}
-            label={`${set.name}'s picture`}
-            current={set.streamerImage}
-            back={setUrl(set)}
-          />
-          <p class="text-base-content/60 text-xs">
-            Without its own art, a set uses its album cover. PNG, JPEG or WebP, up to 5 MB.
-          </p>
-        </section>
-      )}
-      {auth.isAdmin && <EditSetForm set={set} />}
+      {auth.isAdmin && <EditSetDialog set={set} next={setUrl(set)} />}
+      {auth.isAdmin && streamer && <EditStreamerDialog streamer={streamer} next={setUrl(set)} />}
     </Layout>
   );
 }
