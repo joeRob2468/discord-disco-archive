@@ -36,5 +36,11 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
       db.close();
       process.exit(0);
     });
+    // close() waits for open connections: idle keep-alives and, worse, a browser
+    // streaming a set would hold shutdown (and `node --watch` restarts) open forever.
+    if ('closeIdleConnections' in server) server.closeIdleConnections();
+    setTimeout(() => {
+      if ('closeAllConnections' in server) server.closeAllConnections();
+    }, 5000).unref();
   });
 }
