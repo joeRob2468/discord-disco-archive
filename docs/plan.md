@@ -197,14 +197,16 @@ recordings/
     session.json                    # source of truth for the archive (see below)
     setlist.csv                     # start, end, user id, display name, partial, files
     raw/
-      2026-11-14T21-03-12_djname.wav     # float32 capture
+      2026-11-14T21-03-12_djname.wav     # float32 capture; deleted RAW_RETENTION_HOURS after leveling
       2026-11-14T21-03-12_djname.mkv     # if video enabled (video + float audio)
     leveled/
       2026-11-14T21-03-12_djname.flac    # master
-      2026-11-14T21-03-12_djname.mp3     # download
-      2026-11-14T21-03-12_djname.m4a     # web playback (AAC)
+      2026-11-14T21-03-12_djname.mp3     # playback and download
+      2026-11-14T21-03-12_djname.m4a     # only if m4a is in EXPORT_FORMATS (off by default)
       2026-11-14T21-03-12_djname.mp4     # web playback: H.264 + leveled AAC, faststart
 ```
+
+**Retention (decided 2026-10-23):** a finished set keeps its FLAC master (lossless) and MP3: about 300 + 115 MB/h, measured on the test recordings. The raw capture (about 1.3 GB/h) is deleted `RAW_RETENTION_HOURS` (48) after leveling, counted from the master's modification time, so re-processing restarts the clock. The recorder sweeps at startup and hourly (`pipeline/retention.ts`), and the same sweep deletes exports no longer in `EXPORT_FORMATS` (so the M4A files went when the default changed to `mp3`). Only `ready` sets with a master on disk are touched, and only in sessions that have ended: a failed or unprocessed set keeps its raw capture, since that's its only copy. A set whose raw capture is gone can't be re-leveled by `reprocess.ts`. Together that's about 415 MB per hour of finished sets, down from about 1.8 GB.
 
 `session.json` holds the session's ID, title, guild and channel, start and end, who started it, and a list of sets. Each set records the user ID, display name, avatar URL, start, end, `partial`, `hidden` and its files. The recorder writes it; the archive only reads it, except to remove a set an admin permanently deletes. Plain files keep backup and restore as simple as copying the folder.
 
@@ -296,7 +298,7 @@ Server facts (checked over SSH on 2026-10-23; details in research.md):
 
 - **CPU:** x86_64 with 16 cores, so Google Chrome (`channel: 'chrome'`) is available.
 - **Memory:** 30 GiB RAM, about 19 GiB available, with swap already in use (5.6 of 8 GiB) because of the Minecraft server. Give `recorder` `mem_limit: 3g` and check during the first event.
-- **Disk:** `/mnt/media` has 1.5 TB free (79% used) and holds the media stack's `docker_data/` and `data/`; this project follows the same layout. Raw WAV is about 1.4 GB/h. Video at about 6 Mb/s is about 2.7 GB/h. Plan on about 5 GB per hour of video sets. `RAW_RETENTION_DAYS` is optional; empty means keep forever. The NVMe root (746 GB free) is the fallback if the media disk fills up.
+- **Disk:** `/mnt/media` has 1.5 TB free (79% used) and holds the media stack's `docker_data/` and `data/`; this project follows the same layout. Raw WAV is about 1.4 GB/h. Video at about 6 Mb/s is about 2.7 GB/h. Plan on about 5 GB per hour of video sets. Raw captures are deleted 48 h after leveling (`RAW_RETENTION_HOURS`, see "Output layout"), so finished sets take about 415 MB/h. The NVMe root (746 GB free) is the fallback if the media disk fills up.
 - **Docker** 28.5.1 and Compose v2.40.1. `include:` and `env_file` work as planned.
 - **Time zone:** the host is `America/Chicago`. Set the same `TZ` in `.env` so folder dates match the local event date.
 - **Login on the server:** reuse the recorder `PROFILE_DIR` copied from the test machine, or log in again over the SSH-tunnelled noVNC.
@@ -355,7 +357,7 @@ All settings live in `.env` (git-ignored). `.env.example` is committed with ever
 | `RECORDINGS_DIR`                | `/recordings`                 | Path inside the containers.                                                                             |
 | `RECORDINGS_HOST_DIR`           | `./data/recordings`           | Host path bind-mounted to `RECORDINGS_DIR` (see Storage layout).                                        |
 | `APP_DATA_DIR`                  | `./docker-data`               | Host path for app state; `recorder/` and `archive/` are mounted at `/config`.                           |
-| `RAW_RETENTION_DAYS`            | (empty)                       | Delete raw WAV/MKV this many days after leveling. Empty = keep.                                         |
+| `RAW_RETENTION_HOURS`           | (empty; `.env.example`: 48)   | Delete a ready set's raw WAV this many hours after leveling. Empty = keep.                              |
 | `TZ`                            | `America/Chicago`             | Session dates and file times.                                                                           |
 | `PROFILE_DIR`                   | `/config/profile`             | Playwright user data dir (login session). Set by compose.                                               |
 | `BROWSER_CHANNEL`               | `firefox`                     | `firefox` (stereo), `chrome` or `chromium` (mono stream audio).                                         |
@@ -363,7 +365,7 @@ All settings live in `.env` (git-ignored). `.env.example` is committed with ever
 | `TARGET_LUFS`                   | `-14`                         | Loudnorm integrated target.                                                                             |
 | `TARGET_TP`                     | `-1`                          | Loudnorm true-peak ceiling (dBTP).                                                                      |
 | `TARGET_LRA`                    | `11`                          | Loudnorm loudness range target.                                                                         |
-| `EXPORT_FORMATS`                | `mp3,m4a`                     | Comma list: `mp3`, `m4a`.                                                                               |
+| `EXPORT_FORMATS`                | `mp3`                         | Comma list: `mp3`, `m4a`. Formats removed are swept from finished sets.                                 |
 | `RESTART_GRACE_SECONDS`         | `60`                          | Stream restart within this window = same set.                                                           |
 | `HANDOVER_SILENCE_SECONDS`      | `45`                          | Current stream silent this long while another is live → switch.                                         |
 | `VNC_ENABLED`                   | `true`                        | noVNC for login and debugging.                                                                          |

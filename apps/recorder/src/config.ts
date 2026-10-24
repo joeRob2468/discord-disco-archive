@@ -92,13 +92,14 @@ const processingSchema = z
     TARGET_LUFS: withDefault(envNumber.min(-70).max(-5), '-14'),
     TARGET_TP: withDefault(envNumber.min(-9).max(0), '-1'),
     TARGET_LRA: withDefault(envNumber.min(1).max(50), '11'),
-    EXPORT_FORMATS: withDefault(envList.pipe(z.array(z.enum(['mp3', 'm4a']))), 'mp3,m4a'),
-    RAW_RETENTION_DAYS: optional(envInteger.min(0)),
+    EXPORT_FORMATS: withDefault(envList.pipe(z.array(z.enum(['mp3', 'm4a']))), 'mp3'),
+    // Empty keeps raw captures forever.
+    RAW_RETENTION_HOURS: optional(envInteger.min(0)),
   })
   .transform((env) => ({
     targets: { integrated: env.TARGET_LUFS, truePeak: env.TARGET_TP, range: env.TARGET_LRA },
     exportFormats: env.EXPORT_FORMATS,
-    rawRetentionDays: env.RAW_RETENTION_DAYS,
+    rawRetentionHours: env.RAW_RETENTION_HOURS,
   }));
 
 const sessionSchema = z

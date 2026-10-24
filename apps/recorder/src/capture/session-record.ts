@@ -166,6 +166,26 @@ export class SessionRecord {
     });
   }
 
+  /**
+   * Forget some of a set's files (see `pipeline/retention.ts`). Returns their absolute
+   * paths for the caller to delete, once session.json no longer lists them.
+   */
+  async dropFiles(setId: string, keys: readonly (keyof SetFiles)[]): Promise<string[]> {
+    const set = this.set(setId);
+    const dropped = keys.flatMap((key) => {
+      const file = set?.files[key];
+      return file === undefined ? [] : [path.join(this.paths.dir, file)];
+    });
+    if (dropped.length === 0) return [];
+    await this.#updateSet(setId, (current) => {
+      const files = Object.fromEntries(
+        Object.entries(current.files).filter(([key]) => !keys.includes(key as keyof SetFiles)),
+      );
+      return { ...current, files };
+    });
+    return dropped;
+  }
+
   /** Post-processing failed; the raw capture stays, so it can be re-run. */
   failSet(setId: string, error: string): Promise<void> {
     return this.#updateSet(setId, (set) => ({ ...set, status: 'failed', error }));

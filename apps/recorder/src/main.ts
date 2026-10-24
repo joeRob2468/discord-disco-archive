@@ -14,6 +14,7 @@ import { RecordingController } from './capture/controller.ts';
 import { loadConfig } from './config.ts';
 import { processSet } from './pipeline/process-set.ts';
 import { Processor } from './pipeline/processor.ts';
+import { sweepRecordings } from './pipeline/retention.ts';
 import { SessionManager } from './session/session-manager.ts';
 
 const logger = createLogger('recorder');
@@ -83,6 +84,24 @@ const controller = new RecordingController({
 
 const client = await startBot({ config: config.discord, sessions, logger });
 clientRef.current = client;
+
+// Raw captures and dropped export formats are cleaned up at startup, then hourly.
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const sweep = async (): Promise<void> => {
+  try {
+    const result = await sweepRecordings(
+      config.session.recordingsDir,
+      config.processing,
+      logger.child({ module: 'retention' }),
+    );
+    if (result.files > 0) logger.info(result, 'retention sweep freed space');
+  } catch (error) {
+    logger.error({ err: error }, 'retention sweep failed');
+  }
+};
+void sweep();
+const sweepTimer = setInterval(() => void sweep(), SWEEP_INTERVAL_MS);
+sweepTimer.unref();
 
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'shutting down');

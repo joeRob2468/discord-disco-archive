@@ -20,7 +20,7 @@ describe('loadConfig', () => {
       streamVolume: 85,
     });
     expect(config.processing.targets).toEqual({ integrated: -14, truePeak: -1, range: 11 });
-    expect(config.processing.exportFormats).toEqual(['mp3', 'm4a']);
+    expect(config.processing.exportFormats).toEqual(['mp3']);
     expect(config.session.restartGraceMs).toBe(60_000);
     expect(config.session.handoverSilenceSeconds).toBe(45);
   });
