@@ -1,5 +1,5 @@
 # Home server overlay: serve the archive through the existing Traefik on the shared
-# `media_network` instead of a host port. See docs/plan.md, "Deployment".
+# `media_network` instead of a host port. See docs/design.md, "Deployment".
 services:
   archive:
     ports: !reset []

@@ -202,7 +202,7 @@ export async function unmuteStream(page: Page, target: StreamTarget): Promise<bo
  * Set a slider by keyboard, stepping from its current value towards `percent` and never
  * past it. Discord's sliders don't take direct value input, and steps differ between
  * sliders. No `End` key: the stream slider may go above 100%, which can clip inside
- * Discord's mixer (docs/plan.md, "Isolating stream audio from voice chat").
+ * Discord's mixer (docs/design.md, "Browser and audio").
  */
 async function setSlider(slider: Locator, percent: number): Promise<number> {
   // Discord's volume steps are fractional and uneven (84.2, 84.99…); within half a

@@ -5,7 +5,7 @@
  * - Admin: `ARCHIVE_ADMIN_PASSWORD` unlocks hiding and editing. If unset, editing is off.
  *
  * Login sets a signed, HttpOnly cookie holding the role and an expiry. A later Discord
- * login (docs/plan.md, "Archive site") would set the same cookie, so nothing else changes.
+ * login (docs/design.md, "Archive") would set the same cookie, so nothing else changes.
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Context, MiddlewareHandler } from 'hono';

@@ -11,4 +11,4 @@ ffmpeg wrappers. This package knows _how_ to measure, level and encode. Callers 
 | `level.ts`    | `measurePulseLevel(source, seconds)` reports a live PulseAudio source's mean and peak (`volumedetect`), to confirm audio is flowing; `parseVolumeDetect`.                                                                                 |
 | `encode.ts`   | `encodeMaster` (leveled 24-bit FLAC), `encodeMp3`, `encodeM4a`, `muxMp4` (captured H.264 + leveled AAC, faststart) and `concatAudio` (joins restart-grace segments).                                                                      |
 
-Background on the leveling approach: [docs/plan.md, "Leveling"](../../docs/plan.md#leveling).
+Background on the leveling approach: [docs/design.md, "Processing"](../../docs/design.md#processing).

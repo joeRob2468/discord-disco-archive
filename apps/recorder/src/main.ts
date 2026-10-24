@@ -1,7 +1,7 @@
 /**
  * Recorder composition root: the bot, the session manager, the browser running the
  * Discord web client as the recorder account, and the recording controller, all in one
- * process (docs/plan.md, "Components"). It needs Xvfb and PulseAudio, so it runs in the
+ * process (docs/design.md, "Approach"). It needs Xvfb and PulseAudio, so it runs in the
  * container.
  */
 import { createLogger } from '@dsr/core';

@@ -1,8 +1,8 @@
 # Docs
 
-- [status.md](status.md): progress tracker, covering what's implemented, where, verified, and next.
-- [plan.md](plan.md): what we're building, the architecture, components, configuration and milestones.
-- [research.md](research.md): confirmed facts with sources, open questions to test, and rejected options.
-- [operations.md](operations.md): running the server: deploy, noVNC access, troubleshooting (e.g. the recorder logged out), backups.
-- [development.md](development.md): setup, scripts, code organisation, TypeScript conventions, adding packages.
-- [conventions.md](conventions.md): architecture rules, TypeScript and style, testing, security, git.
+- [status.md](status.md): what works, what's next.
+- [design.md](design.md): how it works, configuration, bot setup.
+- [operations.md](operations.md): running the server and fixing problems.
+- [development.md](development.md): scripts and local workflow.
+- [conventions.md](conventions.md): code rules.
+- [research.md](research.md): verified facts with sources.

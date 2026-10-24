@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the virtual display, PulseAudio sinks and (optionally) noVNC, then run the
-# recorder. See docs/plan.md, "Container details".
+# recorder. See docs/design.md.
 set -euo pipefail
 
 : "${DISPLAY:=:99}"

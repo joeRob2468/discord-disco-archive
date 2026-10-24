@@ -1,6 +1,6 @@
 /**
  * Launches the browser that runs the Discord web client as the recorder account.
- * See docs/plan.md, "Browser settings", for why each option is set.
+ * See docs/design.md, "Browser and audio", and docs/research.md for why each option is set.
  *
  * Firefox is the one to use for recording: Chromium plays Discord's stream audio in
  * mono (docs/research.md, "Audio quality"). Chrome stays available as a fallback.

@@ -1,54 +1,39 @@
 # Discord Stream Recorder
 
-Records each DJ's Go Live stream in a Discord voice channel as its own loudness-normalised file (optionally with video), and serves a web archive of past sessions, browsable by session and by streamer.
+Records each DJ's Go Live stream in a Discord voice channel as its own leveled audio file, and serves them in a web archive to browse, play and download.
 
-You start a session with `/record start` in a voice channel's chat. A Discord bot watches for streams starting and stopping. A real Discord web client, logged in as a dedicated recorder account and running headed on a virtual display, opens each stream while ffmpeg records its audio.
+Type `/record start` in a voice channel's chat. A bot follows who is streaming; a real Discord web client, logged in as a dedicated recorder account, plays each stream while ffmpeg records it. When a set ends it's trimmed, leveled to −14 LUFS and saved as FLAC and MP3, and it shows up in the archive.
 
-> **ToS:** driving a user account with Playwright counts as a "self-bot", which Discord forbids, and the account can be terminated. Use a throwaway recorder account. The bot account is a normal bot and is not at risk. Tell DJs and attendees they are being recorded.
+> **ToS:** driving a user account with Playwright counts as a self-bot, which Discord forbids; the account can be banned. Use a throwaway recorder account, and tell people the event is recorded.
 
-**Status:** see [docs/status.md](docs/status.md).
-
-## Repository layout
-
-pnpm workspace. Each app is one container. Each package is shared code with no I/O side effects at import.
+## Layout
 
 ```
-apps/
-  recorder/   @dsr/recorder  Discord bot, session control, browser driver, live capture
-  archive/    @dsr/archive   Web archive (Hono + SQLite): browse, search, play, download, admin edits
-packages/
-  core/       @dsr/core      session.json/state.json schemas, file layout and naming, env parsing, logging
-  media/      @dsr/media     ffmpeg runner, two-pass loudnorm, export encodes
-docs/         plan, research notes, development guide
-compose.yaml          local / default deployment
-compose.server.yaml   home server overlay (Traefik on media_network)
+apps/recorder/    bot, session rules, browser driver, capture, processing (Docker image)
+apps/archive/     web archive: Hono + SQLite (Docker image)
+packages/core/    session.json schema, file layout and naming, env parsing, logging
+packages/media/   ffmpeg: capture, loudness, leveling, encodes
+compose.yaml          both services (local)
+compose.server.yaml   home server overlay (Traefik)
 ```
-
-Dependencies only point one way: `apps/*` → `packages/*`, and `media` doesn't depend on `core`. The recorder writes the recordings volume; the archive only reads it, except when an admin permanently deletes a set or session.
 
 ## Quick start
 
 ```sh
-corepack enable          # uses the pnpm version pinned in package.json
+corepack enable
 pnpm install
-cp .env.example .env     # fill in at least VNC_PASSWORD for the smoke test
+cp .env.example .env     # fill in the Discord IDs, tokens and passwords
 pnpm check               # format, lint, typecheck, test
 
-docker compose up --build recorder
-# open http://localhost:6080/vnc.html and log in to Discord as the recorder account
+docker compose up --build
+# log the recorder account in once at http://localhost:6080/vnc.html
 ```
-
-See [docs/development.md](docs/development.md) for the full workflow, and [docs/plan.md](docs/plan.md) for the design.
-
-## When something breaks
-
-[docs/operations.md](docs/operations.md) is the runbook for the server: deploying and updating, reaching the recorder's Discord over an SSH-tunnelled noVNC (e.g. to log the recorder account back in), logs, stuck or failed sets, archive routing, disk use and backups.
 
 ## Docs
 
-- [docs/plan.md](docs/plan.md): goals, architecture, commands, archive, deployment, configuration, milestones
-- [docs/research.md](docs/research.md): confirmed facts with sources, open questions, rejected options
-- [docs/status.md](docs/status.md): progress tracker, covering what's implemented and what's next
-- [docs/development.md](docs/development.md): setup, scripts, Docker workflow, adding packages
-- [docs/operations.md](docs/operations.md): running the server: deploy, access, troubleshooting, backups
-- [docs/conventions.md](docs/conventions.md): architecture rules, code style, testing, security, git
+- [docs/status.md](docs/status.md): what works, what's next.
+- [docs/design.md](docs/design.md): how it works, configuration, bot setup.
+- [docs/operations.md](docs/operations.md): running the server and fixing problems (e.g. the recorder logged out).
+- [docs/development.md](docs/development.md): scripts and local workflow.
+- [docs/conventions.md](docs/conventions.md): code rules.
+- [docs/research.md](docs/research.md): verified facts with sources.

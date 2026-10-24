@@ -1,6 +1,6 @@
 /**
  * Recorder configuration from the environment (`.env`, see `.env.example` and
- * docs/plan.md, "Configuration"). Split into sections so each module, and scripts
+ * docs/design.md, "Configuration"). Split into sections so each module, and scripts
  * like `smoke.ts`, only require the settings they use.
  */
 import {

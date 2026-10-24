@@ -4,7 +4,7 @@
 load-module module-native-protocol-unix
 
 # The browser's only output. ffmpeg records its monitor (`recorder.monitor`).
-# float32 so peaks over 0 dBFS survive until loudnorm (docs/plan.md, "Leveling").
+# float32 so peaks over 0 dBFS survive until loudnorm (docs/design.md, "Processing").
 load-module module-null-sink sink_name=recorder format=float32le rate=48000 channels=2 sink_properties=device.description=recorder
 
 # A silent default mic, in case Discord opens one when joining voice.

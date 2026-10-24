@@ -1,7 +1,7 @@
 /**
  * Live audio capture from a PulseAudio source: one ffmpeg process writes the float32
  * WAV and runs `silencedetect` on the same audio, so the recorder can hand over when a
- * stream goes quiet (docs/plan.md, "Which stream to record").
+ * stream goes quiet (docs/design.md, "Whose stream to record").
  * https://ffmpeg.org/ffmpeg-filters.html#silencedetect
  */
 import { spawnFfmpeg, type FfmpegProcess, type SpawnOptions } from './ffmpeg.ts';

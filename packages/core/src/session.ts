@@ -2,8 +2,7 @@
  * On-disk data model shared by the recorder (writer) and the archive (reader).
  *
  * `session.json` lives in each session folder and is the source of truth for that
- * session. `state.json` lives in the recordings root and points at the active session,
- * so the recorder can resume after a restart.
+ * session.
  */
 import { z } from 'zod';
 

@@ -1,5 +1,5 @@
 /**
- * Which voice channel `/record start` targets. See docs/plan.md, "Commands":
+ * Which voice channel `/record start` targets. See docs/design.md, "Commands":
  * 1. the `channel` option; 2. the voice channel whose chat the command was typed in;
  * 3. the voice channel the caller is connected to.
  */

@@ -1,5 +1,5 @@
 /**
- * Directory layout of the recordings volume. See docs/plan.md, "Output layout".
+ * Directory layout of the recordings volume. See docs/design.md, "Storage".
  */
 import path from 'node:path';
 

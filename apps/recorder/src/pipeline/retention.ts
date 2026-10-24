@@ -1,5 +1,5 @@
 /**
- * Disk cleanup for finished sessions (docs/plan.md, "Retention"): once a set is leveled,
+ * Disk cleanup for finished sessions (docs/design.md, "Processing"): once a set is leveled,
  * its raw capture is deleted `RAW_RETENTION_HOURS` after the master was written, and
  * exports no longer in `EXPORT_FORMATS` are removed. The FLAC master and the remaining
  * exports are kept. Only `ready` sets with a master on disk are touched, so a failed or

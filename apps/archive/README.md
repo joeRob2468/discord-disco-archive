@@ -2,7 +2,7 @@
 
 The web archive of recorded sessions: browse, search, play and download sets, and edit, archive or delete them as an admin. It uses Hono, server-rendered with `hono/jsx` (htmx and one player script, no client-side framework), plus SQLite (`better-sqlite3`). Recordings are only read, except by admin deletes (`src/recordings.ts`); the database lives in `/config` (`ARCHIVE_DATA_DIR`).
 
-The design (features, access, data model) is in [docs/plan.md, "Archive site"](../../docs/plan.md#archive-site) and ["Data storage"](../../docs/plan.md#data-storage-sessionjson-plus-the-archive-database).
+Design: [docs/design.md, "Archive" and "Storage"](../../docs/design.md#archive).
 
 ## Modules
 

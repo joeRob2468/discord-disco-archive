@@ -69,7 +69,7 @@ Don't run it on the session being recorded. It needs the raw capture, which is d
 ### Recordings are silent, mono, or have voices or pings in them
 
 - **Silent:** the stream wasn't opened or its volume is 0. Watch over noVNC while recording; `STREAM_VOLUME` sets the stream's volume (85).
-- **Mono:** `BROWSER_CHANNEL` must be `firefox`; Chromium plays Go Live audio in mono (research.md, "Audio quality").
+- **Mono:** `BROWSER_CHANNEL` must be `firefox`; Chromium plays Go Live audio in mono (research.md, "Audio").
 - **Voices:** the recorder joins deafened; if voices leak, check over noVNC that it's still deafened.
 - **Notification pings:** turn on **Disable All Notification Sounds** again (see the logout section).
 

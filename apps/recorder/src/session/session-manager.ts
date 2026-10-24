@@ -1,6 +1,6 @@
 /**
  * The active recording session and the handover rules that decide whose stream is
- * recorded (docs/plan.md, "Which stream to record"). Pure state + decisions: Discord
+ * recorded (docs/design.md, "Whose stream to record"). Pure state + decisions: Discord
  * events come in as method calls, and session and target changes go out through the
  * `on*` callbacks, which the recording controller acts on.
  *

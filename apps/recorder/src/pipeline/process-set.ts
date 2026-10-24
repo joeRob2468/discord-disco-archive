@@ -1,5 +1,5 @@
 /**
- * Post-processing for one finished set (docs/plan.md, "Leveling"): measure loudness and
+ * Post-processing for one finished set (docs/design.md, "Processing"): measure loudness and
  * the silence at both ends, write the trimmed, leveled FLAC master, then the exports.
  * The raw capture is never touched, so this can be re-run with other targets.
  */

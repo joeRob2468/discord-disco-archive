@@ -1,7 +1,7 @@
 /**
  * Pass 1 for a finished set: one ffmpeg run measures loudness (for loudnorm's second
  * pass) and finds leading and trailing silence, so setup time and dead air at the ends
- * can be trimmed (docs/plan.md, "Which stream to record", rule 6). Silence inside the
+ * can be trimmed (docs/design.md, "Partial sets"). Silence inside the
  * set is left alone; it may be a quiet passage.
  */
 import { runFfmpeg, type RunOptions } from './ffmpeg.ts';
