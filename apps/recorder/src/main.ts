@@ -4,6 +4,7 @@
  * process (docs/design.md, "Approach"). It needs Xvfb and PulseAudio, so it runs in the
  * container.
  */
+import path from 'node:path';
 import { createLogger } from '@dsr/core';
 import type { Client } from 'discord.js';
 import { createAnnouncer, createChannelPoster } from './bot/announcer.ts';
@@ -76,6 +77,8 @@ const controller = new RecordingController({
     pulseSource: config.capture.pulseSource,
     streamVolume: config.browser.streamVolume,
     handoverSilenceSeconds: config.session.handoverSilenceSeconds,
+    // Next to the browser profile: `APP_DATA_DIR/recorder/screenshots` in Docker.
+    screenshotDir: path.join(path.dirname(config.browser.profileDir), 'screenshots'),
   },
   notify: post,
   postProcess: (record, setId) =>
@@ -135,6 +138,7 @@ const client = await startBot({
   onRecorderLeftVoice: (channelId) => {
     controller.recorderLeftVoice(channelId);
   },
+  retryTarget: () => controller.retryTarget(),
 });
 clientRef.current = client;
 

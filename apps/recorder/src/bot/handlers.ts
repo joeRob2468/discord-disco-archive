@@ -19,6 +19,8 @@ export interface HandlerDeps {
   config: DiscordConfig;
   logger: Logger;
   preflight?: (() => Promise<string | undefined>) | undefined;
+  /** Reopen the current target's stream if it isn't being recorded; false if it is. */
+  retryTarget?: (() => boolean) | undefined;
 }
 
 type Interaction = ChatInputCommandInteraction<'cached'>;
@@ -142,12 +144,14 @@ async function status(interaction: Interaction, { sessions }: HandlerDeps): Prom
 
 async function switchTarget(
   interaction: Interaction,
-  { sessions, logger }: HandlerDeps,
+  { sessions, logger, retryTarget }: HandlerDeps,
 ): Promise<void> {
   const user = interaction.options.getUser('user', true);
   const result = sessions.switchTo(user.id, interaction.user.id);
   if (!result.ok) return refuse(interaction, logger, result.reason);
   if (!result.change) {
+    // Already the target: retry their stream if opening it failed.
+    if (retryTarget?.()) return replyPrivately(interaction, `Retrying <@${user.id}>'s stream.`);
     return replyPrivately(interaction, `Already recording <@${user.id}>.`);
   }
   // The switch itself is announced in the channel by the announcer.

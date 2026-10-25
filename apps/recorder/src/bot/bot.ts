@@ -24,10 +24,12 @@ export interface BotDeps {
   preflight?: () => Promise<string | undefined>;
   /** The recorder account left a voice channel (disconnected, moved or kicked). */
   onRecorderLeftVoice?: (channelId: string) => void;
+  /** `/record switch` to the current target: reopen its stream if it isn't being recorded. */
+  retryTarget?: () => boolean;
 }
 
 export async function startBot(deps: BotDeps): Promise<Client> {
-  const { config, sessions, logger, preflight, onRecorderLeftVoice } = deps;
+  const { config, sessions, logger, preflight, onRecorderLeftVoice, retryTarget } = deps;
   // Neither intent is privileged: Guilds (channels, roles) and GuildVoiceStates (Go Live).
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
@@ -82,7 +84,7 @@ export async function startBot(deps: BotDeps): Promise<Client> {
     interaction: ChatInputCommandInteraction<'cached'>,
   ): Promise<void> {
     try {
-      await handleRecordCommand(interaction, { config, sessions, logger, preflight });
+      await handleRecordCommand(interaction, { config, sessions, logger, preflight, retryTarget });
     } catch (error) {
       logger.error({ err: error }, 'command failed');
       const content = 'Something went wrong; check the recorder logs.';

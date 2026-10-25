@@ -13,6 +13,7 @@ vi.mock('../browser/discord-web.ts', () => ({
   muteAndDeafen: vi.fn(() => Promise.resolve()),
   joinVoice: vi.fn(() => Promise.resolve()),
   isMutedAndDeafened: vi.fn(() => Promise.resolve(true)),
+  closePopups: vi.fn(() => Promise.resolve([])),
   watchStream: vi.fn(() => Promise.resolve()),
   unmuteStream: vi.fn(() => Promise.resolve(false)),
   setStreamVolume: vi.fn(() => Promise.resolve(85)),
@@ -233,5 +234,84 @@ describe('RecordingController: restart grace', () => {
     await controller.idle();
     expect(await onlySet()).toMatchObject({ status: 'processing', partial: true });
     expect(media.concatAudio).not.toHaveBeenCalled();
+  });
+});
+
+describe('RecordingController: opening streams', () => {
+  let dir: string;
+  let notices: string[];
+  let sessions: SessionManager;
+  let controller: RecordingController;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    dir = await mkdtemp(path.join(tmpdir(), 'dsr-open-'));
+    notices = [];
+    sessions = new SessionManager({
+      onSessionStart: (session) => {
+        controller.sessionStarted(session);
+      },
+      onTargetChange: (change, session) => {
+        controller.targetChanged(change, session);
+      },
+      onSessionEnd: (session) => {
+        controller.sessionEnded(session);
+      },
+    });
+    controller = new RecordingController({
+      page: {} as Page,
+      sessions,
+      config: {
+        recordingsDir: dir,
+        pulseSource: 'test',
+        streamVolume: 85,
+        handoverSilenceSeconds: 45,
+      },
+      notify: (_channel, content) => notices.push(content),
+      postProcess: () => Promise.resolve(),
+      logger: quietLogger,
+    });
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const blocked = new Error('locator.hover: Timeout 10000ms exceeded');
+
+  it('closes popups first, and retries a failed open once (pressing Escape)', async () => {
+    vi.mocked(web.watchStream).mockRejectedValueOnce(blocked);
+    sessions.start(info, [DJ]);
+    await controller.idle();
+    expect(web.closePopups).toHaveBeenNthCalledWith(1, expect.anything(), { escape: false });
+    expect(web.closePopups).toHaveBeenNthCalledWith(2, expect.anything(), { escape: true });
+    expect(web.watchStream).toHaveBeenCalledTimes(2);
+    expect(media.captureAudio).toHaveBeenCalledTimes(1);
+    expect(notices).toEqual([]);
+  });
+
+  it('says so after the retry fails, and /record switch to the same DJ retries it', async () => {
+    vi.mocked(web.watchStream).mockRejectedValueOnce(blocked).mockRejectedValueOnce(blocked);
+    sessions.start(info, [DJ]);
+    await controller.idle();
+    expect(media.captureAudio).not.toHaveBeenCalled();
+    expect(notices.at(-1)).toContain("Couldn't open **DJ A**'s stream");
+
+    expect(sessions.switchTo(DJ.userId, DJ.userId)).toEqual({ ok: true, change: undefined });
+    expect(controller.retryTarget()).toBe(true);
+    await controller.idle();
+    expect(media.captureAudio).toHaveBeenCalledTimes(1);
+    // Recording now: nothing to retry.
+    expect(controller.retryTarget()).toBe(false);
+  });
+
+  it('closes popups when the stream goes silent', async () => {
+    sessions.start(info, [DJ]);
+    await controller.idle();
+    vi.mocked(web.closePopups).mockClear();
+    const [, onSilence] = vi.mocked(media.captureAudio).mock.calls[0] ?? [];
+    onSilence?.({ type: 'start', at: 45 });
+    await controller.idle();
+    expect(web.closePopups).toHaveBeenCalledWith(expect.anything(), { escape: false });
   });
 });

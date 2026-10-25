@@ -42,7 +42,7 @@ That profile folder is equivalent to the account's password: don't copy it anywh
 ### `/record` doesn't respond, or the recorder seems stuck
 
 1. `docker compose logs --tail 200 recorder` for the last error.
-2. Look at the browser over noVNC: a Discord dialog, an update banner or a "browser not supported" page can block it.
+2. Look at the browser over noVNC: a Discord dialog, an update banner or a "browser not supported" page can block it. Screenshots from failed opens and silent streams are in `APP_DATA_DIR/recorder/screenshots`.
 3. `docker compose restart recorder`. The current set, if any, is saved as partial; start again with `/record start`.
 
 If the bot is offline in Discord, check `DISCORD_BOT_TOKEN` in `.env` and that the container is running (`docker compose ps`).
@@ -50,6 +50,10 @@ If the bot is offline in Discord, check `DISCORD_BOT_TOKEN` in `.env` and that t
 ### The recorder dropped out of voice
 
 The chat gets "⚠️ The recorder dropped out of voice… Rejoining…", then "✅ Back in voice after N s" once it has rejoined (it tries for about 2 minutes) and is recording the current DJ again as a new set. The set before the drop is kept as a partial set. If it says it couldn't get back in, check noVNC (logged out? captcha?), then `/record stop` and `/record start`. In the log: `recorder dropped out of voice`, `rejoin attempt failed`, `rejoined voice` or `could not rejoin voice`.
+
+### A stream won't open
+
+The recorder closes Discord popups and retries once on its own (log: `closed Discord popups`, `could not open stream; retrying`). If that fails too, the chat gets "⚠️ Couldn't open …'s stream": run `/record switch` to that DJ to retry, and look at the newest `open-failed` screenshot in `APP_DATA_DIR/recorder/screenshots`. If it still fails, `/record stop` and `/record start` (leaving and rejoining voice) has cleared it before. When a stream goes silent the recorder also saves a `silent` screenshot and closes any popup (log: `checked silent stream`).
 
 ### A DJ's stream dropped and came back
 

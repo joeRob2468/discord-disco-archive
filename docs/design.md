@@ -32,7 +32,7 @@ Guild slash commands, registered for `DISCORD_GUILD_ID` at startup. Who can use 
 | --------------------------------- | --------------------------------------------------------------------------------------------- |
 | `/record start [channel] [title]` | Start a session. Every Go Live stream in that voice channel is recorded until `/record stop`. |
 | `/record stop`                    | End the session; the recorder leaves voice.                                                   |
-| `/record switch <user>`           | Record that live user now instead.                                                            |
+| `/record switch <user>`           | Record that live user now instead (for the current DJ: retry their stream if it didn't open). |
 | `/record title <text>`            | Set the session title (the folder is renamed when the session ends).                          |
 | `/record status`                  | Who is being recorded, who else is live, elapsed time.                                        |
 
@@ -70,6 +70,7 @@ A set is `partial` only if recording cut off music. `session.json` records which
 - **Firefox** (`BROWSER_CHANNEL=firefox`): Chromium-based browsers play Discord's stream audio in mono. Firefox runs in kiosk mode on Xvfb with its own profile (`<PROFILE_DIR>-firefox`), which holds the Discord login.
 - **Voice is kept out** by joining self-muted and self-deafened: deafen silences voice chat but not Go Live audio. **Disable All Notification Sounds** is set in the profile (it's per browser, so set it again after a new login).
 - **Stream volume** is set to `STREAM_VOLUME` (85) on every open (Discord's default is 50%), and the stream is unmuted, since Discord remembers mutes per streamer.
+- **Popups** (Discord's modal dialogs, e.g. the "How'd the stream go?" survey after a watched stream ends) block clicks on the call view. They're closed with Escape (ticking "Don't show again" where offered) before every open and whenever the stream goes silent; a failed open is retried once. Both save a screenshot of the browser to `screenshots/` next to the profile (the newest 50 are kept).
 
 ## Processing
 

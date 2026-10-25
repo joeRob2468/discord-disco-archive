@@ -11,6 +11,10 @@
  * current set, rejoins with a few retries, and picks the current target up again as a
  * new set.
  *
+ * Discord popups (modal dialogs) block clicks on the call view, so they're closed before
+ * opening a stream and when the stream goes silent; a failed open is retried once. Both
+ * save a screenshot of the browser, for finding out what happened afterwards.
+ *
  * Restart grace: when the session manager holds a set open after its stream dropped, the
  * capture stops but the set doesn't end. If the stream comes back, the next capture goes
  * into a new segment file; when the set ends, its segments are joined into its raw WAV.
@@ -20,6 +24,7 @@ import type { Logger } from '@dsr/core';
 import { captureAudio, concatAudio, type FfmpegProcess, type SilenceEvent } from '@dsr/media';
 import type { Page } from 'playwright';
 import {
+  closePopups,
   isMutedAndDeafened,
   joinVoice,
   leaveVoice,
@@ -30,6 +35,7 @@ import {
   unmuteStream,
   watchStream,
 } from '../browser/discord-web.ts';
+import { saveScreenshot } from '../browser/screenshots.ts';
 import type {
   SessionInfo,
   SessionManager,
@@ -52,6 +58,8 @@ export interface ControllerConfig {
   pulseSource: string;
   streamVolume: number;
   handoverSilenceSeconds: number;
+  /** Where to save screenshots of the browser when something goes wrong; none if unset. */
+  screenshotDir?: string | undefined;
 }
 
 export interface ControllerDeps {
@@ -149,6 +157,27 @@ export class RecordingController {
 
   sessionEnded(session: SessionInfo): void {
     this.#enqueue('session end', () => this.#end(session));
+  }
+
+  /**
+   * `/record switch` to the current target: reopen its stream if it isn't being recorded
+   * (opening it failed). False if it's being recorded already, or nothing is targeted.
+   */
+  retryTarget(): boolean {
+    const session = this.#sessions.active;
+    const target = this.#sessions.status()?.target;
+    if (!session || !target || this.#capture?.target.userId === target.userId) return false;
+    this.#enqueue('retry stream', async () => {
+      // Opened meanwhile, or the target moved on.
+      if (this.#capture || this.#sessions.status()?.target?.userId !== target.userId) return;
+      if (!this.#inVoice) {
+        this.#logger.warn({ to: target.displayName }, 'not in voice; not retrying this stream');
+        return;
+      }
+      await stopWatching(this.#page);
+      await this.#openStream(target, true, session);
+    });
+    return true;
   }
 
   /**
@@ -252,23 +281,67 @@ export class RecordingController {
     return true;
   }
 
-  /** Watch, unmute and set the volume of `target`'s stream. False (and says so) on failure. */
+  /**
+   * Watch, unmute and set the volume of `target`'s stream, closing popups first and
+   * retrying once. False (and says so) on failure.
+   */
   async #showStream(target: Target, session: SessionInfo): Promise<boolean> {
-    try {
-      await watchStream(this.#page, target);
-      const wasMuted = await unmuteStream(this.#page, target);
-      const volume = await setStreamVolume(this.#page, target, this.#config.streamVolume);
-      this.#logger.info({ target: target.displayName, wasMuted, volume }, 'stream opened');
-    } catch (error) {
-      this.#logger.error({ err: error, target: target.displayName }, 'could not open stream');
-      this.#notify(
-        session.channelId,
-        `⚠️ Couldn't open **${target.displayName}**'s stream, so it isn't being recorded. ` +
-          'Try `/record switch` to retry.',
-      );
-      return false;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        // On the retry, press Escape anyway in case a popup isn't marked up as a dialog.
+        await this.#closePopups(attempt > 1);
+        await watchStream(this.#page, target);
+        const wasMuted = await unmuteStream(this.#page, target);
+        const volume = await setStreamVolume(this.#page, target, this.#config.streamVolume);
+        this.#logger.info({ target: target.displayName, wasMuted, volume }, 'stream opened');
+        return true;
+      } catch (error) {
+        const screenshot = await this.#screenshot('open-failed');
+        if (attempt === 1) {
+          this.#logger.warn(
+            { err: error, target: target.displayName, screenshot },
+            'could not open stream; retrying',
+          );
+          // It may have opened partway (watching, but not unmuted or set).
+          await stopWatching(this.#page).catch(() => undefined);
+          continue;
+        }
+        this.#logger.error(
+          { err: error, target: target.displayName, screenshot },
+          'could not open stream',
+        );
+        this.#notify(
+          session.channelId,
+          `⚠️ Couldn't open **${target.displayName}**'s stream, so it isn't being recorded. ` +
+            `Try \`/record switch\` to **${target.displayName}** to retry.`,
+        );
+        return false;
+      }
     }
-    return true;
+  }
+
+  /** Close any Discord popups, logging what was closed. Never throws. */
+  async #closePopups(escape = false): Promise<string[]> {
+    try {
+      const closed = await closePopups(this.#page, { escape });
+      if (closed.length > 0) this.#logger.warn({ popups: closed }, 'closed Discord popups');
+      return closed;
+    } catch (error) {
+      this.#logger.warn({ err: error }, 'could not check for Discord popups');
+      return [];
+    }
+  }
+
+  /** Save a screenshot of the browser; its path, or undefined if none was saved. */
+  async #screenshot(reason: string): Promise<string | undefined> {
+    const dir = this.#config.screenshotDir;
+    if (dir === undefined) return undefined;
+    try {
+      return await saveScreenshot(this.#page, dir, reason, this.#now());
+    } catch (error) {
+      this.#logger.warn({ err: error, reason }, 'could not save a screenshot');
+      return undefined;
+    }
   }
 
   /** The target's stream dropped: stop capturing but keep the set open for its return. */
@@ -537,6 +610,16 @@ export class RecordingController {
       { target: capture.target.displayName, seconds: this.#config.handoverSilenceSeconds },
       'stream went silent',
     );
+    // A popup may have cut the audio: record what the browser shows, and close it.
+    this.#enqueue('silence check', async () => {
+      if (this.#capture !== capture || capture.stopping) return;
+      const screenshot = await this.#screenshot('silent');
+      const popups = await this.#closePopups();
+      this.#logger.info(
+        { target: capture.target.displayName, screenshot, popups },
+        'checked silent stream',
+      );
+    });
     // Hand over now if someone else is live; otherwise keep checking while it stays
     // silent. Returns true once there is nothing left to check.
     const check = (): boolean => {

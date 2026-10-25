@@ -11,6 +11,8 @@ import type { Locator, Page } from 'playwright';
 
 const APP_LOAD_TIMEOUT_MS = 60_000;
 const ACTION_TIMEOUT_MS = 10_000;
+/** Popups close quickly; don't hold up opening a stream waiting on one. */
+const POPUP_TIMEOUT_MS = 2_000;
 
 export class DiscordWebError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -66,6 +68,14 @@ const selectors = {
    * has no ARIA role or value.
    */
   streamVolumeSlider: (page: Page): Locator => page.getByRole('menu').getByRole('slider'),
+  /**
+   * A popup over the app: Discord's modal dialogs, such as the "How'd the stream go?"
+   * survey shown after a watched stream ends. While one is open, nothing behind it can
+   * be clicked.
+   */
+  popup: (page: Page): Locator => page.locator('[role="dialog"]:visible'),
+  /** The survey's opt-out; ticking it keeps that popup from coming back. */
+  dontShowAgain: (popup: Locator): Locator => popup.getByText(/^don.t show again$/i),
   /** Login form, shown when the profile's session has expired. */
   loginForm: (page: Page): Locator =>
     page.locator('form').filter({ has: page.locator('input[name="email"]') }),
@@ -153,6 +163,47 @@ export async function isMutedAndDeafened(page: Page): Promise<boolean> {
     selectors.deafenSwitch(page).getAttribute('aria-checked'),
   ]);
   return muted === 'true' && deafened === 'true';
+}
+
+/**
+ * Close any popups with Escape, ticking "Don't show again" where offered. Returns their
+ * titles. With `escape`, press Escape once even if no popup is found, in case one isn't
+ * marked up as a dialog.
+ */
+export async function closePopups(page: Page, { escape = false } = {}): Promise<string[]> {
+  const closed: string[] = [];
+  // A few rounds: closing one popup can reveal another.
+  for (let round = 0; round < 3; round++) {
+    const popup = selectors.popup(page).first();
+    if (!(await popup.isVisible())) break;
+    // Its heading, else its label, for the log.
+    const heading =
+      (
+        await popup
+          .getByRole('heading')
+          .first()
+          .textContent({ timeout: POPUP_TIMEOUT_MS })
+          .catch(() => null)
+      )?.trim() ?? '';
+    closed.push(
+      heading !== '' ? heading : ((await popup.getAttribute('aria-label')) ?? 'untitled popup'),
+    );
+    await selectors
+      .dontShowAgain(popup)
+      .click({ timeout: POPUP_TIMEOUT_MS })
+      .catch(() => undefined);
+    await page.keyboard.press('Escape');
+    if (
+      !(await popup.waitFor({ state: 'hidden', timeout: POPUP_TIMEOUT_MS }).then(
+        () => true,
+        () => false,
+      ))
+    ) {
+      break;
+    }
+  }
+  if (escape && closed.length === 0) await page.keyboard.press('Escape');
+  return closed;
 }
 
 /** Open the target's Go Live stream from the call view. Requires being in voice. */
