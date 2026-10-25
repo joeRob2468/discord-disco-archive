@@ -13,7 +13,8 @@ import {
 import type { DiscordConfig } from '../config.ts';
 import type { SessionManager } from '../session/session-manager.ts';
 import { RECORD_COMMAND, registerCommands } from './commands.ts';
-import { handleRecordCommand } from './handlers.ts';
+import type { SessionOnDisk } from '../capture/session-record.ts';
+import { autocompleteSessions, handleRecordCommand } from './handlers.ts';
 import { toStreamEvents } from './voice-events.ts';
 
 export interface BotDeps {
@@ -28,10 +29,21 @@ export interface BotDeps {
   retryTarget?: () => boolean;
   /** `/record split`: why it can't split now, or undefined once the split is queued. */
   split?: (names: { name?: string; previous?: string }) => string | undefined;
+  /** A voice channel's sessions on disk, for `/record resume`. */
+  findSessions?: (channelId: string) => Promise<SessionOnDisk[]>;
 }
 
 export async function startBot(deps: BotDeps): Promise<Client> {
-  const { config, sessions, logger, preflight, onRecorderLeftVoice, retryTarget, split } = deps;
+  const {
+    config,
+    sessions,
+    logger,
+    preflight,
+    onRecorderLeftVoice,
+    retryTarget,
+    split,
+    findSessions,
+  } = deps;
   // Neither intent is privileged: Guilds (channels, roles) and GuildVoiceStates (Go Live).
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
@@ -77,8 +89,17 @@ export async function startBot(deps: BotDeps): Promise<Client> {
   });
 
   client.on(Events.InteractionCreate, (interaction) => {
-    if (!interaction.isChatInputCommand() || interaction.commandName !== RECORD_COMMAND) return;
     if (!interaction.inCachedGuild() || interaction.guildId !== config.guildId) return;
+    if (interaction.isAutocomplete() && interaction.commandName === RECORD_COMMAND) {
+      // Only `/record resume`'s session list autocompletes.
+      autocompleteSessions(interaction, { config, sessions, logger, findSessions }).catch(
+        (error: unknown) => {
+          logger.warn({ err: error }, 'autocomplete failed');
+        },
+      );
+      return;
+    }
+    if (!interaction.isChatInputCommand() || interaction.commandName !== RECORD_COMMAND) return;
     void onRecordCommand(interaction);
   });
 
@@ -93,6 +114,7 @@ export async function startBot(deps: BotDeps): Promise<Client> {
         preflight,
         retryTarget,
         split,
+        findSessions,
       });
     } catch (error) {
       logger.error({ err: error }, 'command failed');

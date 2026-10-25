@@ -59,6 +59,10 @@ The recorder closes Discord popups and retries once on its own (log: `closed Dis
 
 The current DJ is live but nothing has reached the recording for `SILENCE_ALERT_SECONDS`. The recorder has already reopened the stream (log: `stream silent too long; reopening`, `reopened silent stream`) and saved a `silent-long` screenshot. If people in the call can hear the DJ and no ✅ follows within a minute, check noVNC, then `/record switch` to another live stream and back, or `/record stop` and `/record start`. If the DJ is the one having audio trouble, nothing needs doing.
 
+### Carrying on a session
+
+`/record stop` then `/record start` makes a new session. To carry on the earlier one instead (stopped too soon, or stopped to clear a problem), use `/record resume`: it reopens the channel's most recent session, or the one picked from its list, and adds new sets to it.
+
 ### Adding a set that wasn't recorded
 
 On the session page (as admin): **Add set…**, pick the file (WAV or FLAC if the DJ has it), the DJ to file it under, the name to show and when it started. The session must have ended. The set appears within about a minute as processing, then plays once leveled (log: archive `set uploaded`; recorder `imported uploaded set`, `set processed`). A request the recorder can't read is left as `uploads/<id>.json.invalid` in the session folder, with `import request rejected` in the recorder log; delete it and its audio file, then upload again.

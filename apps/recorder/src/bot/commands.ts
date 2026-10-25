@@ -37,6 +37,23 @@ export function buildRecordCommand(
             .setMaxLength(100),
         ),
     )
+    .addSubcommand((sub) =>
+      sub
+        .setName('resume')
+        .setDescription("Carry on recording an earlier session of this voice channel's")
+        .addStringOption((option) =>
+          option
+            .setName('session')
+            .setDescription('Which session (default: the most recent)')
+            .setAutocomplete(true),
+        )
+        .addChannelOption((option) =>
+          option
+            .setName('channel')
+            .setDescription('Voice channel (default: this one, or the one you are in)')
+            .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice),
+        ),
+    )
     .addSubcommand((sub) => sub.setName('stop').setDescription('Stop recording'))
     .addSubcommand((sub) =>
       sub.setName('status').setDescription("Show who's live and who is being recorded"),

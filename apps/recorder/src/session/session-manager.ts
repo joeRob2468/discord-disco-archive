@@ -17,6 +17,8 @@ export interface SessionInfo {
   title: string | undefined;
   startedAt: Date;
   startedBy: { userId: string; displayName: string };
+  /** Reopen this session folder and record into it (`/record resume`), not a new one. */
+  resumeDir?: string;
 }
 
 export type SwitchReason =
@@ -116,10 +118,10 @@ export class SessionManager {
 
   /**
    * Start a session. `liveNow` is who is already streaming in the channel; the earliest
-   * of them becomes the first target.
+   * of them becomes the first target. A resumed session keeps its original `startedAt`.
    */
   start(
-    info: Omit<SessionInfo, 'startedAt'>,
+    info: Omit<SessionInfo, 'startedAt'> & { startedAt?: Date },
     liveNow: readonly { userId: string; displayName: string }[],
   ): StartResult {
     if (this.#session) {
@@ -132,10 +134,10 @@ export class SessionManager {
       };
     }
 
-    const startedAt = this.#now();
-    this.#session = { ...info, startedAt };
+    const now = this.#now();
+    this.#session = { ...info, startedAt: info.startedAt ?? now };
     this.#tracker.clear();
-    for (const stream of liveNow) this.#tracker.start(stream.userId, stream.displayName, startedAt);
+    for (const stream of liveNow) this.#tracker.start(stream.userId, stream.displayName, now);
     this.#onSessionStart(this.#session);
 
     const first = this.#tracker.earliest();

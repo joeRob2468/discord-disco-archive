@@ -32,6 +32,22 @@ export function sessionStarted(session: SessionInfo, firstTarget: Target | undef
   );
 }
 
+export function sessionResumed(
+  session: SessionInfo,
+  sets: number,
+  firstTarget: Target | undefined,
+): string {
+  const name = session.title ?? session.channelName;
+  const first = firstTarget
+    ? `\n🎧 Recording **${firstTarget.displayName}** (already live).`
+    : '\nWaiting for someone to go live.';
+  return (
+    `🔁 Resumed recording session **${name}** in <#${session.channelId}> ` +
+    `(${String(sets)} ${sets === 1 ? 'set' : 'sets'} so far); new sets are added to it.` +
+    first
+  );
+}
+
 export function sessionStopped(session: SessionInfo, now: Date): string {
   return `⏹️ Recording session ended after ${formatElapsed(session.startedAt.getTime(), now.getTime())}.`;
 }

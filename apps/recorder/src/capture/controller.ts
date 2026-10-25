@@ -253,8 +253,13 @@ export class RecordingController {
   }
 
   async #start(session: SessionInfo): Promise<void> {
-    this.#record = await SessionRecord.create(this.#config.recordingsDir, session);
-    this.#logger.info({ dir: this.#record.paths.dir }, 'session folder created');
+    if (session.resumeDir === undefined) {
+      this.#record = await SessionRecord.create(this.#config.recordingsDir, session);
+      this.#logger.info({ dir: this.#record.paths.dir }, 'session folder created');
+    } else {
+      this.#record = await SessionRecord.reopen(this.#config.recordingsDir, session.resumeDir);
+      this.#logger.info({ dir: this.#record.paths.dir }, 'session folder reopened');
+    }
 
     try {
       await this.#join(session);

@@ -5,9 +5,12 @@
 import type { Logger } from '@dsr/core';
 import {
   MessageFlags,
+  type AutocompleteInteraction,
   type ChatInputCommandInteraction,
   type InteractionReplyOptions,
+  type VoiceBasedChannel,
 } from 'discord.js';
+import type { SessionOnDisk } from '../capture/session-record.ts';
 import type { DiscordConfig } from '../config.ts';
 import type { SessionManager } from '../session/session-manager.ts';
 import { resolveTargetChannel } from '../session/target-channel.ts';
@@ -23,6 +26,8 @@ export interface HandlerDeps {
   retryTarget?: (() => boolean) | undefined;
   /** `/record split`: why it can't split now, or undefined once the split is queued. */
   split?: ((names: { name?: string; previous?: string }) => string | undefined) | undefined;
+  /** A voice channel's sessions on disk, newest first, for `/record resume`. */
+  findSessions?: ((channelId: string) => Promise<SessionOnDisk[]>) | undefined;
 }
 
 type Interaction = ChatInputCommandInteraction<'cached'>;
@@ -69,6 +74,8 @@ export async function handleRecordCommand(
   switch (subcommand) {
     case 'start':
       return start(interaction, deps);
+    case 'resume':
+      return resume(interaction, deps);
     case 'stop':
       return stop(interaction, deps);
     case 'status':
@@ -84,33 +91,57 @@ export async function handleRecordCommand(
   }
 }
 
-async function start(
+/**
+ * The voice channel `/record start` or `/record resume` is for, once the recorder can
+ * record there, with who is live in it. Refuses (and returns undefined) otherwise.
+ */
+async function recordableChannel(
   interaction: Interaction,
-  { sessions, config, logger, preflight }: HandlerDeps,
-): Promise<void> {
+  { config, logger, preflight }: HandlerDeps,
+): Promise<
+  { channel: VoiceBasedChannel; liveNow: { userId: string; displayName: string }[] } | undefined
+> {
   const invokedIn = interaction.channel;
   const target = resolveTargetChannel({
     optionChannelId: interaction.options.getChannel('channel')?.id,
     invokedInVoiceChannelId: invokedIn?.isVoiceBased() ? invokedIn.id : undefined,
     callerVoiceChannelId: interaction.member.voice.channelId ?? undefined,
   });
-  if (!target.ok) return refuse(interaction, logger, target.reason);
+  if (!target.ok) {
+    await refuse(interaction, logger, target.reason);
+    return undefined;
+  }
 
   const channel = interaction.guild.channels.cache.get(target.channelId);
   if (!channel?.isVoiceBased()) {
-    return refuse(interaction, logger, "I can't see that voice channel.");
+    await refuse(interaction, logger, "I can't see that voice channel.");
+    return undefined;
   }
 
   const problems = await checkRecorderAccess(interaction.guild, channel, config.recorderUserId);
-  if (problems.length > 0) return refuse(interaction, logger, problems.join('\n'));
+  if (problems.length > 0) {
+    await refuse(interaction, logger, problems.join('\n'));
+    return undefined;
+  }
 
   // Catch a logged-out recorder now, not halfway through joining voice.
   const blocked = await preflight?.();
-  if (blocked) return refuse(interaction, logger, blocked);
+  if (blocked) {
+    await refuse(interaction, logger, blocked);
+    return undefined;
+  }
 
   const liveNow = channel.members
     .filter((member) => member.voice.streaming === true && member.id !== config.recorderUserId)
     .map((member) => ({ userId: member.id, displayName: member.displayName }));
+  return { channel, liveNow };
+}
+
+async function start(interaction: Interaction, deps: HandlerDeps): Promise<void> {
+  const { sessions, logger } = deps;
+  const recordable = await recordableChannel(interaction, deps);
+  if (!recordable) return;
+  const { channel, liveNow } = recordable;
 
   const result = sessions.start(
     {
@@ -130,6 +161,75 @@ async function start(
     );
   }
   await reply(interaction, messages.sessionStarted(result.session, sessions.status()?.target));
+}
+
+/** `/record resume`: carry on an earlier session of the channel, adding new sets to it. */
+async function resume(interaction: Interaction, deps: HandlerDeps): Promise<void> {
+  const { sessions, logger, findSessions } = deps;
+  if (sessions.active) {
+    return refuse(
+      interaction,
+      logger,
+      `Already recording in <#${sessions.active.channelId}>. Run \`/record stop\` first.`,
+    );
+  }
+  const recordable = await recordableChannel(interaction, deps);
+  if (!recordable) return;
+  const { channel, liveNow } = recordable;
+
+  const chosen = interaction.options.getString('session');
+  const found = (await findSessions?.(channel.id)) ?? [];
+  const previous = chosen === null ? found[0] : found.find((session) => session.dir === chosen);
+  if (!previous) {
+    return refuse(
+      interaction,
+      logger,
+      chosen === null
+        ? `There's no earlier session in <#${channel.id}> to resume. Use \`/record start\`.`
+        : `That session isn't one of <#${channel.id}>'s. Pick one from the list.`,
+    );
+  }
+
+  const result = sessions.start(
+    {
+      guildId: interaction.guildId,
+      channelId: channel.id,
+      channelName: channel.name,
+      title: previous.title,
+      startedAt: previous.startedAt,
+      startedBy: { userId: interaction.user.id, displayName: interaction.member.displayName },
+      resumeDir: previous.dir,
+    },
+    liveNow,
+  );
+  if (!result.ok) return refuse(interaction, logger, result.reason);
+  await reply(
+    interaction,
+    messages.sessionResumed(result.session, previous.sets, sessions.status()?.target),
+  );
+}
+
+const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+
+/** `/record resume`'s `session` choices: the channel's latest sessions, newest first. */
+export async function autocompleteSessions(
+  interaction: AutocompleteInteraction<'cached'>,
+  { findSessions }: HandlerDeps,
+): Promise<void> {
+  const invokedIn = interaction.channel;
+  const channelId = invokedIn?.isVoiceBased()
+    ? invokedIn.id
+    : (interaction.member.voice.channelId ?? undefined);
+  const typed = interaction.options.getFocused().toLowerCase();
+  const found = channelId ? ((await findSessions?.(channelId)) ?? []) : [];
+  const choices = found
+    .map((session) => {
+      const label = `${session.title ?? session.channelName} · ${SHORT_DATE.format(session.startedAt)} · ${String(session.sets)} ${session.sets === 1 ? 'set' : 'sets'}`;
+      return { name: label.slice(0, 100), value: session.dir.slice(0, 100) };
+    })
+    .filter((choice) => choice.name.toLowerCase().includes(typed))
+    .slice(0, 25);
+  await interaction.respond(choices);
 }
 
 async function stop(interaction: Interaction, { sessions, logger }: HandlerDeps): Promise<void> {

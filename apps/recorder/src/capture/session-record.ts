@@ -10,7 +10,7 @@
  * file on disk rather than this object's copy, which may be minutes old.
  */
 import { randomUUID } from 'node:crypto';
-import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   RAW_DIR,
@@ -62,6 +62,45 @@ export function setlistCsv(sets: readonly StreamSet[]): string {
   return [header, ...rows].map((row) => row.map(csvField).join(',')).join('\n') + '\n';
 }
 
+/** A session folder, as `/record resume` offers it. */
+export interface SessionOnDisk {
+  /** Folder name, relative to the recordings root. */
+  dir: string;
+  guildId: string;
+  title: string | undefined;
+  channelName: string;
+  startedAt: Date;
+  ended: boolean;
+  sets: number;
+}
+
+/** The sessions recorded in `channelId`, newest first. Unreadable folders are skipped. */
+export async function findSessions(
+  recordingsDir: string,
+  channelId: string,
+): Promise<SessionOnDisk[]> {
+  const entries = await readdir(recordingsDir, { withFileTypes: true }).catch(() => []);
+  const found: SessionOnDisk[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name.startsWith('_')) continue;
+    const session = await readJsonFile(
+      sessionPaths(recordingsDir, entry.name).sessionFile,
+      sessionSchema,
+    ).catch(() => undefined);
+    if (session?.channelId !== channelId) continue;
+    found.push({
+      dir: entry.name,
+      guildId: session.guildId,
+      title: session.title,
+      channelName: session.channelName,
+      startedAt: new Date(session.startedAt),
+      ended: session.endedAt !== undefined,
+      sets: session.sets.length,
+    });
+  }
+  return found.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+}
+
 export class SessionRecord {
   readonly #recordingsDir: string;
   /** The folder name before any `-2` suffix, to tell whether the title changed. */
@@ -104,6 +143,27 @@ export class SessionRecord {
     );
     if (!session) throw new Error(`No ${SESSION_FILE} in ${path.join(recordingsDir, dirName)}`);
     return new SessionRecord(recordingsDir, dirName, dirName, session);
+  }
+
+  /**
+   * Reopen a session folder to record into it again (`/record resume`): its end time is
+   * cleared until it finishes again.
+   */
+  static async reopen(recordingsDir: string, dirName: string): Promise<SessionRecord> {
+    const record = await SessionRecord.open(recordingsDir, dirName);
+    const { session } = record;
+    // Its name without any `-2` suffix, so finishing only renames it if the title changes.
+    record.#baseName = sessionDirName(
+      new Date(session.startedAt),
+      session.title ?? session.channelName,
+    );
+    await record.#exclusive(async () => {
+      await record.#reload();
+      const { endedAt: _endedAt, ...reopened } = record.#session;
+      record.#session = reopened;
+      await record.#save();
+    });
+    return record;
   }
 
   get paths() {

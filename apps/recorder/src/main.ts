@@ -12,6 +12,7 @@ import { startBot } from './bot/bot.ts';
 import { checkBrowser, FIX_HINT, HEALTH_PROBLEMS, HealthMonitor } from './browser/health.ts';
 import { DISCORD_APP_URL, launchBrowser } from './browser/launch.ts';
 import { RecordingController } from './capture/controller.ts';
+import { findSessions } from './capture/session-record.ts';
 import { loadConfig } from './config.ts';
 import { findImports, importSet } from './pipeline/imports.ts';
 import { processSet } from './pipeline/process-set.ts';
@@ -142,6 +143,7 @@ const client = await startBot({
   },
   retryTarget: () => controller.retryTarget(),
   split: (names) => controller.split(names),
+  findSessions: (channelId) => findSessions(config.session.recordingsDir, channelId),
 });
 clientRef.current = client;
 

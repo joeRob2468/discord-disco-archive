@@ -28,16 +28,18 @@ shared: recordings volume (session folders with session.json)
 
 Guild slash commands, registered for `DISCORD_GUILD_ID` at startup. Who can use them: `COMMAND_DEFAULT_PERMISSION` (default `ManageEvents`, adjustable in Server Settings → Integrations), optionally narrowed by `ALLOWED_ROLE_IDS`.
 
-| Command                           | Effect                                                                                                                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/record start [channel] [title]` | Start a session. Every Go Live stream in that voice channel is recorded until `/record stop`.                                                                                   |
-| `/record stop`                    | End the session; the recorder leaves voice.                                                                                                                                     |
-| `/record switch <user>`           | Record that live user now instead (for the current DJ: retry their stream if it didn't open).                                                                                   |
-| `/record split [name] [previous]` | End the current set here and record the same stream as a new set, named `name` (default: the stream's owner); `previous` renames the set that ends. For DJs sharing one stream. |
-| `/record title <text>`            | Set the session title (the folder is renamed when the session ends).                                                                                                            |
-| `/record status`                  | Who is being recorded, who else is live, elapsed time.                                                                                                                          |
+| Command                              | Effect                                                                                                                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/record start [channel] [title]`    | Start a session. Every Go Live stream in that voice channel is recorded until `/record stop`.                                                                                   |
+| `/record resume [session] [channel]` | Carry on an earlier session of the channel (default: the most recent; autocompletes the latest): new sets are added to it, its title and folder kept.                           |
+| `/record stop`                       | End the session; the recorder leaves voice.                                                                                                                                     |
+| `/record switch <user>`              | Record that live user now instead (for the current DJ: retry their stream if it didn't open).                                                                                   |
+| `/record split [name] [previous]`    | End the current set here and record the same stream as a new set, named `name` (default: the stream's owner); `previous` renames the set that ends. For DJs sharing one stream. |
+| `/record title <text>`               | Set the session title (the folder is renamed when the session ends).                                                                                                            |
+| `/record status`                     | Who is being recorded, who else is live, elapsed time.                                                                                                                          |
 
 - **Target channel:** the `channel` option, else the voice channel whose chat the command was typed in, else the caller's current voice channel.
+- **Several sessions in a night** are fine: `/record start` always makes a new one, and `/record resume` reopens an earlier one (e.g. after a `/record stop` too soon, or a problem fixed by leaving voice). A resumed session shows as recording in the archive until it's stopped again.
 - **One session at a time.** Before joining, `/record start` checks that the recorder account can see and connect to the channel and that its browser is logged in (no login page or captcha); otherwise it refuses with the reason.
 - **Replies:** start, stop and title replies are public (they double as the recording notice); refusals are private.
 - **Channel notices** (`ANNOUNCE_SETS`): 🔴 now recording, 🔀 switched (with the reason), ⏸️ waiting for the next stream, ⏳/▶️ stream dropped/back, ✂️ split, plus ⚠️ alerts.

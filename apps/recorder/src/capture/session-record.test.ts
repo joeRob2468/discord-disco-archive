@@ -4,7 +4,7 @@ import path from 'node:path';
 import { readJsonFile, sessionSchema } from '@dsr/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { SessionInfo } from '../session/session-manager.ts';
-import { SessionRecord, setlistCsv } from './session-record.ts';
+import { findSessions, SessionRecord, setlistCsv } from './session-record.ts';
 
 const info: SessionInfo = {
   guildId: '500000000000000001',
@@ -94,6 +94,43 @@ describe('SessionRecord', () => {
     });
     const csv = await readFile(record.paths.setlistFile, 'utf8');
     expect(csv.split('\n')[1]).toContain(',DJ Spooky,false,ready,');
+  });
+
+  it('reopens a finished session to record more sets into it (/record resume)', async () => {
+    const first = await SessionRecord.create(dir, info);
+    const second = await SessionRecord.create(dir, info);
+    const name = path.basename(second.paths.dir);
+    expect(name).toMatch(/-2$/);
+    const { setId } = await second.startSet(dj, new Date(2026, 9, 31, 21), false);
+    await second.endSet(setId, new Date(2026, 9, 31, 22), { partial: false });
+    await second.finish(info, new Date(2026, 9, 31, 22, 30));
+
+    const reopened = await SessionRecord.reopen(dir, name);
+    expect((await readSession(reopened))?.endedAt).toBeUndefined();
+    await reopened.startSet(
+      { userId: dj.userId, displayName: 'DJ Later' },
+      new Date(2026, 9, 31, 23),
+      false,
+    );
+    await reopened.finish(info, new Date(2026, 10, 1, 0, 30));
+    // Same folder (its -2 suffix kept: the title didn't change), both sets, ended again.
+    expect(path.basename(reopened.paths.dir)).toBe(name);
+    const session = await readSession(reopened);
+    expect(session?.sets.map((set) => set.displayName)).toEqual(['DJ Spooky', 'DJ Later']);
+    expect(session?.endedAt).toBe(new Date(2026, 10, 1, 0, 30).toISOString());
+    expect((await readSession(first))?.sets).toEqual([]);
+  });
+
+  it("lists a channel's sessions, newest first", async () => {
+    await SessionRecord.create(dir, info);
+    await SessionRecord.create(dir, { ...info, startedAt: new Date(2026, 10, 7, 20) });
+    await SessionRecord.create(dir, { ...info, channelId: '300000000000000002' });
+    const found = await findSessions(dir, info.channelId);
+    expect(found.map((session) => session.startedAt)).toEqual([
+      new Date(2026, 10, 7, 20),
+      new Date(2026, 9, 31, 20),
+    ]);
+    expect(found[0]).toMatchObject({ ended: false, sets: 0, channelName: 'Halloween Disco' });
   });
 
   it('never reuses an existing folder', async () => {

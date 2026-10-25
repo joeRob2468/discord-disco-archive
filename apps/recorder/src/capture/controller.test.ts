@@ -528,3 +528,64 @@ describe('RecordingController: /record split', () => {
     expect(events.at(-1)).toMatch(/^start .*_afterglow\.seg2\.wav$/);
   });
 });
+
+describe('RecordingController: /record resume', () => {
+  let dir: string;
+  let sessions: SessionManager;
+  let controller: RecordingController;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    dir = await mkdtemp(path.join(tmpdir(), 'dsr-resume-'));
+    sessions = new SessionManager({
+      onSessionStart: (session) => {
+        controller.sessionStarted(session);
+      },
+      onTargetChange: (change, session) => {
+        controller.targetChanged(change, session);
+      },
+      onSessionEnd: (session) => {
+        controller.sessionEnded(session);
+      },
+    });
+    controller = new RecordingController({
+      page: {} as Page,
+      sessions,
+      config: {
+        recordingsDir: dir,
+        pulseSource: 'test',
+        streamVolume: 85,
+        handoverSilenceSeconds: 45,
+        silenceAlertSeconds: 300,
+      },
+      notify: () => undefined,
+      postProcess: () => Promise.resolve(),
+      logger: quietLogger,
+    });
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('records into the earlier session folder, keeping its sets and start', async () => {
+    const first = sessions.start(info, [DJ]);
+    await controller.idle();
+    sessions.stop();
+    await controller.idle();
+    const [folder] = await readdir(dir);
+    const startedAt = first.ok ? first.session.startedAt : new Date();
+
+    const other = { userId: '400000000000000002', displayName: 'DJ B' };
+    sessions.start({ ...info, startedAt, resumeDir: folder ?? '' }, [other]);
+    await controller.idle();
+    expect(await readdir(dir)).toEqual([folder]);
+    const reopened = await readJsonFile(
+      path.join(dir, folder ?? '', 'session.json'),
+      sessionSchema,
+    );
+    expect(reopened?.endedAt).toBeUndefined();
+    expect(reopened?.startedAt).toBe(startedAt.toISOString());
+    expect(reopened?.sets.map((set) => set.displayName)).toEqual(['DJ A', 'DJ B']);
+  });
+});
