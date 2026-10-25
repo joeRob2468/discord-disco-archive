@@ -523,6 +523,25 @@ describe('RecordingController: /record split', () => {
     expect(controller.split({ name: 'X' })).toContain('Nothing is being recorded');
   });
 
+  it('names the stream and the set in silence alerts after a split', async () => {
+    controller.split({ name: 'Afterglow' });
+    await controller.idle();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const onSilence = vi.mocked(media.captureAudio).mock.calls.at(-1)?.[1];
+      onSilence?.({ type: 'start', at: 0 });
+      await vi.advanceTimersByTimeAsync(300_000);
+      await controller.idle();
+      expect(notices.at(-1)).toMatch(
+        /^⚠️ \*\*DJ A\*\*'s stream \(\*\*Afterglow\*\*\) has been silent/,
+      );
+      onSilence?.({ type: 'end', at: 0 });
+      expect(notices.at(-1)).toBe("✅ **DJ A**'s stream (**Afterglow**) is audible again.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('carries on the new set if the stream drops and comes back', async () => {
     controller.split({ name: 'Afterglow' });
     await controller.idle();

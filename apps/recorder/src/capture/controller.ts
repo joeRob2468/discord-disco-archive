@@ -781,7 +781,7 @@ export class RecordingController {
       const channelId = this.#sessions.active?.channelId;
       if (capture.alerted && channelId !== undefined) {
         capture.alerted = false;
-        this.#notify(channelId, `✅ **${capture.target.displayName}**'s stream is audible again.`);
+        this.#notify(channelId, `✅ ${this.#streamOf(capture)} is audible again.`);
       }
       return;
     }
@@ -829,6 +829,18 @@ export class RecordingController {
   }
 
   /**
+   * "**DJ**'s stream", or "**Owner**'s stream (**Set**)" for a set named apart from the
+   * stream's owner (a split), so chat says whose stream to check.
+   */
+  #streamOf(capture: ActiveCapture): string {
+    const set = capture.target.displayName;
+    const owner = this.#sessions.status()?.target;
+    return owner?.userId === capture.target.userId && owner.displayName !== set
+      ? `**${owner.displayName}**'s stream (**${set}**)`
+      : `**${set}**'s stream`;
+  }
+
+  /**
    * The current DJ's stream is still live but has been silent for `silenceAlertSeconds`:
    * say so, and reopen it in case it stopped playing on our side.
    */
@@ -845,7 +857,7 @@ export class RecordingController {
     capture.alerted = true;
     this.#notify(
       session.channelId,
-      `⚠️ **${name}**'s stream has been silent for ${String(minutes)} min. ` +
+      `⚠️ ${this.#streamOf(capture)} has been silent for ${String(minutes)} min. ` +
         "Reopening it in case the problem is on the recorder's side.",
     );
     const screenshot = await this.#screenshot('silent-long');
