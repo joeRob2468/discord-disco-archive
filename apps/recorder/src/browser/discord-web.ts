@@ -75,7 +75,7 @@ const selectors = {
    */
   popup: (page: Page): Locator => page.locator('[role="dialog"]:visible'),
   /** The survey's opt-out; ticking it keeps that popup from coming back. */
-  dontShowAgain: (popup: Locator): Locator => popup.getByText(/^don.t show again$/i),
+  dontShowAgain: (popup: Locator): Locator => popup.getByText(/don.t show again/i),
   /** Login form, shown when the profile's session has expired. */
   loginForm: (page: Page): Locator =>
     page.locator('form').filter({ has: page.locator('input[name="email"]') }),
