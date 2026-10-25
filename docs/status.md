@@ -26,6 +26,7 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
    - Partial tags: a set only escapes the tag if it opens with at least 2 s of silence.
    - AFK moves of the recorder (exempt it from any AFK bot).
 2. Open the archive from outside the home network once.
+3. **`/record split`** (later): end the current set and start the next one on the same stream, for DJs who share one Go Live stream. Today the recorder sees no switch (switching to the current target does nothing), so they end up in one long set; see the workaround in operations.md. Ideally a gapless cut, with an optional DJ name or title for the new set.
 
 ## Environment notes
 
