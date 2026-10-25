@@ -4,13 +4,19 @@ import type { SetSummary } from '../catalog/catalog.ts';
 export const mediaUrl = (setId: string, format: string, download = false): string =>
   `/media/${encodeURIComponent(setId)}/${format}${download ? '?download=1' : ''}`;
 
+/** The raw file's label: the WAV capture, or an uploaded set's original (`MP3 (original)`). */
+function rawLabel(file: string | undefined): string {
+  const ext = file?.split('.').pop()?.toUpperCase() ?? 'WAV';
+  return ext === 'WAV' ? 'WAV (raw)' : `${ext} (original)`;
+}
+
 export function Downloads({ set }: { set: SetSummary }) {
   const formats = [
     ['mp3', 'MP3'],
     ['master', 'FLAC'],
     ['m4a', 'AAC'],
     ['mp4', 'Video (MP4)'],
-    ['rawAudio', 'WAV (raw)'],
+    ['rawAudio', rawLabel(set.files.rawAudio)],
   ] as const;
   const available = formats.filter(([key]) => set.files[key] !== undefined);
   if (available.length === 0) return null;

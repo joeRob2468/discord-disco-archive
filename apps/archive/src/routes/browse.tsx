@@ -119,7 +119,13 @@ export function browseRoutes(catalog: Catalog, publicUrl: string): Hono<AuthEnv>
     const auth = c.var.auth;
     const session = catalog.getSession(c.req.param('id'), auth.isAdmin);
     if (!session || !hasSets(session, auth)) return c.html(<NotFoundPage auth={auth} />, 404);
-    return c.html(<AlbumPage auth={auth} album={albumOf(session, auth)} />);
+    return c.html(
+      <AlbumPage
+        auth={auth}
+        album={albumOf(session, auth)}
+        allDjs={auth.isAdmin ? catalog.listStreamers(true, { by: 'name', dir: 'asc' }) : []}
+      />,
+    );
   });
 
   /** The set at `/sessions/:id/sets/:uuid`, if the viewer may see it there. */

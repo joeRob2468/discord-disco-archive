@@ -9,14 +9,29 @@ import type { Track } from '../client/track.ts';
 import { setArt } from './art.ts';
 import { Art, DjAvatar, SetListRow, StatusBadges } from './cards.tsx';
 import { Downloads } from './components.tsx';
-import { EditButton, EditSessionDialog, EditSetDialog, EditStreamerDialog } from './edit.tsx';
+import {
+  AddSetDialog,
+  EditButton,
+  EditSessionDialog,
+  EditSetDialog,
+  EditStreamerDialog,
+} from './edit.tsx';
 import { formatDate, formatDateTime, formatDuration, plural } from './format.ts';
 import { djsOf, totalSeconds, type Album } from './home.tsx';
 import { Layout } from './layout.tsx';
 import { PlayButton, PlayCount, QueueButton, queueOf } from './play.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
 
-export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
+/** `allDjs`: every DJ, for admins adding a set from a file. */
+export function AlbumPage({
+  album,
+  auth,
+  allDjs = [],
+}: {
+  album: Album;
+  auth: AuthState;
+  allDjs?: readonly StreamerSummary[];
+}) {
   const { session, sets } = album;
   const djs = djsOf(sets);
   const queue = queueOf(sets);
@@ -75,7 +90,15 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
               Copy link
             </button>
             {auth.isAdmin && (
-              <EditButton kind="session" id={session.id} class="btn btn-ghost rounded-xl" />
+              <>
+                <EditButton kind="session" id={session.id} class="btn btn-ghost rounded-xl" />
+                <EditButton
+                  kind="add-set"
+                  id={session.id}
+                  label="Add set…"
+                  class="btn btn-ghost rounded-xl"
+                />
+              </>
             )}
           </div>
         </div>
@@ -114,7 +137,12 @@ export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
         </div>
       </section>
 
-      {auth.isAdmin && <EditSessionDialog session={session} next={sessionUrl(session.id)} />}
+      {auth.isAdmin && (
+        <>
+          <EditSessionDialog session={session} next={sessionUrl(session.id)} />
+          <AddSetDialog session={session} djs={allDjs} />
+        </>
+      )}
     </Layout>
   );
 }

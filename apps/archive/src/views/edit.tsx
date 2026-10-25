@@ -3,9 +3,11 @@
  * `EditButton` (see `data-dialog` in layout.tsx). The forms are boosted multipart posts
  * carrying the text fields and the image together, so nothing changes until Save; the
  * route redirects to `next`, which swaps in the updated page and drops the dialog.
+ * `AddSetDialog` is the exception: it uploads a file with a progress bar (layout.tsx).
  */
 import type { Child } from 'hono/jsx';
 import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/catalog.ts';
+import { UPLOAD_EXTENSIONS } from '../uploads.ts';
 import { imageUrl } from './art.ts';
 import { formatBytes } from './format.ts';
 import { sessionUrl, setUrl } from './links.ts';
@@ -18,7 +20,7 @@ export function EditButton({
   label = 'Edit',
   class: className = 'btn btn-ghost btn-sm',
 }: {
-  kind: 'set' | 'session' | 'streamer';
+  kind: 'set' | 'session' | 'streamer' | 'add-set';
   id: string;
   label?: string;
   class?: string;
@@ -350,5 +352,63 @@ export function EditStreamerDialog({
       </Field>
       <ImageField label="Picture" current={streamer.image} />
     </Dialog>
+  );
+}
+
+/**
+ * Add a set to a finished session from a file. The page script sends the file as the
+ * request body with a progress bar (`data-upload`); the recorder then imports and levels
+ * it, so it shows up a few seconds later.
+ */
+export function AddSetDialog({
+  session,
+  djs,
+}: {
+  session: SessionSummary;
+  djs: readonly StreamerSummary[];
+}) {
+  const accept = UPLOAD_EXTENSIONS.map((ext) => `.${ext}`).join(',');
+  return (
+    <Modal id={dialogId('add-set', session.id)} title="Add a set">
+      {session.endedAt === undefined ? (
+        <p class="text-sm">This session is still recording. Add sets once it has ended.</p>
+      ) : (
+        <form
+          class="flex flex-col gap-3"
+          action={`/sessions/${encodeURIComponent(session.id)}/uploads`}
+          hx-boost="false"
+          data-upload
+        >
+          <p class="text-base-content/60 text-sm">
+            For a set that wasn't recorded, e.g. the DJ's own copy. It's leveled like a recorded
+            set; a lossless file (WAV, FLAC) sounds best.
+          </p>
+          <Field label="Audio file" hint={UPLOAD_EXTENSIONS.join(', ')}>
+            <input class="file-input w-full" type="file" name="file" accept={accept} required />
+          </Field>
+          <Field label="DJ" hint="who it's filed under; the name below is what's shown">
+            <select class="select w-full" name="userId" required>
+              <option value="">Choose…</option>
+              {djs.map((dj) => (
+                <option value={dj.userId}>{dj.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Name">
+            <input class="input w-full" name="displayName" required maxlength={100} />
+          </Field>
+          <Field label="Started at" hint="sets are listed in start order">
+            <input class="input w-full" type="datetime-local" name="startedAt" required />
+          </Field>
+          <progress class="progress progress-primary w-full" value="0" max="1" hidden />
+          <p class="text-sm" data-upload-status role="status" />
+          <div class="modal-action mt-2">
+            <button class="btn btn-primary" type="submit">
+              Upload
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }

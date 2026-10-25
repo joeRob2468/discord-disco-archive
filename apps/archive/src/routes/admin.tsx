@@ -2,7 +2,8 @@
  * The admin panel and the admin-only edit endpoints (HTML form posts). Fields missing
  * from a form are left unchanged, so a one-field form (e.g. the quick Hide button) only
  * touches that field. Edit forms may also carry an image (`image` upload, or
- * `removeImage=1`), applied in the same save.
+ * `removeImage=1`), applied in the same save. Sets uploaded from a file come in as a raw
+ * request body instead (see `uploads.ts`), since they can be gigabytes.
  */
 import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -11,6 +12,7 @@ import { safeNext, type AuthEnv } from '../auth/auth.ts';
 import { SET_SORTS, type Catalog, type ImageEntity } from '../catalog/catalog.ts';
 import { deleteImage, IMAGE_MAX_BYTES, ImageError, saveImage } from '../images.ts';
 import { DeleteError, deleteSessionFolder, deleteSetFiles } from '../recordings.ts';
+import { saveUpload, UploadError } from '../uploads.ts';
 import {
   ActivityPage,
   AdminSetsPage,
@@ -218,6 +220,39 @@ export function adminRoutes(
     for (const image of images) await deleteImage(imagesDir, image);
     logger?.info({ ...context, images }, 'session deleted');
     return redirectBack(c, body, '/sessions');
+  });
+
+  // Add a set from a file: the file is the request body, streamed to disk; its details
+  // are query parameters. Answers in plain text, for the upload dialog to show.
+  app.put('/sessions/:id/uploads', requireAdmin, async (c) => {
+    const session = catalog.getSession(c.req.param('id'), true);
+    if (!session) return c.text('No such session.', 404);
+    if (session.endedAt === undefined) {
+      return c.text('This session is still recording. Add sets once it has ended.', 409);
+    }
+    const body = c.req.raw.body;
+    if (!body || c.req.header('content-type') !== 'application/octet-stream') {
+      return c.text('Send the file as the request body.', 400);
+    }
+    const upload = {
+      fileName: c.req.query('name') ?? '',
+      userId: c.req.query('userId') ?? '',
+      displayName: c.req.query('displayName') ?? '',
+      startedAt: new Date(c.req.query('startedAt') ?? ''),
+    };
+    const context = { sessionId: session.id, dir: session.dir, ...upload };
+    try {
+      const id = await saveUpload(recordingsDir, session.dir, body, upload);
+      logger?.info({ ...context, uploadId: id }, 'set uploaded');
+    } catch (error) {
+      if (!(error instanceof UploadError)) throw error;
+      logger?.warn({ ...context, reason: error.message }, 'upload refused');
+      return c.text(error.message, 400);
+    }
+    return c.text(
+      'Uploaded. The set appears in a few seconds and is playable once it has been leveled.',
+      201,
+    );
   });
 
   // Reorder an album: `move=up|down` with `set=<id>`, or `move=reset`.

@@ -1,5 +1,6 @@
 /**
- * Permanent deletes on the recordings volume: the only writes the archive makes there.
+ * Permanent deletes on the recordings volume. The archive's only other writes there are
+ * uploaded sets (`uploads.ts`).
  * A set's files go and its entry is removed from `session.json`, so a rebuilt database
  * doesn't bring it back; a session goes as its whole folder. Both are refused while the
  * recorder may still be writing (the session hasn't ended, or the set is recording)

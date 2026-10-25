@@ -86,7 +86,7 @@ A set is `partial` only if recording cut off music. `session.json` records which
 
 ### Uploaded sets
 
-A set can be added to a finished session from a file (any format ffmpeg reads, e.g. a DJ's own copy of a set that wasn't recorded). The archive saves the audio and an import request (`uploads/<id>.json`: DJ user ID, display name, start time) in the session folder. The recorder checks every 15 s, moves the audio to `raw/<set>.<ext>`, adds the set as `processing` and levels it like a recorded one; its end time comes from the measured length. Requests wait while the session is still recording; an unreadable one is renamed `.invalid`. Like a raw capture, the uploaded file is deleted `RAW_RETENTION_HOURS` after leveling.
+A set can be added to a finished session from a file (any format ffmpeg reads, e.g. a DJ's own copy of a set that wasn't recorded), with the admin's **Add set…** on the session page: the file, the DJ it's filed under, the name shown and its start time. The browser sends the file as the request body with a progress bar, and the archive streams it to disk. The archive saves the audio and an import request (`uploads/<id>.json`: DJ user ID, display name, start time) in the session folder. The recorder checks every 15 s, moves the audio to `raw/<set>.<ext>`, adds the set as `processing` and levels it like a recorded one; its end time comes from the measured length. Requests wait while the session is still recording; an unreadable one is renamed `.invalid`. Like a raw capture, the uploaded file is deleted `RAW_RETENTION_HOURS` after leveling; until then it's offered as e.g. **MP3 (original)**.
 
 ## Storage
 
@@ -121,7 +121,7 @@ Hono, server-rendered `hono/jsx`, daisyUI on Tailwind, htmx (with `hx-boost`, so
 - **Downloads:** MP3 and FLAC (and the raw WAV while it exists), named `DJ - Title (date).ext`. Each client IP (from Traefik's `X-Forwarded-For`) gets at most `ARCHIVE_DOWNLOAD_LIMIT_MBPS` across all its downloads and playback, after a 1 s burst at full speed (so playback starts and seeks are instant), so one fast downloader can't take the whole upload link.
 - **Link previews:** Open Graph tags and a preview card on the home and login pages.
 - **Access:** public unless `ARCHIVE_PASSWORD` is set (one shared viewer password). `ARCHIVE_ADMIN_PASSWORD` enables admin features. Signed `HttpOnly` cookies, CSRF-checked form posts, constant-time password checks.
-- **Admin:** edit dialogs for sets, sessions and DJs (titles, names, descriptions, tags, links, images; nothing changes until Save), reorder sets within an album, **Archive** (hide; reversible) or **Delete** (permanent: files and the `session.json` entry, or the whole session folder; refused while recording unless forced). `/admin` shows totals, storage use and sets needing attention; `/admin/sets` lists every set; `/admin/activity` lists every change, by the admin or by the recorder.
+- **Admin:** **Add set…** from a file (see [Uploaded sets](#uploaded-sets)), edit dialogs for sets, sessions and DJs (titles, names, descriptions, tags, links, images; nothing changes until Save), reorder sets within an album, **Archive** (hide; reversible) or **Delete** (permanent: files and the `session.json` entry, or the whole session folder; refused while recording unless forced). `/admin` shows totals, storage use and sets needing attention; `/admin/sets` lists every set; `/admin/activity` lists every change, by the admin or by the recorder.
 - **Name precedence:** set edit → DJ edit → recorded display name.
 
 ## Deployment

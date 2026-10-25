@@ -23,9 +23,35 @@ const FORMATS = {
   mp3: { file: 'mp3', ext: 'mp3', mime: 'audio/mpeg' },
   m4a: { file: 'm4a', ext: 'm4a', mime: 'audio/mp4' },
   mp4: { file: 'mp4', ext: 'mp4', mime: 'video/mp4' },
-  // The float32 capture, playable before (or without) leveling.
+  // The float32 capture (or an uploaded set's original file; see `rawType`), playable
+  // before (or without) leveling.
   raw: { file: 'rawAudio', ext: 'wav', mime: 'audio/wav' },
 } as const satisfies Record<string, { file: keyof SetFiles; ext: string; mime: string }>;
+
+/** Types of uploaded originals (`uploads.ts`), by extension. */
+const RAW_MIME: Record<string, string> = {
+  wav: 'audio/wav',
+  flac: 'audio/flac',
+  aiff: 'audio/aiff',
+  aif: 'audio/aiff',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  ogg: 'audio/ogg',
+  opus: 'audio/ogg',
+  wma: 'audio/x-ms-wma',
+  mp4: 'video/mp4',
+  mkv: 'video/x-matroska',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+};
+
+/** The served file's extension and type: from its name for an uploaded original. */
+function fileType(format: Format, relative: string): { ext: string; mime: string } {
+  if (format !== 'raw') return FORMATS[format];
+  const ext = path.extname(relative).slice(1).toLowerCase();
+  return { ext, mime: RAW_MIME[ext] ?? 'application/octet-stream' };
+}
 
 type Format = keyof typeof FORMATS;
 
@@ -79,14 +105,15 @@ export function mediaRoutes(
     const file = path.resolve(sessionDir, relative);
     if (!file.startsWith(sessionDir + path.sep)) return c.notFound();
 
+    const type = fileType(format, relative);
     if (c.req.query('download') !== undefined) {
-      c.header('Content-Disposition', contentDisposition(downloadName(set, FORMATS[format].ext)));
+      c.header('Content-Disposition', contentDisposition(downloadName(set, type.ext)));
     }
     c.header('Cache-Control', 'private, max-age=3600');
 
     const response = await serveStatic<AuthEnv>({ root: '/', path: file })(c, next);
     if (!response) return c.notFound();
-    response.headers.set('Content-Type', FORMATS[format].mime);
+    response.headers.set('Content-Type', type.mime);
     if (!limiter || !response.body) return response;
     // Without a proxy (local dev) every request counts as one client.
     const throttled = limiter.throttle(response.body, clientIp(c) ?? 'direct');

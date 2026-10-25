@@ -487,6 +487,78 @@ describe('archive app', () => {
       expect(new Catalog(db).getSession('session-live', true)).toBeUndefined();
     });
 
+    describe('adding a set from a file', () => {
+      const upload = (cookie: string | undefined, query: Record<string, string>, body = 'audio') =>
+        new Request(
+          `${ORIGIN}/sessions/session-1/uploads?${new URLSearchParams(query).toString()}`,
+          {
+            method: 'PUT',
+            headers: {
+              Origin: ORIGIN,
+              'Content-Type': 'application/octet-stream',
+              ...(cookie && { Cookie: cookie }),
+            },
+            body,
+          },
+        );
+      const details = {
+        name: 'Afterglow set.mp3',
+        userId: DJ_A,
+        displayName: 'Afterglow',
+        startedAt: '2026-11-14T23:00:00.000Z',
+      };
+      const uploadsDir = () => path.join(recordings.dir, '2026-11-14_halloween-disco', 'uploads');
+
+      it('saves the file and an import request for the recorder', async () => {
+        const app = build(adminEnv);
+        const response = await app.request(upload(await loginAsAdmin(app), details));
+        expect(response.status).toBe(201);
+        const files = (await readdir(uploadsDir())).sort();
+        expect(files).toHaveLength(2);
+        const [request, audio] = files.map((name) => path.join(uploadsDir(), name));
+        expect(audio).toMatch(/\.mp3$/);
+        expect(await readFile(audio ?? '', 'utf8')).toBe('audio');
+        expect(JSON.parse(await readFile(request ?? '', 'utf8'))).toEqual({
+          schemaVersion: 1,
+          file: path.basename(audio ?? ''),
+          userId: DJ_A,
+          displayName: 'Afterglow',
+          startedAt: details.startedAt,
+        });
+      });
+
+      it('refuses other file types and missing details, writing nothing', async () => {
+        const app = build(adminEnv);
+        const cookie = await loginAsAdmin(app);
+        const exe = await app.request(upload(cookie, { ...details, name: 'set.exe' }));
+        expect(exe.status).toBe(400);
+        expect(await exe.text()).toContain("Can't use a .exe file");
+        const noDj = await app.request(upload(cookie, { ...details, userId: '' }));
+        expect(noDj.status).toBe(400);
+        await expect(readdir(uploadsDir())).rejects.toThrow();
+      });
+
+      it('refuses while the session is still recording', async () => {
+        await recordings.write(
+          '2026-11-14_halloween-disco',
+          makeSession({
+            id: 'session-1',
+            endedAt: undefined,
+            sets: [makeSet({ id: 'set-1', userId: DJ_A })],
+          }),
+        );
+        await syncCatalog(db, recordings.dir);
+        const app = build(adminEnv);
+        const response = await app.request(upload(await loginAsAdmin(app), details));
+        expect(response.status).toBe(409);
+      });
+
+      it('is admin-only', async () => {
+        const app = build(adminEnv);
+        expect((await app.request(upload(undefined, details))).status).toBe(404);
+      });
+    });
+
     it('only lets admins delete', async () => {
       const app = build(adminEnv);
       expect((await app.request(post('/sets/set-1/delete', {}))).status).toBe(404);

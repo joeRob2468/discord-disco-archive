@@ -56,8 +56,9 @@ export interface LayoutProps {
 /**
  * Applies the saved theme before first paint (dark unless the viewer chose light), and
  * handles the theme toggle, admin edit dialogs (`data-dialog`), set rows that expand
- * into an inline set page (`data-expand`, fetched by htmx) and "Copy link" buttons, and
- * disables a form's submit buttons while its post is pending. Delegated on `document`, so it
+ * into an inline set page (`data-expand`, fetched by htmx) and "Copy link" buttons,
+ * disables a form's submit buttons while its post is pending, and sends "Add a set"
+ * uploads (`data-upload`) as a raw body with a progress bar. Delegated on `document`, so it
  * survives hx-boost swaps.
  */
 const PAGE_SCRIPT = `
@@ -116,6 +117,53 @@ const PAGE_SCRIPT = `
     form.addEventListener('htmx:afterRequest', () => {
       for (const button of buttons) button.disabled = false;
     }, { once: true });
+  });
+  // "Add a set": the file goes as the request body (it can be gigabytes), the rest in the
+  // query, so the server can stream it to disk.
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !('upload' in form.dataset)) return;
+    event.preventDefault();
+    const file = form.elements.file.files[0];
+    if (!file) return;
+    const bar = form.querySelector('progress');
+    const status = form.querySelector('[data-upload-status]');
+    const submit = form.querySelector('button[type="submit"]');
+    const params = new URLSearchParams({
+      name: file.name,
+      userId: form.elements.userId.value,
+      displayName: form.elements.displayName.value,
+      // datetime-local is the viewer's local time.
+      startedAt: new Date(form.elements.startedAt.value).toISOString(),
+    });
+    const done = (ok, message) => {
+      status.textContent = message;
+      status.classList.toggle('text-error', !ok);
+      bar.hidden = true;
+      if (!ok) {
+        submit.disabled = false;
+        return;
+      }
+      submit.textContent = 'Close and reload';
+      submit.type = 'button';
+      submit.disabled = false;
+      submit.addEventListener('click', () => location.reload(), { once: true });
+    };
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', form.action + '?' + params);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.addEventListener('progress', (progress) => {
+      if (!progress.lengthComputable) return;
+      bar.value = progress.loaded / progress.total;
+      status.textContent = 'Uploading… ' + Math.floor(bar.value * 100) + '%';
+    });
+    xhr.addEventListener('load', () => done(xhr.status < 300, xhr.responseText || 'Upload failed.'));
+    xhr.addEventListener('error', () => done(false, 'Upload failed: the connection was lost.'));
+    submit.disabled = true;
+    status.classList.remove('text-error');
+    bar.hidden = false;
+    bar.value = 0;
+    xhr.send(file);
   });
   // A dropdown left open must not survive navigation.
   document.addEventListener('htmx:beforeSwap', () => {
