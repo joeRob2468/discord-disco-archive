@@ -3,13 +3,11 @@
  * start position (`data-index`); "Add to queue" buttons carry tracks to append
  * (`data-enqueue`). Clicks are handled by delegation, so buttons in pages swapped in by
  * htmx work too. The queue panel lists what's queued, to jump to or remove. The bar itself is `hx-preserve`d, so playback carries on
- * while browsing. A set counts as played after 30 s of actual listening.
+ * while browsing. A set counts as played once it starts playing.
  *
  * Built by esbuild into dist/player.js (`pnpm --filter @dsr/archive build:js`).
  */
 import type { Track } from './track.ts';
-
-const PLAY_COUNT_SECONDS = 30;
 
 /** The element with `id`, checked to be a `type`. The bar's markup is in layout.tsx. */
 function byId<T extends HTMLElement>(id: string, type: new () => T): T {
@@ -65,8 +63,6 @@ function init(): void {
 
   let queue: Track[] = [];
   let index = 0;
-  let listened = 0;
-  let lastTime = 0;
   let counted = false;
   let seeking = false;
 
@@ -141,8 +137,6 @@ function init(): void {
     const track = queue[position];
     if (!track) return;
     index = position;
-    listened = 0;
-    lastTime = 0;
     counted = false;
     audio.src = track.src;
     render();
@@ -310,6 +304,11 @@ function init(): void {
   audio.addEventListener('play', () => {
     bar.dataset['state'] = 'playing';
   });
+  // Count each loaded set once, when playback actually begins.
+  audio.addEventListener('playing', () => {
+    const track = current();
+    if (track && !counted) countPlay(track);
+  });
   audio.addEventListener('pause', () => {
     bar.dataset['state'] = 'paused';
   });
@@ -318,12 +317,6 @@ function init(): void {
   });
   audio.addEventListener('timeupdate', () => {
     const now = audio.currentTime;
-    // Count only real listening: small forward steps while playing, not seeks.
-    const step = now - lastTime;
-    if (!audio.paused && step > 0 && step < 2) listened += step;
-    lastTime = now;
-    const track = current();
-    if (track && !counted && listened >= PLAY_COUNT_SECONDS) countPlay(track);
     if (!seeking && Number.isFinite(audio.duration)) {
       seek.value = String(Math.round((now / audio.duration) * 1000));
       elapsed.textContent = formatTime(now);

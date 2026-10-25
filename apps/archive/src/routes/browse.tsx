@@ -167,7 +167,7 @@ export function browseRoutes(catalog: Catalog, publicUrl: string): Hono<AuthEnv>
     return set ? c.redirect(setUrl(set), 301) : c.html(<NotFoundPage auth={c.var.auth} />, 404);
   });
 
-  // Counted by the player after 30 s of listening.
+  // Counted by the player when a set starts playing.
   app.post('/api/plays/:uuid', (c) => {
     const uuid = c.req.param('uuid');
     if (!isUuid(uuid) || !catalog.recordPlay(uuid)) return c.body(null, 404);
