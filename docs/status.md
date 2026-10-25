@@ -26,7 +26,8 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
    - Partial tags: a set only escapes the tag if it opens with at least 2 s of silence.
    - AFK moves of the recorder (exempt it from any AFK bot).
 2. Open the archive from outside the home network once.
-3. **`/record split`** (later): end the current set and start the next one on the same stream, for DJs who share one Go Live stream. Today the recorder sees no switch (switching to the current target does nothing), so they end up in one long set; see the workaround in operations.md. Ideally a gapless cut, with an optional DJ name or title for the new set.
+3. **Fix: Discord popups block opening a stream.** After a few stream restarts in a row, Discord showed its "How'd the stream go?" feedback popup over the call view; every stream open then failed (`locator.hover: Timeout 10000ms exceeded` on the call tile) and nothing was recorded until the popup was closed by hand. The recorder should close such popups (Esc, or the dialog's close button) before opening a stream, and retry once if it fails. Also: after a failed open, the ⚠️ notice says to try `/record switch`, but switching to the user who is still the target does nothing; a failed open should clear the target, or switching to the current target should retry.
+4. **`/record split`** (later): end the current set and start the next one on the same stream, for DJs who share one Go Live stream. Today the recorder sees no switch (switching to the current target does nothing), so they end up in one long set; see the workaround in operations.md. Ideally a gapless cut, with an optional DJ name or title for the new set.
 
 ## Environment notes
 
