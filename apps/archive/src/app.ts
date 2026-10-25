@@ -10,6 +10,7 @@ import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
 import { ASSETS } from './assets.ts';
 import { createAuth, type AuthEnv } from './auth/auth.ts';
+import { BandwidthLimiter } from './bandwidth.ts';
 import { NotFoundError, type Catalog } from './catalog/catalog.ts';
 import type { ArchiveConfig } from './config.ts';
 import { imagesDir } from './images.ts';
@@ -85,7 +86,11 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
       logger?.child({ module: 'admin' }),
     ),
   );
-  app.route('/', mediaRoutes(catalog, config.recordingsDir, imagesDir(config.dataDir)));
+  const limiter =
+    config.downloadLimitBytesPerSecond > 0
+      ? new BandwidthLimiter(config.downloadLimitBytesPerSecond)
+      : undefined;
+  app.route('/', mediaRoutes(catalog, config.recordingsDir, imagesDir(config.dataDir), limiter));
 
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();

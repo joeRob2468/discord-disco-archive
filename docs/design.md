@@ -113,7 +113,7 @@ Hono, server-rendered `hono/jsx`, daisyUI on Tailwind, htmx (with `hx-boost`, so
 - **Player:** a bottom bar with a queue (play an album, a list or a set; add to it, jump within it, remove from it), stop, seek, volume and media keys. Plays the MP3, falling back to the raw WAV until a set is leveled. While a set loads or buffers, the play button shows a spinner and the seek bar pulses. A play counts when a set starts playing, and that set's play counts on the page update at once.
 - **Forms:** submit buttons are disabled while their request is pending.
 - **Assets:** pages link the CSS and scripts with a `?v=` version (file time and size), so they're cached for a year and a new build is fetched at once.
-- **Downloads:** MP3 and FLAC (and the raw WAV while it exists), named `DJ - Title (date).ext`.
+- **Downloads:** MP3 and FLAC (and the raw WAV while it exists), named `DJ - Title (date).ext`. Each client IP (from Traefik's `X-Forwarded-For`) gets at most `ARCHIVE_DOWNLOAD_LIMIT_MBPS` across all its downloads and playback, after a 1 s burst at full speed (so playback starts and seeks are instant), so one fast downloader can't take the whole upload link.
 - **Link previews:** Open Graph tags and a preview card on the home and login pages.
 - **Access:** public unless `ARCHIVE_PASSWORD` is set (one shared viewer password). `ARCHIVE_ADMIN_PASSWORD` enables admin features. Signed `HttpOnly` cookies, CSRF-checked form posts, constant-time password checks.
 - **Admin:** edit dialogs for sets, sessions and DJs (titles, names, descriptions, tags, links, images; nothing changes until Save), reorder sets within an album, **Archive** (hide; reversible) or **Delete** (permanent: files and the `session.json` entry, or the whole session folder; refused while recording unless forced). `/admin` shows totals, storage use and sets needing attention; `/admin/sets` lists every set; `/admin/activity` lists every change, by the admin or by the recorder.
@@ -146,6 +146,7 @@ All settings are in `.env` (see `.env.example`). The main ones:
 | `ARCHIVE_PASSWORD`, `ARCHIVE_ADMIN_PASSWORD`             | —                 | Viewer password (optional), admin password (12+ chars).     |
 | `ARCHIVE_SESSION_SECRET`                                 | —                 | Cookie signing (32+ chars), needed if a password is set.    |
 | `ARCHIVE_SYNC_INTERVAL_SECONDS`                          | `60`              | Full rescan of the recordings.                              |
+| `ARCHIVE_DOWNLOAD_LIMIT_MBPS`                            | `50`              | Per-client media bandwidth cap (Mbit/s); `0` = none.        |
 | `COMPOSE_FILE`, `DOMAIN`                                 | server only       | `compose.yaml:compose.server.yaml`, and the Traefik domain. |
 
 `RECORD_VIDEO`, `VIDEO_FPS` and `VIDEO_SIZE` exist but video capture isn't built.

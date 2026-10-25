@@ -1,7 +1,8 @@
 /**
  * Streams set files from the read-only recordings volume, with Range support so seeking
  * works. Files are looked up through the catalog, so hidden sets stay hidden and request
- * paths never touch the filesystem directly.
+ * paths never touch the filesystem directly. With a `limiter`, each client's media
+ * bandwidth is capped (`ARCHIVE_DOWNLOAD_LIMIT_MBPS`).
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +10,9 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import type { SetFiles } from '@dsr/core';
 import { Hono } from 'hono';
 import type { AuthEnv } from '../auth/auth.ts';
+import type { BandwidthLimiter } from '../bandwidth.ts';
 import type { Catalog, SetSummary } from '../catalog/catalog.ts';
+import { clientIp } from '../client-ip.ts';
 import { IMAGE_NAME, imageMime } from '../images.ts';
 import { formatDate } from '../views/format.ts';
 
@@ -44,6 +47,7 @@ export function mediaRoutes(
   catalog: Catalog,
   recordingsDir: string,
   imagesDir: string,
+  limiter?: BandwidthLimiter,
 ): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
 
@@ -83,7 +87,10 @@ export function mediaRoutes(
     const response = await serveStatic<AuthEnv>({ root: '/', path: file })(c, next);
     if (!response) return c.notFound();
     response.headers.set('Content-Type', FORMATS[format].mime);
-    return response;
+    if (!limiter || !response.body) return response;
+    // Without a proxy (local dev) every request counts as one client.
+    const throttled = limiter.throttle(response.body, clientIp(c) ?? 'direct');
+    return new Response(throttled, { status: response.status, headers: response.headers });
   });
 
   return app;

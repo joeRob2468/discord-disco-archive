@@ -26,6 +26,11 @@ describe('loadConfig', () => {
     ).toThrow(/differ/);
   });
 
+  it('caps each client at 50 Mbit/s unless set (0 = no cap)', () => {
+    expect(loadConfig({}).downloadLimitBytesPerSecond).toBe(6_250_000);
+    expect(loadConfig({ ARCHIVE_DOWNLOAD_LIMIT_MBPS: '0' }).downloadLimitBytesPerSecond).toBe(0);
+  });
+
   it('uses secure cookies behind https', () => {
     expect(
       loadConfig({ ARCHIVE_PUBLIC_URL: 'https://archive.example.com' }).auth.secureCookies,

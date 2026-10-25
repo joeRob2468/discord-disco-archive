@@ -19,6 +19,8 @@ const archiveSchema = z
     ARCHIVE_SESSION_SECRET: optional(z.string().min(32)),
     /** Fallback full rescan interval; file watching handles most changes. */
     ARCHIVE_SYNC_INTERVAL_SECONDS: withDefault(envInteger.min(10), '60'),
+    /** Per-client cap on media bandwidth, in megabits per second; 0 = no cap. */
+    ARCHIVE_DOWNLOAD_LIMIT_MBPS: withDefault(envInteger.min(0), '50'),
   })
   .refine(
     (env) =>
@@ -46,6 +48,7 @@ const archiveSchema = z
       secureCookies: env.ARCHIVE_PUBLIC_URL.startsWith('https://'),
     },
     syncIntervalMs: env.ARCHIVE_SYNC_INTERVAL_SECONDS * 1000,
+    downloadLimitBytesPerSecond: (env.ARCHIVE_DOWNLOAD_LIMIT_MBPS * 1_000_000) / 8,
   }));
 
 export type ArchiveConfig = z.output<typeof archiveSchema>;

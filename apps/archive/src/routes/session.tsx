@@ -1,14 +1,11 @@
 /** Login and logout. */
 import type { Logger } from '@dsr/core';
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { safeNext, type Auth, type AuthEnv } from '../auth/auth.ts';
+import { clientIp } from '../client-ip.ts';
 import { sitePreview } from '../views/layout.tsx';
 import { LoginPage, NotFoundPage } from '../views/pages.tsx';
 import { formField } from './params.ts';
-
-/** The client's address as Traefik reports it, for spotting password guessing. */
-const clientIp = (c: Context): string | undefined =>
-  c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip');
 
 export function sessionRoutes(auth: Auth, publicUrl: string, logger?: Logger): Hono<AuthEnv> {
   // Crawlers land on /login when a viewer password is set; show the site's preview there.
