@@ -13,7 +13,7 @@ import path from 'node:path';
 import { SESSION_FILE, type Logger, type SetFiles } from '@dsr/core';
 import { SessionRecord } from '../capture/session-record.ts';
 
-/** Audio exports the recorder makes; others (video) are left alone. */
+/** The exports the recorder makes. */
 const EXPORTS = ['mp3', 'm4a'] as const satisfies readonly (keyof SetFiles)[];
 
 export interface RetentionConfig {

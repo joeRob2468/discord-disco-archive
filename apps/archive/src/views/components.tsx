@@ -15,7 +15,6 @@ export function Downloads({ set }: { set: SetSummary }) {
     ['mp3', 'MP3'],
     ['master', 'FLAC'],
     ['m4a', 'AAC'],
-    ['mp4', 'Video (MP4)'],
     ['rawAudio', rawLabel(set.files.rawAudio)],
   ] as const;
   const available = formats.filter(([key]) => set.files[key] !== undefined);

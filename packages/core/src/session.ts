@@ -15,17 +15,13 @@ const timestampSchema = z.iso.datetime({ offset: true });
 
 /** File paths relative to the session folder. Each is set once that file exists. */
 export const setFilesSchema = z.object({
-  /** Float32 WAV capture straight from PulseAudio. */
+  /** Float32 WAV capture straight from PulseAudio, or an uploaded set's original file. */
   rawAudio: z.string().optional(),
-  /** MKV capture (H.264 + float32 audio) when video recording is on. */
-  rawVideo: z.string().optional(),
   /** Loudness-normalised FLAC master. */
   master: z.string().optional(),
   mp3: z.string().optional(),
   /** AAC audio for in-browser playback. */
   m4a: z.string().optional(),
-  /** H.264 + leveled AAC with faststart, for in-browser playback. */
-  mp4: z.string().optional(),
 });
 
 export const setStatusSchema = z.enum(['recording', 'processing', 'ready', 'failed']);

@@ -76,9 +76,9 @@ export function OverviewPage(props: {
 }) {
   const { auth, overview, unfinished } = props;
   const { storage } = overview;
-  const raw = sum(storage.rawAudio, storage.rawVideo);
+  const raw = sum(storage.rawAudio);
   const masters = sum(storage.master);
-  const exports = sum(storage.mp3, storage.m4a, storage.mp4);
+  const exports = sum(storage.mp3, storage.m4a);
   return (
     <AdminLayout auth={auth} title="Overview" tab="/admin">
       <section class="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -95,9 +95,9 @@ export function OverviewPage(props: {
 
       <h2 class="mt-8 mb-3 text-xl font-bold">Storage</h2>
       <section class="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Raw captures" value={formatBytes(raw)} detail="WAV (and MKV)" />
+        <Stat label="Raw captures" value={formatBytes(raw)} detail="WAV, uploaded originals" />
         <Stat label="Masters" value={formatBytes(masters)} detail="FLAC" />
-        <Stat label="Exports" value={formatBytes(exports)} detail="MP3, M4A, MP4" />
+        <Stat label="Exports" value={formatBytes(exports)} detail="MP3, M4A" />
         <Stat label="Total" value={formatBytes(raw + masters + exports)} />
       </section>
       <p class="text-base-content/60 mt-2 text-xs">

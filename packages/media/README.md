@@ -9,6 +9,6 @@ ffmpeg wrappers. This package knows _how_ to measure, level and encode. Callers 
 | `analyze.ts`  | `analyzeSet`: pass 1, loudness measurement plus leading and trailing silence (trim range) in one run; `parseSilences`, `parseDuration`, `trimRange`.                                                                                      |
 | `capture.ts`  | `captureAudio` / `audioCaptureArgs`: live float32 WAV from PulseAudio with `silencedetect` in the same process; `parseSilenceLine`.                                                                                                       |
 | `level.ts`    | `measurePulseLevel(source, seconds)` reports a live PulseAudio source's mean and peak (`volumedetect`), to confirm audio is flowing; `parseVolumeDetect`.                                                                                 |
-| `encode.ts`   | `encodeMaster` (leveled 24-bit FLAC), `encodeMp3`, `encodeM4a`, `muxMp4` (captured H.264 + leveled AAC, faststart) and `concatAudio` (joins restart-grace segments).                                                                      |
+| `encode.ts`   | `encodeMaster` (leveled 24-bit FLAC), `encodeMp3`, `encodeM4a` and `concatAudio` (joins restart-grace segments).                                                                                                                          |
 
 Background on the leveling approach: [docs/design.md, "Processing"](../../docs/design.md#processing).

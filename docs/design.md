@@ -159,7 +159,7 @@ All settings are in `.env` (see `.env.example`). The main ones:
 | `ARCHIVE_DOWNLOAD_LIMIT_MBPS`                            | `200`             | Per-client media bandwidth cap (Mbit/s); `0` = none.        |
 | `COMPOSE_FILE`, `DOMAIN`                                 | server only       | `compose.yaml:compose.server.yaml`, and the Traefik domain. |
 
-`RECORD_VIDEO`, `VIDEO_FPS` and `VIDEO_SIZE` exist but video capture isn't built.
+`VIDEO_SIZE` (`1920x1080`) is the size of the recorder's virtual screen and browser window.
 
 ## Bot setup (one-time)
 
@@ -170,6 +170,6 @@ All settings are in `.env` (see `.env.example`). The main ones:
 
 ## Not built
 
-- **Video** capture (deferred).
+- **Video** capture (removed; it would be a separate project).
 - **A recorder pool** for recording overlapping streams in full (one account and browser per stream).
 - **Login with Discord** for the archive.

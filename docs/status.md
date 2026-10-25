@@ -22,7 +22,6 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 | Uploaded sets                  | ✅ verified live (Add set…, import and leveling in ~20 s)                                              |
 | Discord popups                 | 🔨 deployed; opens and screenshots verified, but no popup has appeared since to close                  |
 | Download cap (200 Mbit/s each) | 🔨 deployed; not yet seen under load                                                                   |
-| Video                          | ⏸️ not built (deferred)                                                                                |
 
 ## Next
 

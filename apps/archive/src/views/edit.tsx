@@ -126,12 +126,10 @@ function DeleteDialog(props: {
 }
 
 const FILE_LABELS: Record<string, string> = {
-  rawAudio: 'Raw capture (WAV)',
-  rawVideo: 'Raw video (MKV)',
+  rawAudio: 'Raw capture or uploaded original',
   master: 'Master (FLAC)',
   mp3: 'MP3',
   m4a: 'AAC (M4A)',
-  mp4: 'Video (MP4)',
 };
 
 export function DeleteSetDialog({ set, next }: { set: SetSummary; next: string }) {

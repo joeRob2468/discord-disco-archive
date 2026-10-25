@@ -94,33 +94,6 @@ export function encodeM4a(
 }
 
 /**
- * Web video: the captured H.264 stream copied as-is, with the leveled master as audio.
- */
-export function muxMp4(
-  rawVideo: string,
-  master: string,
-  output: string,
-  tags: Tags,
-  options?: RunOptions,
-): Promise<string> {
-  return runFfmpeg(
-    // prettier-ignore
-    [
-      '-i', rawVideo,
-      '-i', master,
-      '-map', '0:v:0', '-map', '1:a:0',
-      '-c:v', 'copy',
-      '-c:a', 'aac', '-b:a', '256k',
-      '-movflags', '+faststart',
-      '-shortest',
-      ...metadataArgs(tags),
-      output,
-    ],
-    options,
-  );
-}
-
-/**
  * Join raw capture segments (same format) back to back into one float32 WAV, for a set
  * whose stream dropped and came back within the restart grace.
  */

@@ -16,7 +16,7 @@ import {
 import { PermissionFlagsBits } from 'discord.js';
 import { z } from 'zod';
 
-const videoSizeSchema = z
+const screenSizeSchema = z
   .string()
   .regex(/^\d+x\d+$/, 'Expected WIDTHxHEIGHT, e.g. 1920x1080')
   .transform((value) => {
@@ -58,7 +58,7 @@ const browserSchema = z
     PROFILE_DIR: withDefault(z.string().min(1), './docker-data/recorder/profile'),
     /** firefox records stereo; Chromium-based browsers get Discord's stream audio in mono. */
     BROWSER_CHANNEL: withDefault(z.enum(['firefox', 'chrome', 'chromium']), 'firefox'),
-    VIDEO_SIZE: withDefault(videoSizeSchema, '1920x1080'),
+    VIDEO_SIZE: withDefault(screenSizeSchema, '1920x1080'),
     /** Discord's stream volume slider, in percent. Below 100 leaves headroom; leveling makes up the gain. */
     STREAM_VOLUME: withDefault(envInteger.min(1).max(100), '85'),
   })
@@ -75,16 +75,10 @@ const captureSchema = z
     PULSE_SOURCE: withDefault(z.string().min(1), 'recorder.monitor'),
     /** X display the browser runs on; set by the container entrypoint. */
     DISPLAY: withDefault(z.string().min(1), ':99'),
-    RECORD_VIDEO: withDefault(envBoolean, 'false'),
-    VIDEO_FPS: withDefault(envInteger.min(1).max(120), '30'),
-    VIDEO_SIZE: withDefault(videoSizeSchema, '1920x1080'),
   })
   .transform((env) => ({
     pulseSource: env.PULSE_SOURCE,
     display: env.DISPLAY,
-    recordVideo: env.RECORD_VIDEO,
-    videoFps: env.VIDEO_FPS,
-    videoSize: env.VIDEO_SIZE,
   }));
 
 const processingSchema = z
