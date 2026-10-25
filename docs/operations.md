@@ -69,7 +69,7 @@ If the current DJ's Go Live ends and nobody else is live, the chat gets "⏳ …
 
 ### Several DJs share one stream
 
-The recorder only starts a new set when the stream it records changes, so DJs who take turns on one Go Live stream end up in one long set. To cut between them: have a second account go live in the channel, `/record switch` to it, then end that stream. The recorder switches back to the shared stream on its own. Costs: the shared stream isn't recorded for the second stream's lifetime plus about 4 s (do it between tracks); the short set of the second stream lands in the archive (delete it); every piece is named after the stream's owner (retitle them); and while the second stream is live, 45 s of silence on the shared one switches to it.
+The recorder only starts a new set when the stream it records changes, so DJs who take turns on one Go Live stream would end up in one long set. At each handover, run `/record split name:<next DJ>`; add `previous:<DJ who just played>` to name the set that ends (the first set on a shared stream is named after its owner). The chat gets "✂️ Split: …". The two sets overlap by about a second, so nothing is lost; any naming mistakes can be fixed in the archive's set edit. It's refused while nothing is being recorded (e.g. the stream just dropped).
 
 ### A set is stuck "processing" or "failed"
 

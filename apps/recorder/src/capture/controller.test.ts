@@ -398,3 +398,130 @@ describe('RecordingController: long silence', () => {
     expect(web.watchStream).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('RecordingController: /record split', () => {
+  let dir: string;
+  let notices: string[];
+  let sessions: SessionManager;
+  let controller: RecordingController;
+  let events: string[];
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    dir = await mkdtemp(path.join(tmpdir(), 'dsr-split-'));
+    notices = [];
+    events = [];
+    // Record when each capture starts and stops, to check the handover overlaps.
+    vi.mocked(media.captureAudio).mockImplementation((options) => {
+      const name = path.basename(options.output);
+      events.push(`start ${name}`);
+      let finish = (): void => undefined;
+      const done = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      return {
+        done,
+        stop: () => {
+          events.push(`stop ${name}`);
+          finish();
+          return done;
+        },
+      } as ReturnType<typeof media.captureAudio>;
+    });
+    sessions = new SessionManager({
+      restartGraceMs: 60_000,
+      setTimer: () => () => undefined,
+      onSessionStart: (session) => {
+        controller.sessionStarted(session);
+      },
+      onTargetChange: (change, session) => {
+        controller.targetChanged(change, session);
+      },
+      onSessionEnd: (session) => {
+        controller.sessionEnded(session);
+      },
+    });
+    controller = new RecordingController({
+      page: {} as Page,
+      sessions,
+      config: {
+        recordingsDir: dir,
+        pulseSource: 'test',
+        streamVolume: 85,
+        handoverSilenceSeconds: 45,
+        silenceAlertSeconds: 300,
+      },
+      notify: (_channel, content) => notices.push(content),
+      postProcess: () => Promise.resolve(),
+      logger: quietLogger,
+      waitForCapture: () => {
+        events.push('new capture recording');
+        return Promise.resolve();
+      },
+    });
+    sessions.start(info, [DJ]);
+    await controller.idle();
+  });
+
+  afterEach(async () => {
+    vi.mocked(media.captureAudio).mockReset();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const sets = async () => {
+    const [folder] = await readdir(dir);
+    const session = await readJsonFile(path.join(dir, folder ?? '', 'session.json'), sessionSchema);
+    return session?.sets ?? [];
+  };
+
+  it('starts the new set before ending the old one, naming both', async () => {
+    expect(controller.split({ name: 'Afterglow', previous: 'Orbit' })).toBeUndefined();
+    await controller.idle();
+
+    const [first, second] = await sets();
+    expect(first).toMatchObject({ displayName: 'Orbit', status: 'processing' });
+    // Its start was cut (the DJ was live before recording), but the split didn't cut its end.
+    expect(first?.cut).toEqual({ start: true, end: false });
+    expect(second).toMatchObject({
+      displayName: 'Afterglow',
+      userId: DJ.userId,
+      status: 'recording',
+      partial: false,
+    });
+    expect(second?.id).toMatch(/_afterglow$/);
+    expect(events).toEqual([
+      expect.stringMatching(/^start .*_dj-a\.wav$/),
+      expect.stringMatching(/^start .*_afterglow\.wav$/),
+      'new capture recording',
+      expect.stringMatching(/^stop .*_dj-a\.wav$/),
+    ]);
+    expect(notices.at(-1)).toBe(
+      "✂️ Split: **Orbit**'s set ends here; now recording **Afterglow** on DJ A's stream.",
+    );
+  });
+
+  it("names the new set after the stream's owner by default", async () => {
+    controller.split({});
+    await controller.idle();
+    const [first, second] = await sets();
+    expect(first?.displayName).toBe('DJ A');
+    expect(second?.displayName).toBe('DJ A');
+    expect(notices.at(-1)).toBe("✂️ Split: **DJ A**'s set ends here; now recording **DJ A**.");
+  });
+
+  it('refuses while nothing is being recorded', async () => {
+    sessions.streamEnded(CHANNEL, DJ.userId);
+    await controller.idle();
+    expect(controller.split({ name: 'X' })).toContain('Nothing is being recorded');
+  });
+
+  it('carries on the new set if the stream drops and comes back', async () => {
+    controller.split({ name: 'Afterglow' });
+    await controller.idle();
+    sessions.streamEnded(CHANNEL, DJ.userId);
+    await controller.idle();
+    sessions.streamStarted(CHANNEL, DJ.userId, DJ.displayName);
+    await controller.idle();
+    expect(events.at(-1)).toMatch(/^start .*_afterglow\.seg2\.wav$/);
+  });
+});

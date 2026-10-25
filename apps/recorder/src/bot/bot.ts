@@ -26,10 +26,12 @@ export interface BotDeps {
   onRecorderLeftVoice?: (channelId: string) => void;
   /** `/record switch` to the current target: reopen its stream if it isn't being recorded. */
   retryTarget?: () => boolean;
+  /** `/record split`: why it can't split now, or undefined once the split is queued. */
+  split?: (names: { name?: string; previous?: string }) => string | undefined;
 }
 
 export async function startBot(deps: BotDeps): Promise<Client> {
-  const { config, sessions, logger, preflight, onRecorderLeftVoice, retryTarget } = deps;
+  const { config, sessions, logger, preflight, onRecorderLeftVoice, retryTarget, split } = deps;
   // Neither intent is privileged: Guilds (channels, roles) and GuildVoiceStates (Go Live).
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
@@ -84,7 +86,14 @@ export async function startBot(deps: BotDeps): Promise<Client> {
     interaction: ChatInputCommandInteraction<'cached'>,
   ): Promise<void> {
     try {
-      await handleRecordCommand(interaction, { config, sessions, logger, preflight, retryTarget });
+      await handleRecordCommand(interaction, {
+        config,
+        sessions,
+        logger,
+        preflight,
+        retryTarget,
+        split,
+      });
     } catch (error) {
       logger.error({ err: error }, 'command failed');
       const content = 'Something went wrong; check the recorder logs.';

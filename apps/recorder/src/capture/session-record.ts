@@ -176,6 +176,11 @@ export class SessionRecord {
     });
   }
 
+  /** Rename a set (`/record split` names the set that ended). */
+  renameSet(setId: string, displayName: string): Promise<void> {
+    return this.#updateSet(setId, (set) => ({ ...set, displayName }));
+  }
+
   /** Close a set. Without `error` it goes on to post-processing, so its status is `processing`. */
   endSet(
     setId: string,

@@ -54,6 +54,23 @@ export function buildRecordCommand(
     )
     .addSubcommand((sub) =>
       sub
+        .setName('split')
+        .setDescription('End the current set here and record a new one on the same stream')
+        .addStringOption((option) =>
+          option
+            .setName('name')
+            .setDescription("The new set's DJ name (default: the stream's owner)")
+            .setMaxLength(100),
+        )
+        .addStringOption((option) =>
+          option
+            .setName('previous')
+            .setDescription('Rename the set that ends here, e.g. the DJ who just played')
+            .setMaxLength(100),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName('title')
         .setDescription("Set the session's title")
         .addStringOption((option) =>

@@ -19,6 +19,10 @@
  * our side (the browser stopped feeding the capture), so the controller says so in chat
  * and reopens it, once per silence. The capture keeps running throughout.
  *
+ * `/record split` ends the current set and records the same stream as a new one, for DJs
+ * sharing a stream. The new capture starts before the old one stops, so the handover
+ * overlaps by a moment instead of losing it.
+ *
  * Restart grace: when the session manager holds a set open after its stream dropped, the
  * capture stops but the set doesn't end. If the stream comes back, the next capture goes
  * into a new segment file; when the set ends, its segments are joined into its raw WAV.
@@ -54,6 +58,10 @@ const SILENCE_THRESHOLD_DB = -60;
 const SILENCE_RECHECK_MS = 5_000;
 /** float32 stereo at 48 kHz; the capture format from `@dsr/media`'s `audioCaptureArgs`. */
 const WAV_BYTES_PER_SECOND = 48_000 * 2 * 4;
+/** A split stops the old capture once the new one holds this much audio... */
+const SPLIT_OVERLAP_BYTES = WAV_BYTES_PER_SECOND / 4;
+/** ...or after this long, whichever comes first. */
+const SPLIT_WAIT_MS = 5_000;
 /** Warn when a capture holds this much less audio than the time it ran. */
 const MISSING_AUDIO_WARN_SECONDS = 1;
 
@@ -80,6 +88,8 @@ export interface ControllerDeps {
   now?: () => Date;
   /** Waits before each rejoin attempt; the first is usually 0. */
   rejoinDelaysMs?: readonly number[];
+  /** Resolves once a new capture is recording, before a split stops the old one. */
+  waitForCapture?: (file: string) => Promise<void>;
 }
 
 const REJOIN_DELAYS_MS = [0, 10_000, 30_000, 60_000];
@@ -88,6 +98,19 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+
+/** Wait until `file` holds a moment of audio (or give up after `SPLIT_WAIT_MS`). */
+async function waitForAudio(file: string): Promise<void> {
+  const deadline = Date.now() + SPLIT_WAIT_MS;
+  while (Date.now() < deadline) {
+    const size = await stat(file).then(
+      (info) => info.size,
+      () => 0,
+    );
+    if (size >= SPLIT_OVERLAP_BYTES) return;
+    await sleep(100);
+  }
+}
 
 interface ActiveCapture {
   setId: string;
@@ -133,6 +156,7 @@ export class RecordingController {
   /** Set while we leave on purpose, so our own leave isn't taken for a drop. */
   #leaving = false;
   readonly #rejoinDelaysMs: readonly number[];
+  readonly #waitForCapture: (file: string) => Promise<void>;
 
   constructor(deps: ControllerDeps) {
     this.#page = deps.page;
@@ -143,6 +167,7 @@ export class RecordingController {
     this.#now = deps.now ?? (() => new Date());
     this.#postProcess = deps.postProcess;
     this.#rejoinDelaysMs = deps.rejoinDelaysMs ?? REJOIN_DELAYS_MS;
+    this.#waitForCapture = deps.waitForCapture ?? waitForAudio;
   }
 
   sessionStarted(session: SessionInfo): void {
@@ -188,6 +213,28 @@ export class RecordingController {
       await this.#openStream(target, true, session);
     });
     return true;
+  }
+
+  /**
+   * `/record split`: end the current set here and record the same stream as a new set,
+   * named `name` (default: the stream's owner); `previous` renames the set that ends.
+   * Returns why it can't, or undefined once the split is queued.
+   */
+  split({ name, previous }: { name?: string; previous?: string }): string | undefined {
+    const session = this.#sessions.active;
+    const owner = this.#sessions.status()?.target;
+    const capture = this.#capture;
+    if (
+      !session ||
+      !owner ||
+      !capture ||
+      capture.heldAt ||
+      capture.target.userId !== owner.userId
+    ) {
+      return 'Nothing is being recorded right now, so there is no set to split.';
+    }
+    this.#enqueue('split', () => this.#split(capture, session, owner, name, previous));
+    return undefined;
   }
 
   /**
@@ -446,8 +493,13 @@ export class RecordingController {
     }
   }
 
-  async #startCapture(target: Target, partial: boolean, session: SessionInfo): Promise<void> {
-    if (!this.#record) return;
+  /** Start a set and its capture; returns it (undefined without a session folder). */
+  async #startCapture(
+    target: Target,
+    partial: boolean,
+    session: SessionInfo,
+  ): Promise<ActiveCapture | undefined> {
+    if (!this.#record) return undefined;
     const { setId, rawAudioPath } = await this.#record.startSet(target, this.#now(), partial);
     const capture: ActiveCapture = {
       setId,
@@ -469,6 +521,7 @@ export class RecordingController {
     this.#capture = capture;
     this.#watchExit(capture, session);
     this.#logger.info({ setId, file: rawAudioPath }, 'capture started');
+    return capture;
   }
 
   #runCapture(output: string, onSilence: (event: SilenceEvent) => void): FfmpegProcess {
@@ -544,11 +597,15 @@ export class RecordingController {
     return error;
   }
 
-  /** End the set: stop capturing (unless held), join its segments, then post-process. */
+  /** End the current set: stop capturing (unless held), join its segments, then post-process. */
   async #stopCapture(partial: boolean): Promise<void> {
     const capture = this.#capture;
     if (!capture) return;
     this.#capture = undefined;
+    await this.#endCapture(capture, partial);
+  }
+
+  async #endCapture(capture: ActiveCapture, partial: boolean): Promise<void> {
     const held = capture.heldAt;
     // A held set ended when its stream dropped, not now.
     const error = held ? undefined : await this.#stopSegment(capture);
@@ -565,6 +622,37 @@ export class RecordingController {
     if (error === undefined && this.#record) {
       this.#processing = this.#postProcess(this.#record, capture.setId);
     }
+  }
+
+  async #split(
+    old: ActiveCapture,
+    session: SessionInfo,
+    owner: Target,
+    name: string | undefined,
+    previous: string | undefined,
+  ): Promise<void> {
+    // The stream dropped or moved on while this was queued.
+    if (this.#capture !== old || old.heldAt || old.stopping) {
+      this.#logger.info({ setId: old.setId }, 'split skipped: the set already ended');
+      return;
+    }
+    if (previous !== undefined) await this.#record?.renameSet(old.setId, previous);
+    const ended = previous ?? old.target.displayName;
+    const next: Target = { ...owner, displayName: name ?? owner.displayName };
+    // The new capture first, the old one stopped once the new one is recording: the
+    // handover overlaps by a moment instead of losing it.
+    const started = await this.#startCapture(next, false, session);
+    if (started) await this.#waitForCapture(started.file);
+    await this.#endCapture(old, false);
+    this.#logger.info(
+      { from: old.setId, to: started?.setId, owner: owner.displayName },
+      'set split',
+    );
+    this.#notify(
+      session.channelId,
+      `✂️ Split: **${ended}**'s set ends here; now recording **${next.displayName}**` +
+        (next.displayName === owner.displayName ? '.' : ` on ${owner.displayName}'s stream.`),
+    );
   }
 
   /**

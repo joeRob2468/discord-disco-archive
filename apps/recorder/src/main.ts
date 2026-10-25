@@ -141,6 +141,7 @@ const client = await startBot({
     controller.recorderLeftVoice(channelId);
   },
   retryTarget: () => controller.retryTarget(),
+  split: (names) => controller.split(names),
 });
 clientRef.current = client;
 

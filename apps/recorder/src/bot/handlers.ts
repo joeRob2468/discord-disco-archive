@@ -21,6 +21,8 @@ export interface HandlerDeps {
   preflight?: (() => Promise<string | undefined>) | undefined;
   /** Reopen the current target's stream if it isn't being recorded; false if it is. */
   retryTarget?: (() => boolean) | undefined;
+  /** `/record split`: why it can't split now, or undefined once the split is queued. */
+  split?: ((names: { name?: string; previous?: string }) => string | undefined) | undefined;
 }
 
 type Interaction = ChatInputCommandInteraction<'cached'>;
@@ -73,6 +75,8 @@ export async function handleRecordCommand(
       return status(interaction, deps);
     case 'switch':
       return switchTarget(interaction, deps);
+    case 'split':
+      return split(interaction, deps);
     case 'title':
       return title(interaction, deps);
     default:
@@ -156,6 +160,21 @@ async function switchTarget(
   }
   // The switch itself is announced in the channel by the announcer.
   await replyPrivately(interaction, `Switching to <@${user.id}>.`);
+}
+
+async function split(
+  interaction: Interaction,
+  { split: splitSet, logger }: HandlerDeps,
+): Promise<void> {
+  const text = (option: string): string | undefined => {
+    const value = interaction.options.getString(option)?.trim();
+    return value === '' ? undefined : value;
+  };
+  const refusal =
+    splitSet?.({ name: text('name'), previous: text('previous') }) ?? 'Not available.';
+  if (refusal) return refuse(interaction, logger, refusal);
+  // The split itself is announced in the channel by the controller.
+  await replyPrivately(interaction, 'Splitting the set here.');
 }
 
 async function title(interaction: Interaction, { sessions, logger }: HandlerDeps): Promise<void> {
