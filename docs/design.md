@@ -42,7 +42,7 @@ Guild slash commands, registered for `DISCORD_GUILD_ID` at startup. Who can use 
 - **Several sessions in a night** are fine: `/record start` always makes a new one, and `/record resume` reopens an earlier one (e.g. after a `/record stop` too soon, or a problem fixed by leaving voice). A resumed session shows as recording in the archive until it's stopped again.
 - **One session at a time.** Before joining, `/record start` checks that the recorder account can see and connect to the channel and that its browser is logged in (no login page or captcha); otherwise it refuses with the reason.
 - **Replies:** start, stop and title replies are public (they double as the recording notice); refusals are private.
-- **Channel notices** (`ANNOUNCE_SETS`): 🔴 now recording, 🔀 switched (with the reason), ⏸️ waiting for the next stream, ⏳/▶️ stream dropped/back, ✂️ split, plus ⚠️ alerts.
+- **Channel notices** (`ANNOUNCE_SETS`): 🔴 now recording, 🔀 switched (with the reason), ⏸️ waiting for the next stream, ⏳/▶️ stream dropped/back, ✂️ split, 🔇 silence (✅ when it ends), plus ⚠️ alerts.
 - **Split:** the new set's capture starts before the old one stops (once it holds 0.25 s of audio), so the two overlap by about a second at the handover instead of losing it. Neither end counts as cut, so a split alone doesn't make either set partial.
 
 ### Whose stream to record
@@ -57,7 +57,7 @@ The recorder watches one stream at a time.
 
 Every switch ends the current set (it's processed) and starts the next. Known gap: if the next DJ starts playing while the current one is still audible, their first moments are missed until a switch.
 
-**Long silence:** when the current DJ's stream is still live but silent for `SILENCE_ALERT_SECONDS` (300), the chat gets a ⚠️ and the recorder reopens the stream in the browser, in case it stopped playing on its side; the set keeps recording. Once per silence, with a ✅ when the audio is back.
+**Silence:** when the current DJ's stream is silent with nobody else live, the chat gets a 🔇 at `HANDOVER_SILENCE_SECONDS` (45) and again at 3 min. At `SILENCE_ALERT_SECONDS` (300) it gets a ⚠️ and the recorder reopens the stream in the browser, in case it stopped playing on its side; the set keeps recording. Once per silence, with a ✅ when the audio is back. (Silence with someone else live is a handover, announced as 🔀.)
 
 ### When things go wrong
 

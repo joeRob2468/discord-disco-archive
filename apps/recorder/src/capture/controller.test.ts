@@ -374,17 +374,24 @@ describe('RecordingController: long silence', () => {
     onSilence?.({ type, at: 0 });
   };
 
-  it('alerts and reopens the stream, keeping the capture, then says when audio is back', async () => {
+  it('reports a silence at 45 s and 3 min, reopens at 5 min, then says the audio is back', async () => {
     silence('start');
-    // Reported after 45 s of silence; the alert comes at 300 s.
-    await vi.advanceTimersByTimeAsync(254_000);
+    // Reported once silent for 45 s (now); the notices come at 45 s and 3 min, the alert at 5.
     await controller.idle();
-    expect(notices).toEqual([]);
+    expect(notices).toEqual(["🔇 **DJ A**'s stream has been silent for 45 s."]);
+    await vi.advanceTimersByTimeAsync(134_000);
+    expect(notices).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(notices.at(-1)).toBe(
+      "🔇 **DJ A**'s stream has been silent for 3 min. If it stays silent, the recorder will reopen it at 5 min.",
+    );
+    await vi.advanceTimersByTimeAsync(119_000);
+    await controller.idle();
+    expect(notices).toHaveLength(2);
+    expect(web.watchStream).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1_000);
     await controller.idle();
-    expect(notices).toEqual([
-      expect.stringContaining("**DJ A**'s stream has been silent for 5 min"),
-    ]);
+    expect(notices.at(-1)).toContain("⚠️ **DJ A**'s stream has been silent for 5 min");
     expect(web.stopWatching).toHaveBeenCalled();
     expect(web.watchStream).toHaveBeenCalledTimes(2);
     expect(media.captureAudio).toHaveBeenCalledTimes(1);
@@ -393,13 +400,26 @@ describe('RecordingController: long silence', () => {
     expect(notices.at(-1)).toBe("✅ **DJ A**'s stream is audible again.");
   });
 
-  it("doesn't alert when the audio comes back in time", async () => {
+  it('hands over to someone else live without a silence notice', async () => {
+    sessions.streamStarted(CHANNEL, '400000000000000002', 'DJ B');
+    silence('start');
+    await controller.idle();
+    await vi.advanceTimersByTimeAsync(600_000);
+    await controller.idle();
+    expect(notices.filter((notice) => notice.startsWith('🔇'))).toEqual([]);
+    expect(sessions.status()?.target?.displayName).toBe('DJ B');
+  });
+
+  it('only says the audio is back when it returns before the reopen', async () => {
     silence('start');
     await vi.advanceTimersByTimeAsync(60_000);
     silence('end');
     await vi.advanceTimersByTimeAsync(600_000);
     await controller.idle();
-    expect(notices).toEqual([]);
+    expect(notices).toEqual([
+      "🔇 **DJ A**'s stream has been silent for 45 s.",
+      "✅ **DJ A**'s stream is audible again.",
+    ]);
     expect(web.watchStream).toHaveBeenCalledTimes(1);
   });
 });

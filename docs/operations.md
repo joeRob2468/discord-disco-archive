@@ -55,9 +55,9 @@ The chat gets "⚠️ The recorder dropped out of voice… Rejoining…", then "
 
 The recorder closes Discord popups and retries once on its own (log: `closed Discord popups`, `could not open stream; retrying`). If that fails too, the chat gets "⚠️ Couldn't open …'s stream": run `/record switch` to that DJ to retry, and look at the newest `open-failed` screenshot in `APP_DATA_DIR/recorder/screenshots`. If it still fails, `/record stop` and `/record start` (leaving and rejoining voice) has cleared it before. When a stream goes silent the recorder also saves a `silent` screenshot and closes any popup (log: `checked silent stream`).
 
-### "…'s stream has been silent for 5 min"
+### "🔇 …'s stream has been silent" / "⚠️ … silent for 5 min"
 
-The current DJ is live but nothing has reached the recording for `SILENCE_ALERT_SECONDS`. The recorder has already reopened the stream (log: `stream silent too long; reopening`, `reopened silent stream`) and saved a `silent-long` screenshot. If people in the call can hear the DJ and no ✅ follows within a minute, check noVNC, then `/record switch` to another live stream and back, or `/record stop` and `/record start`. If the DJ is the one having audio trouble, nothing needs doing.
+🔇 at 45 s and 3 min: the current DJ is live but nothing has reached the recording. Check whether people in the call can hear them: if they can, the problem is on the recorder's side (watch for the ⚠️); if not, it's the DJ's. ⚠️ at `SILENCE_ALERT_SECONDS` (5 min): the recorder has already reopened the stream (log: `stream silent too long; reopening`, `reopened silent stream`) and saved a `silent-long` screenshot. If people in the call can hear the DJ and no ✅ follows within a minute, check noVNC, then `/record switch` to another live stream and back, or `/record stop` and `/record start`. If the DJ is the one having audio trouble, nothing needs doing.
 
 ### Carrying on a session
 

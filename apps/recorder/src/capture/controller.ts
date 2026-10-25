@@ -15,9 +15,10 @@
  * opening a stream and when the stream goes silent; a failed open is retried once. Both
  * save a screenshot of the browser, for finding out what happened afterwards.
  *
- * A live stream that stays silent for `silenceAlertSeconds` may have stopped playing on
- * our side (the browser stopped feeding the capture), so the controller says so in chat
- * and reopens it, once per silence. The capture keeps running throughout.
+ * A live stream that stays silent is reported in chat as it goes on (at the handover's
+ * seconds, then `SILENCE_WARN_SECONDS`), and at `silenceAlertSeconds` it may have stopped
+ * playing on our side (the browser stopped feeding the capture), so the controller
+ * reopens it, once per silence. The capture keeps running throughout.
  *
  * `/record split` ends the current set and records the same stream as a new one, for DJs
  * sharing a stream. The new capture starts before the old one stops, so the handover
@@ -56,6 +57,8 @@ import { SessionRecord } from './session-record.ts';
 
 /** Below this the stream counts as silent. Paused or muted streams measure about -91 dB. */
 const SILENCE_THRESHOLD_DB = -60;
+/** A second chat notice of a continuing silence, before the reopen. */
+const SILENCE_WARN_SECONDS = 180;
 /** While silent, how often to re-check for someone else live to hand over to. */
 const SILENCE_RECHECK_MS = 5_000;
 /** float32 stereo at 48 kHz; the capture format from `@dsr/media`'s `audioCaptureArgs`. */
@@ -128,10 +131,11 @@ interface ActiveCapture {
   ffmpeg: FfmpegProcess;
   stopping: boolean;
   silenceTimer: NodeJS.Timeout | undefined;
-  /** Runs the long-silence alert, while silent. */
+  /** The 3-minute notice and the long-silence alert, while silent. */
+  warnTimer: NodeJS.Timeout | undefined;
   alertTimer: NodeJS.Timeout | undefined;
-  /** Set once the current silence was alerted, to say when the audio is back. */
-  alerted: boolean;
+  /** Set once chat was told of the current silence, to say when the audio is back. */
+  noticed: boolean;
   /** Set while the set is held open between segments (its stream dropped). */
   heldAt: Date | undefined;
 }
@@ -588,8 +592,9 @@ export class RecordingController {
       }),
       stopping: false,
       silenceTimer: undefined,
+      warnTimer: undefined,
       alertTimer: undefined,
-      alerted: false,
+      noticed: false,
       heldAt: undefined,
     };
     this.#capture = capture;
@@ -779,8 +784,8 @@ export class RecordingController {
       this.#logger.info({ target: capture.target.displayName }, 'audio resumed');
       this.#clearSilence(capture);
       const channelId = this.#sessions.active?.channelId;
-      if (capture.alerted && channelId !== undefined) {
-        capture.alerted = false;
+      if (capture.noticed && channelId !== undefined) {
+        capture.noticed = false;
         this.#notify(channelId, `✅ ${this.#streamOf(capture)} is audible again.`);
       }
       return;
@@ -789,16 +794,6 @@ export class RecordingController {
       { target: capture.target.displayName, seconds: this.#config.handoverSilenceSeconds },
       'stream went silent',
     );
-    // A popup may have cut the audio: record what the browser shows, and close it.
-    this.#enqueue('silence check', async () => {
-      if (this.#capture !== capture || capture.stopping) return;
-      const screenshot = await this.#screenshot('silent');
-      const popups = await this.#closePopups();
-      this.#logger.info(
-        { target: capture.target.displayName, screenshot, popups },
-        'checked silent stream',
-      );
-    });
     // Hand over now if someone else is live; otherwise keep checking while it stays
     // silent. Returns true once there is nothing left to check.
     const check = (): boolean => {
@@ -809,22 +804,60 @@ export class RecordingController {
     };
     this.#clearSilence(capture);
     // `silencedetect` reports silence once it has lasted the handover's seconds.
-    const alertDelayMs =
-      Math.max(0, this.#config.silenceAlertSeconds - this.#config.handoverSilenceSeconds) * 1000;
+    const after = (seconds: number): number =>
+      Math.max(0, seconds - this.#config.handoverSilenceSeconds) * 1000;
+    if (SILENCE_WARN_SECONDS < this.#config.silenceAlertSeconds) {
+      capture.warnTimer = setTimeout(() => {
+        capture.warnTimer = undefined;
+        this.#silenceNotice(
+          capture,
+          `has been silent for ${String(SILENCE_WARN_SECONDS / 60)} min. If it stays silent, ` +
+            `the recorder will reopen it at ${String(Math.round(this.#config.silenceAlertSeconds / 60))} min.`,
+        );
+      }, after(SILENCE_WARN_SECONDS));
+    }
     capture.alertTimer = setTimeout(() => {
       capture.alertTimer = undefined;
       this.#enqueue('silence alert', () => this.#silenceAlert(capture));
-    }, alertDelayMs);
-    if (check()) return;
+    }, after(this.#config.silenceAlertSeconds));
+    // Handing over to someone else live is announced as a switch, not as a silence.
+    const done = check();
+    // A popup may have cut the audio: record what the browser shows, and close it.
+    this.#enqueue('silence check', async () => {
+      if (this.#capture !== capture || capture.stopping) return;
+      const screenshot = await this.#screenshot('silent');
+      const popups = await this.#closePopups();
+      this.#logger.info(
+        { target: capture.target.displayName, screenshot, popups },
+        'checked silent stream',
+      );
+      if (!done) {
+        this.#silenceNotice(
+          capture,
+          `has been silent for ${String(this.#config.handoverSilenceSeconds)} s.`,
+        );
+      }
+    });
+    if (done) return;
     capture.silenceTimer = setInterval(() => {
       if (check()) this.#clearSilence(capture);
     }, SILENCE_RECHECK_MS);
   }
 
+  /** Tell chat about a continuing silence of the current set's stream ("🔇 … `text`"). */
+  #silenceNotice(capture: ActiveCapture, text: string): void {
+    const session = this.#sessions.active;
+    if (this.#capture !== capture || capture.stopping || capture.heldAt || !session) return;
+    capture.noticed = true;
+    this.#notify(session.channelId, `🔇 ${this.#streamOf(capture)} ${text}`);
+  }
+
   #clearSilence(capture: ActiveCapture): void {
     if (capture.silenceTimer) clearInterval(capture.silenceTimer);
+    if (capture.warnTimer) clearTimeout(capture.warnTimer);
     if (capture.alertTimer) clearTimeout(capture.alertTimer);
     capture.silenceTimer = undefined;
+    capture.warnTimer = undefined;
     capture.alertTimer = undefined;
   }
 
@@ -854,7 +887,7 @@ export class RecordingController {
       { target: name, seconds: this.#config.silenceAlertSeconds },
       'stream silent too long; reopening',
     );
-    capture.alerted = true;
+    capture.noticed = true;
     this.#notify(
       session.channelId,
       `⚠️ ${this.#streamOf(capture)} has been silent for ${String(minutes)} min. ` +
