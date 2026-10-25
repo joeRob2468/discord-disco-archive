@@ -62,6 +62,7 @@ describe('importing uploaded sets', () => {
     const [set] = await sessionSets(record);
     expect(set).toMatchObject({
       displayName: 'Afterglow',
+      nameGiven: true,
       userId: request.userId,
       startedAt: request.startedAt,
       status: 'processing',

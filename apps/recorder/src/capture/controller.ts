@@ -498,9 +498,15 @@ export class RecordingController {
     target: Target,
     partial: boolean,
     session: SessionInfo,
+    nameGiven = false,
   ): Promise<ActiveCapture | undefined> {
     if (!this.#record) return undefined;
-    const { setId, rawAudioPath } = await this.#record.startSet(target, this.#now(), partial);
+    const { setId, rawAudioPath } = await this.#record.startSet(
+      target,
+      this.#now(),
+      partial,
+      nameGiven,
+    );
     const capture: ActiveCapture = {
       setId,
       mainFile: rawAudioPath,
@@ -641,7 +647,7 @@ export class RecordingController {
     const next: Target = { ...owner, displayName: name ?? owner.displayName };
     // The new capture first, the old one stopped once the new one is recording: the
     // handover overlaps by a moment instead of losing it.
-    const started = await this.#startCapture(next, false, session);
+    const started = await this.#startCapture(next, false, session, name !== undefined);
     if (started) await this.#waitForCapture(started.file);
     await this.#endCapture(old, false);
     this.#logger.info(

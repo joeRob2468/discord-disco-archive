@@ -302,6 +302,35 @@ describe('catalog', () => {
       expect(catalog.getSet('set-1', false)?.name).toBe('Owl');
     });
 
+    it("shows a set's given name ahead of the DJ's, without renaming the DJ", async () => {
+      // A later set on DJ A's stream, split off or uploaded under another DJ's name.
+      await recordings.write(
+        '2026-11-28_disco',
+        makeSession({
+          id: 'session-3',
+          startedAt: '2026-11-28T20:00:00.000Z',
+          sets: [
+            makeSet({
+              id: 'set-4',
+              userId: DJ_A,
+              displayName: 'Afterglow',
+              nameGiven: true,
+              startedAt: '2026-11-28T21:00:00.000Z',
+              endedAt: '2026-11-28T22:00:00.000Z',
+            }),
+          ],
+        }),
+      );
+      await syncCatalog(db, recordings.dir);
+      catalog.updateStreamer(DJ_A, { displayName: 'Owl' }, 'test');
+      expect(catalog.getSet('set-4', false)?.name).toBe('Afterglow');
+      expect(catalog.getSet('set-1', false)?.name).toBe('Owl');
+      // Though it's DJ A's latest set, their own recorded name stays.
+      expect(catalog.getStreamer(DJ_A, false)?.recordedName).toBe('Night Owl II');
+      catalog.updateSet('set-4', { displayName: 'Afterglow b2b Owl' }, 'test');
+      expect(catalog.getSet('set-4', false)?.name).toBe('Afterglow b2b Owl');
+    });
+
     it('hides sets from everyone but admins, and can revert to the recorded value', () => {
       catalog.updateSet('set-2', { hidden: true }, 'test');
       expect(catalog.getSet('set-2', false)).toBeUndefined();

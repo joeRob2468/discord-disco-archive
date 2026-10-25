@@ -123,6 +123,7 @@ export class SessionRecord {
     target: { userId: string; displayName: string },
     startedAt: Date,
     partial: boolean,
+    nameGiven = false,
   ): Promise<{ setId: string; rawAudioPath: string }> {
     return this.#exclusive(async () => {
       const setId = setBaseName(startedAt, target.displayName, target.userId);
@@ -131,6 +132,7 @@ export class SessionRecord {
         id: setId,
         userId: target.userId,
         displayName: target.displayName,
+        ...(nameGiven && { nameGiven }),
         startedAt: startedAt.toISOString(),
         partial,
         cut: { start: partial, end: false },
@@ -163,6 +165,7 @@ export class SessionRecord {
         id: setId,
         userId: dj.userId,
         displayName: dj.displayName,
+        nameGiven: true,
         startedAt: startedAt.toISOString(),
         // Its end is known once post-processing has measured it.
         partial: false,
@@ -176,9 +179,9 @@ export class SessionRecord {
     });
   }
 
-  /** Rename a set (`/record split` names the set that ended). */
+  /** Give a set its own name (`/record split` names the set that ended). */
   renameSet(setId: string, displayName: string): Promise<void> {
-    return this.#updateSet(setId, (set) => ({ ...set, displayName }));
+    return this.#updateSet(setId, (set) => ({ ...set, displayName, nameGiven: true }));
   }
 
   /** Close a set. Without `error` it goes on to post-processing, so its status is `processing`. */

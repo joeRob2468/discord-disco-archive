@@ -34,8 +34,13 @@ export const setStatusSchema = z.enum(['recording', 'processing', 'ready', 'fail
 export const streamSetSchema = z.object({
   id: z.string().min(1),
   userId: snowflakeSchema,
-  /** Server display name when the stream started. */
+  /** Server display name when the stream started, or `nameGiven`. */
   displayName: z.string().min(1),
+  /**
+   * The name was given for this set (`/record split`, an upload) rather than taken from
+   * the stream owner: the archive shows it ahead of the DJ's own name.
+   */
+  nameGiven: z.boolean().optional(),
   avatarUrl: z.url().optional(),
   startedAt: timestampSchema,
   endedAt: timestampSchema.optional(),

@@ -479,11 +479,12 @@ describe('RecordingController: /record split', () => {
     await controller.idle();
 
     const [first, second] = await sets();
-    expect(first).toMatchObject({ displayName: 'Orbit', status: 'processing' });
+    expect(first).toMatchObject({ displayName: 'Orbit', nameGiven: true, status: 'processing' });
     // Its start was cut (the DJ was live before recording), but the split didn't cut its end.
     expect(first?.cut).toEqual({ start: true, end: false });
     expect(second).toMatchObject({
       displayName: 'Afterglow',
+      nameGiven: true,
       userId: DJ.userId,
       status: 'recording',
       partial: false,
@@ -506,6 +507,8 @@ describe('RecordingController: /record split', () => {
     const [first, second] = await sets();
     expect(first?.displayName).toBe('DJ A');
     expect(second?.displayName).toBe('DJ A');
+    // The owner's own name: nothing given.
+    expect(second?.nameGiven).toBeUndefined();
     expect(notices.at(-1)).toBe("✂️ Split: **DJ A**'s set ends here; now recording **DJ A**.");
   });
 

@@ -102,22 +102,26 @@ export async function syncCatalog(
       recorded_title = excluded.recorded_title, missing = 0, synced_at = excluded.synced_at`);
 
   // Sets are processed oldest first, so the streamer row ends up with their latest name.
+  // A name given to a set (a split, an upload) is that set's, not the DJ's: it only names a
+  // DJ who has no other.
   const upsertStreamer = db.prepare(`
     INSERT INTO streamers (user_id, recorded_name, avatar_url)
     VALUES (@userId, @name, @avatarUrl)
     ON CONFLICT (user_id) DO UPDATE SET
-      recorded_name = excluded.recorded_name,
+      recorded_name = CASE WHEN @nameGiven THEN streamers.recorded_name
+                           ELSE excluded.recorded_name END,
       avatar_url = COALESCE(excluded.avatar_url, streamers.avatar_url)`);
 
   const upsertSet = db.prepare(`
-    INSERT INTO sets (id, uuid, session_id, user_id, position, recorded_name, started_at,
-                      ended_at, partial, status, recorded_error, files, file_sizes,
-                      recorded_hidden, missing)
-    VALUES (@id, @uuid, @sessionId, @userId, @position, @name, @startedAt,
+    INSERT INTO sets (id, uuid, session_id, user_id, position, recorded_name,
+                      recorded_name_given, started_at, ended_at, partial, status,
+                      recorded_error, files, file_sizes, recorded_hidden, missing)
+    VALUES (@id, @uuid, @sessionId, @userId, @position, @name, @nameGiven, @startedAt,
             @endedAt, @partial, @status, @error, @files, @fileSizes, @hidden, 0)
     ON CONFLICT (id) DO UPDATE SET
       uuid = excluded.uuid, session_id = excluded.session_id, user_id = excluded.user_id,
       position = excluded.position, recorded_name = excluded.recorded_name,
+      recorded_name_given = excluded.recorded_name_given,
       started_at = excluded.started_at, ended_at = excluded.ended_at,
       partial = excluded.partial, status = excluded.status,
       recorded_error = excluded.recorded_error, files = excluded.files,
@@ -204,6 +208,7 @@ export async function syncCatalog(
       upsertStreamer.run({
         userId: set.userId,
         name: set.displayName,
+        nameGiven: set.nameGiven ? 1 : 0,
         avatarUrl: set.avatarUrl ?? null,
       });
       const before = previousSets.get(set.id);
@@ -236,6 +241,7 @@ export async function syncCatalog(
         userId: set.userId,
         position,
         name: set.displayName,
+        nameGiven: set.nameGiven ? 1 : 0,
         startedAt: set.startedAt,
         endedAt: set.endedAt ?? null,
         partial: set.partial ? 1 : 0,

@@ -124,7 +124,7 @@ Hono, server-rendered `hono/jsx`, daisyUI on Tailwind, htmx (with `hx-boost`, so
 - **Link previews:** Open Graph tags and a preview card on the home and login pages.
 - **Access:** public unless `ARCHIVE_PASSWORD` is set (one shared viewer password). `ARCHIVE_ADMIN_PASSWORD` enables admin features. Signed `HttpOnly` cookies, CSRF-checked form posts, constant-time password checks.
 - **Admin:** **Add set…** from a file (see [Uploaded sets](#uploaded-sets)), edit dialogs for sets, sessions and DJs (titles, names, descriptions, tags, links, images; nothing changes until Save), reorder sets within an album, **Archive** (hide; reversible) or **Delete** (permanent: files and the `session.json` entry, or the whole session folder; refused while recording unless forced). `/admin` shows totals, storage use and sets needing attention; `/admin/sets` lists every set; `/admin/activity` lists every change, by the admin or by the recorder.
-- **Name precedence:** set edit → DJ edit → recorded display name.
+- **Name precedence:** set edit → name given to the set (`/record split`, an upload; `nameGiven` in `session.json`) → DJ edit → recorded display name. A given name never renames the DJ.
 
 ## Deployment
 
