@@ -23,7 +23,7 @@ const FORMATS = {
   mp3: { file: 'mp3', ext: 'mp3', mime: 'audio/mpeg' },
   m4a: { file: 'm4a', ext: 'm4a', mime: 'audio/mp4' },
   mp4: { file: 'mp4', ext: 'mp4', mime: 'video/mp4' },
-  // The float32 capture (or an uploaded set's original file; see `rawType`), playable
+  // The float32 capture (or an uploaded set's original file; see `fileType`), playable
   // before (or without) leveling.
   raw: { file: 'rawAudio', ext: 'wav', mime: 'audio/wav' },
 } as const satisfies Record<string, { file: keyof SetFiles; ext: string; mime: string }>;

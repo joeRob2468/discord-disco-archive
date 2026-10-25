@@ -11,7 +11,6 @@
  * (docs/research.md, milestone 5). Here every set gets the same gain treatment, and
  * only the peaks above the ceiling are touched.
  */
-import { runFfmpeg, type RunOptions } from './ffmpeg.ts';
 
 export interface LoudnessTargets {
   /** Integrated loudness, LUFS (-70 to -5). */
@@ -94,17 +93,4 @@ export function parseMeasurement(stderr: string): LoudnessMeasurement {
     throw new SilentInputError();
   }
   return measurement;
-}
-
-/** Pass 1: measure `input` against `targets`. */
-export async function measureLoudness(
-  input: string,
-  targets: LoudnessTargets,
-  options?: RunOptions,
-): Promise<LoudnessMeasurement> {
-  const stderr = await runFfmpeg(
-    ['-i', input, '-vn', '-af', measureFilter(targets), '-f', 'null', '-'],
-    options,
-  );
-  return parseMeasurement(stderr);
 }

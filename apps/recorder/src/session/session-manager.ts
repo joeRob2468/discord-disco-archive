@@ -208,7 +208,7 @@ export class SessionManager {
       this.#setTarget(next, 'stopped-streaming');
       return;
     }
-    // Nobody else is live: hold the set open in case this stream comes back.
+    // Rule 3: nobody else is live, so hold the set open in case this stream comes back.
     const held = this.#target;
     this.#target = undefined;
     this.#held = held;
@@ -235,7 +235,7 @@ export class SessionManager {
     this.#held = undefined;
   }
 
-  /** Rule 3: the current stream has been silent for the handover window. */
+  /** Rule 4: the current stream has been silent for the handover window. */
   targetSilent(): TargetChange | undefined {
     if (!this.#target) return undefined;
     const next = this.#tracker.earliest(this.#target.userId);
@@ -244,7 +244,7 @@ export class SessionManager {
     return this.#setTarget(next, 'silence');
   }
 
-  /** Rule 4: `/record switch`. */
+  /** Rule 5: `/record switch`. */
   switchTo(userId: string, requestedBy: string): SwitchResult {
     if (!this.#session) return { ok: false, reason: 'No recording session is active.' };
     const stream = this.#tracker.get(userId);

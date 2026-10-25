@@ -2,7 +2,7 @@
  * Acts on the session manager's decisions: joins and leaves voice, opens the target's
  * stream, and runs one ffmpeg capture per set, handing each finished set to
  * post-processing. When the capture reports a long silence, it asks the session
- * manager whether to hand over (rule 3).
+ * manager whether to hand over (rule 4).
  *
  * Browser steps are slow and must not interleave, so every event goes through one
  * queue and runs to completion before the next starts.

@@ -2,15 +2,10 @@
 import { snowflakeSchema } from '@dsr/core';
 import type { Sort, SortDir } from '../catalog/catalog.ts';
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 export function pageParam(value: string | undefined): number {
   const page = Number(value);
   return Number.isInteger(page) && page >= 1 && page <= 10_000 ? page : 1;
 }
-
-export const dateParam = (value: string | undefined): string | undefined =>
-  value && DATE.test(value) ? value : undefined;
 
 export const snowflakeParam = (value: string | undefined): string | undefined =>
   value && snowflakeSchema.safeParse(value).success ? value : undefined;
