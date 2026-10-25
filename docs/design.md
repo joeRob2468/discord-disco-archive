@@ -108,6 +108,7 @@ Hono, server-rendered `hono/jsx`, daisyUI on Tailwind, htmx (with `hx-boost`, so
 
 - **Pages:** home (latest sessions, DJs, popular sets), `/search` (every set, filtered live by text, DJ or session), sessions as albums (`/sessions/<uuid>`, with tracklist), set pages under their album, and stats tables at `/sessions` and `/djs`. Set rows expand in place into the set's details.
 - **Player:** a bottom bar with a queue (play an album, a list or a set; add to it, jump within it, remove from it), stop, seek, volume and media keys. Plays the MP3, falling back to the raw WAV until a set is leveled. A play counts when a set starts playing.
+- **Forms:** submit buttons are disabled while their request is pending.
 - **Downloads:** MP3 and FLAC (and the raw WAV while it exists), named `DJ - Title (date).ext`.
 - **Link previews:** Open Graph tags and a preview card on the home and login pages.
 - **Access:** public unless `ARCHIVE_PASSWORD` is set (one shared viewer password). `ARCHIVE_ADMIN_PASSWORD` enables admin features. Signed `HttpOnly` cookies, CSRF-checked form posts, constant-time password checks.

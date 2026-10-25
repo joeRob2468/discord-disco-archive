@@ -55,7 +55,8 @@ export interface LayoutProps {
 /**
  * Applies the saved theme before first paint (dark unless the viewer chose light), and
  * handles the theme toggle, admin edit dialogs (`data-dialog`), set rows that expand
- * into an inline set page (`data-expand`, fetched by htmx) and "Copy link" buttons. Delegated on `document`, so it
+ * into an inline set page (`data-expand`, fetched by htmx) and "Copy link" buttons, and
+ * disables a form's submit buttons while its post is pending. Delegated on `document`, so it
  * survives hx-boost swaps.
  */
 const PAGE_SCRIPT = `
@@ -104,6 +105,16 @@ const PAGE_SCRIPT = `
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     for (const open of document.querySelectorAll('details.dropdown[open]')) open.removeAttribute('open');
+  });
+  // Disable a form's submit buttons while its post is pending, so it can't be sent twice.
+  document.addEventListener('htmx:beforeRequest', (event) => {
+    const form = event.detail.elt;
+    if (!(form instanceof HTMLFormElement) || form.method !== 'post') return;
+    const buttons = [...form.querySelectorAll('button[type="submit"]:not(:disabled)')];
+    for (const button of buttons) button.disabled = true;
+    form.addEventListener('htmx:afterRequest', () => {
+      for (const button of buttons) button.disabled = false;
+    }, { once: true });
   });
   // A dropdown left open must not survive navigation.
   document.addEventListener('htmx:beforeSwap', () => {

@@ -58,6 +58,10 @@
   .is-playing .playing-title {
     @apply text-primary;
   }
+  /* daisyUI styles disabled .btn; give other buttons (menu items) a disabled look too. */
+  button:disabled:not(.btn) {
+    @apply cursor-not-allowed opacity-50;
+  }
   .art {
     @apply bg-base-300 relative overflow-hidden;
   }
