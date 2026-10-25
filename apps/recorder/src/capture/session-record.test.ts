@@ -52,6 +52,23 @@ describe('SessionRecord', () => {
     });
   });
 
+  it("keeps other writers' changes instead of saving an old copy over them", async () => {
+    const record = await SessionRecord.create(dir, info);
+    const { setId } = await record.startSet(dj, new Date(2026, 9, 31, 21), false);
+    // Another process (an import, here) adds a set behind this record's back.
+    const other = await SessionRecord.open(dir, path.basename(record.paths.dir));
+    await other.addImportedSet(
+      { userId: dj.userId, displayName: 'Afterglow' },
+      new Date(2026, 9, 31, 22),
+      '.mp3',
+    );
+    await record.endSet(setId, new Date(2026, 9, 31, 22), { partial: false });
+    expect((await readSession(record))?.sets.map((set) => set.displayName)).toEqual([
+      'DJ Spooky',
+      'Afterglow',
+    ]);
+  });
+
   it('marks a set failed with its error', async () => {
     const record = await SessionRecord.create(dir, info);
     const { setId } = await record.startSet(dj, new Date(), false);

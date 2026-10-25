@@ -13,6 +13,7 @@ import { checkBrowser, FIX_HINT, HEALTH_PROBLEMS, HealthMonitor } from './browse
 import { DISCORD_APP_URL, launchBrowser } from './browser/launch.ts';
 import { RecordingController } from './capture/controller.ts';
 import { loadConfig } from './config.ts';
+import { findImports, importSet } from './pipeline/imports.ts';
 import { processSet } from './pipeline/process-set.ts';
 import { Processor } from './pipeline/processor.ts';
 import { sweepRecordings } from './pipeline/retention.ts';
@@ -143,7 +144,9 @@ const client = await startBot({
 });
 clientRef.current = client;
 
-// Raw captures and dropped export formats are cleaned up at startup, then hourly.
+// Raw captures and dropped export formats are cleaned up at startup, then hourly. The
+// sweep runs in the processor's queue, so it never edits a session.json that an import
+// or a reprocess has open.
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 const sweep = async (): Promise<void> => {
   try {
@@ -157,9 +160,46 @@ const sweep = async (): Promise<void> => {
     logger.error({ err: error }, 'retention sweep failed');
   }
 };
-void sweep();
-const sweepTimer = setInterval(() => void sweep(), SWEEP_INTERVAL_MS);
+void processor.enqueue('retention sweep', sweep);
+const sweepTimer = setInterval(
+  () => void processor.enqueue('retention sweep', sweep),
+  SWEEP_INTERVAL_MS,
+);
 sweepTimer.unref();
+
+// Sets uploaded through the archive: import and level each, one at a time.
+const IMPORT_INTERVAL_MS = 15_000;
+const importing = new Set<string>();
+const importLogger = logger.child({ module: 'imports' });
+const scanImports = async (): Promise<void> => {
+  let pending;
+  try {
+    pending = await findImports(config.session.recordingsDir);
+  } catch (error) {
+    importLogger.error({ err: error }, 'could not look for uploaded sets');
+    return;
+  }
+  for (const request of pending) {
+    if (importing.has(request.requestFile)) continue;
+    importing.add(request.requestFile);
+    void processor.enqueue(`import ${request.requestFile}`, async (signal) => {
+      try {
+        const imported = await importSet(config.session.recordingsDir, request, importLogger);
+        if (imported) {
+          await processSet(imported.record, imported.setId, config.processing, {
+            signal,
+            logger: logger.child({ module: 'pipeline' }),
+          });
+        }
+      } finally {
+        importing.delete(request.requestFile);
+      }
+    });
+  }
+};
+void scanImports();
+const importTimer = setInterval(() => void scanImports(), IMPORT_INTERVAL_MS);
+importTimer.unref();
 
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'shutting down');

@@ -82,8 +82,24 @@ export const recorderStateSchema = z.object({
     .nullable(),
 });
 
+/**
+ * A set uploaded through the archive: `uploads/<id>.json` next to its audio file in a
+ * finished session's folder. The recorder adds it to `session.json` and levels it, so the
+ * recorder stays the only writer of new sets.
+ */
+export const importRequestSchema = z.object({
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  /** The audio file's name in `uploads/`; any format ffmpeg reads. */
+  file: z.string().regex(/^[\w-]+\.[a-z\d]+$/i, 'Expected a plain file name'),
+  userId: snowflakeSchema,
+  displayName: z.string().min(1),
+  /** Where the set goes in the session's running order. */
+  startedAt: timestampSchema,
+});
+
 export type SetFiles = z.infer<typeof setFilesSchema>;
 export type SetStatus = z.infer<typeof setStatusSchema>;
 export type StreamSet = z.infer<typeof streamSetSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type RecorderState = z.infer<typeof recorderStateSchema>;
+export type ImportRequest = z.infer<typeof importRequestSchema>;

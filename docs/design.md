@@ -82,7 +82,11 @@ A set is `partial` only if recording cut off music. `session.json` records which
 4. **Exports** from the master: MP3 320 (`EXPORT_FORMATS=mp3`; `m4a` is optional).
 5. The set is marked `ready` (or `failed` with the reason). Sets are processed one at a time, in the background.
 
-**Retention:** the raw WAV (~1.3 GB/h) is deleted `RAW_RETENTION_HOURS` (48) after leveling, by a sweep at startup and hourly, which also removes exports no longer in `EXPORT_FORMATS`. Only `ready` sets of ended sessions are touched; failed or unprocessed sets keep their raw capture. A kept set is about 415 MB/h (FLAC ~300 + MP3 ~115).
+**Retention:** the raw WAV (~1.3 GB/h) is deleted `RAW_RETENTION_HOURS` (48) after leveling, by a sweep at startup and hourly, which also removes exports no longer in `EXPORT_FORMATS`. Only `ready` sets of ended sessions are touched; failed or unprocessed sets keep their raw capture. A kept set is about 415 MB/h (FLAC ~300 + MP3 ~115). The sweep runs in the processing queue, so it never edits a `session.json` that a job has open.
+
+### Uploaded sets
+
+A set can be added to a finished session from a file (any format ffmpeg reads, e.g. a DJ's own copy of a set that wasn't recorded). The archive saves the audio and an import request (`uploads/<id>.json`: DJ user ID, display name, start time) in the session folder. The recorder checks every 15 s, moves the audio to `raw/<set>.<ext>`, adds the set as `processing` and levels it like a recorded one; its end time comes from the measured length. Requests wait while the session is still recording; an unreadable one is renamed `.invalid`. Like a raw capture, the uploaded file is deleted `RAW_RETENTION_HOURS` after leveling.
 
 ## Storage
 
@@ -93,6 +97,7 @@ recordings/
     setlist.csv                      for people browsing the folder
     raw/2026-11-14T21-03-12_dj.wav   float32 capture, until retention
     leveled/2026-11-14T21-03-12_dj.flac, .mp3
+    uploads/                         uploaded sets waiting to be imported
 ```
 
 | What       | `.env` host path      | Server                                           | Container     |
@@ -101,7 +106,7 @@ recordings/
 | Recordings | `RECORDINGS_HOST_DIR` | `/mnt/media/data/media/discord-sets`             | `/recordings` |
 
 - `recorder/` app state holds the browser profiles (the Discord login: treat it like a password). `archive/` holds `archive.db` and uploaded `images/`.
-- **`session.json`** (one per folder, written atomically by the recorder) records sessions, sets, times, files and recorded names. The archive writes it only to remove a set an admin deletes.
+- **`session.json`** (one per folder, written atomically by the recorder) records sessions, sets, times, files and recorded names. The archive writes it only to remove a set an admin deletes. Every write re-reads the file first, so writers don't undo each other's changes.
 - **`archive.db`** (SQLite) mirrors every `session.json` plus everything the archive adds: edits, images, plays, album order, the activity log and the search index. If it's lost, it rebuilds from `session.json` without the edits. Schema changes are append-only migrations.
 - **Back up both** folders.
 

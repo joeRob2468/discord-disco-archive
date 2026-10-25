@@ -96,7 +96,9 @@ export async function processSet(
     }
 
     const partial = set.cut && settlePartial(set.cut, analysis.trim, analysis.duration);
-    await record.completeSet(setId, files, partial);
+    // An imported set has no end time until its length is known.
+    const duration = analysis.trim.end - analysis.trim.start;
+    await record.completeSet(setId, files, partial, duration);
     logger.info({ setId, files, seconds: (Date.now() - started) / 1000 }, 'set processed');
   } catch (error) {
     if (signal?.aborted) {

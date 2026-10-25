@@ -1,11 +1,13 @@
 /**
  * The session folder and its `session.json` (the recorder → archive contract, see
  * `@dsr/core`'s session schema). Creates the folder when a session starts, adds a set
- * per capture, records post-processing results, keeps `setlist.csv` in step, and renames
- * the folder at the end if the title changed.
+ * per capture (or per upload imported from the archive), records post-processing results,
+ * keeps `setlist.csv` in step, and renames the folder at the end if the title changed.
  *
  * The controller and the post-processor both update it, so every write runs one at a
- * time behind an internal lock.
+ * time behind an internal lock. Other processes write it too (the archive deletes sets,
+ * the retention sweep drops files, an import adds a set), so each write starts from the
+ * file on disk rather than this object's copy, which may be minutes old.
  */
 import { randomUUID } from 'node:crypto';
 import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
@@ -142,6 +144,38 @@ export class SessionRecord {
     });
   }
 
+  /**
+   * Add a set for an uploaded file, ready for post-processing. `ext` is the file's
+   * extension (`.mp3`); its raw audio path is returned for the caller to move it to.
+   */
+  async addImportedSet(
+    dj: { userId: string; displayName: string },
+    startedAt: Date,
+    ext: string,
+  ): Promise<{ setId: string; rawAudioPath: string }> {
+    return this.#exclusive(async () => {
+      await this.#reload();
+      const base = setBaseName(startedAt, dj.displayName, dj.userId);
+      let setId = base;
+      for (let n = 2; this.set(setId); n++) setId = `${base}-${String(n)}`;
+      const rawAudio = path.posix.join(RAW_DIR, `${setId}${ext}`);
+      const set: StreamSet = {
+        id: setId,
+        userId: dj.userId,
+        displayName: dj.displayName,
+        startedAt: startedAt.toISOString(),
+        // Its end is known once post-processing has measured it.
+        partial: false,
+        hidden: false,
+        status: 'processing',
+        files: { rawAudio },
+      };
+      this.#session = { ...this.#session, sets: [...this.#session.sets, set] };
+      await this.#save();
+      return { setId, rawAudioPath: path.join(this.paths.dir, rawAudio) };
+    });
+  }
+
   /** Close a set. Without `error` it goes on to post-processing, so its status is `processing`. */
   endSet(
     setId: string,
@@ -160,15 +194,26 @@ export class SessionRecord {
 
   /**
    * Post-processing finished: add its files and mark the set playable, with `partial`
-   * settled from the audio if given.
+   * settled from the audio if given. `durationSeconds` gives an imported set its end.
    */
-  completeSet(setId: string, files: SetFiles, partial?: boolean): Promise<void> {
+  completeSet(
+    setId: string,
+    files: SetFiles,
+    partial?: boolean,
+    durationSeconds?: number,
+  ): Promise<void> {
     return this.#updateSet(setId, (set) => {
+      const endedAt =
+        set.endedAt ??
+        (durationSeconds === undefined
+          ? undefined
+          : new Date(Date.parse(set.startedAt) + durationSeconds * 1000).toISOString());
       const next: StreamSet = {
         ...set,
         status: 'ready',
         files: { ...set.files, ...files },
         ...(partial !== undefined && { partial }),
+        ...(endedAt !== undefined && { endedAt }),
       };
       // A reprocessed set may have failed before.
       delete next.error;
@@ -225,6 +270,7 @@ export class SessionRecord {
 
   #updateSet(setId: string, update: (set: StreamSet) => StreamSet): Promise<void> {
     return this.#exclusive(async () => {
+      await this.#reload();
       this.#session = {
         ...this.#session,
         sets: this.#session.sets.map((set) => (set.id === setId ? update(set) : set)),
@@ -238,6 +284,12 @@ export class SessionRecord {
     const result = this.#lock.then(step, step);
     this.#lock = result.catch(() => undefined);
     return result;
+  }
+
+  /** Pick up changes other processes made to session.json; keep this copy if it's gone. */
+  async #reload(): Promise<void> {
+    const onDisk = await readJsonFile(this.paths.sessionFile, sessionSchema);
+    if (onDisk) this.#session = onDisk;
   }
 
   async #save(): Promise<void> {
