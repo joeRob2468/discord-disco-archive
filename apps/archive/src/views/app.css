@@ -23,6 +23,14 @@
   scrollbar-gutter: stable;
 }
 
+/*
+ * The player's spinner shows only while loading (player.ts). Unlayered: daisyUI sets
+ * `.loading`'s display in its own layer, which comes after Tailwind's.
+ */
+#player:not([data-loading]) .player-loading {
+  display: none;
+}
+
 /* App shell: a dark page with one faint glow at the top, and solid panels on it. */
 @layer base {
   /* On the root, not <body>: the root background paints beneath the fixed backdrop. */
@@ -52,7 +60,6 @@
   }
   #player[data-state='playing'] .player-play,
   #player[data-state='paused'] .player-pause,
-  #player:not([data-loading]) .player-loading,
   #player[data-loading] :is(.player-play, .player-pause) {
     @apply hidden;
   }
