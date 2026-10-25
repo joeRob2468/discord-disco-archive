@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-23_
+_Last updated: 2026-10-25_
 
 ## Where things stand
 
@@ -15,20 +15,21 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 | Logout / captcha alerts        | ✅ deployed; the healthy path is verified, a real logout or captcha hasn't been seen   |
 | Rejoin after a voice drop      | ✅ verified live (disconnected mid-set, rejoined in 6 s)                               |
 | Stream restart grace           | ✅ verified live (drop and return joined into one set)                                 |
-| Partial tagging                | ✅ deployed; needs a real event to judge (see Next)                                    |
+| Partial tagging                | ✅ deployed; no set was tagged in the first real event                                 |
 | Video                          | ⏸️ not built (deferred)                                                                |
 | Resume after recorder restart  | ⏭️ skipped                                                                             |
 
 ## Next
 
-1. **Dry run with friends** (the user's). Watch for:
-   - "capture is shorter than the time it ran" warnings: the first segment of some sets was 1–3 s short (later segments weren't), likely audio missed while ffmpeg starts.
-   - Partial tags: a set only escapes the tag if it opens with at least 2 s of silence.
-   - AFK moves of the recorder (exempt it from any AFK bot).
-2. Open the archive from outside the home network once.
-3. **Fix: Discord popups block opening a stream.** After a few stream restarts in a row, Discord showed its "How'd the stream go?" feedback popup over the call view; every stream open then failed (`locator.hover: Timeout 10000ms exceeded` on the call tile) and nothing was recorded until the popup was closed by hand. The recorder should close such popups (Esc, or the dialog's close button) before opening a stream, and retry once if it fails. Also: after a failed open, the ⚠️ notice says to try `/record switch`, but switching to the user who is still the target does nothing; a failed open should clear the target, or switching to the current target should retry.
-4. **Keep a night in one session** (later): `/record stop` + `/record start` mid-event makes a new session (`<date>_<slug>-2`), and the archive can't merge sessions. Options: `/record start` reopens the last session if it's in the same channel and ended within a set time (e.g. 2 h), and/or an admin "merge into…" action. Until then, merge by hand after the event: move the second folder's `raw/` and `leveled/` files into the first, append its `sets` to the first `session.json` (paths are relative) and update `endedAt`, remove the second folder, restart the archive.
-5. **`/record split`** (later): end the current set and start the next one on the same stream, for DJs who share one Go Live stream. Today the recorder sees no switch (switching to the current target does nothing), so they end up in one long set; see the workaround in operations.md. Ideally a gapless cut, with an optional DJ name or title for the new set.
+The first real event (Halloween Disco, 2026-10-24, ~7 h, 8 sets) is recorded. Capture lengths matched wall-clock time on every set, handovers and stream-restart grace worked, no set was tagged partial. Problems it found are items 1–4.
+
+1. **Fix: Discord popups block opening a stream.** After a few stream restarts in a row, Discord showed its "How'd the stream go?" feedback popup over the call view; every stream open then failed (`locator.hover: Timeout 10000ms exceeded` on the call tile) and nothing was recorded until the popup was closed by hand. The recorder should close such popups (Esc, or the dialog's close button) before opening a stream, and retry once if it fails. Also: after a failed open, the ⚠️ notice says to try `/record switch`, but switching to the user who is still the target does nothing; a failed open should clear the target, or switching to the current target should retry.
+2. **Alert on long silence.** One set recorded ~59 min of silence: the stream went quiet ~100 s after it was reopened and the recorder only logged `stream went silent` (nothing in chat) until the DJ restarted their stream. People in the call heard the DJ the whole time, so the audio was lost on our side; the cause is still unknown. The recorder should post a ⚠️ in chat when the target stays silent for a few minutes with nobody else live, and repeat it while the silence lasts.
+3. **Player: show buffering.** While an MP3 is loading or stalls, the player gives no sign; it needs a loading/buffering state (spinner on the play button and seek bar).
+4. **Investigate slow downloads** of the FLAC/MP3 files from the archive (where the bottleneck is: the archive's file serving, Traefik, or the upload link).
+5. Open the archive from outside the home network once (logins from outside IPs were seen during the event, so it's likely reachable).
+6. **Keep a night in one session** (later): `/record stop` + `/record start` mid-event makes a new session (`<date>_<slug>-2`), and the archive can't merge sessions. Options: `/record start` reopens the last session if it's in the same channel and ended within a set time (e.g. 2 h), and/or an admin "merge into…" action. Until then, merge by hand after the event: move the second folder's `raw/` and `leveled/` files into the first, append its `sets` to the first `session.json` (paths are relative) and update `endedAt`, remove the second folder, restart the archive.
+7. **`/record split`** (later): end the current set and start the next one on the same stream, for DJs who share one Go Live stream. Today the recorder sees no switch (switching to the current target does nothing), so they end up in one long set; see the workaround in operations.md. Ideally a gapless cut, with an optional DJ name or title for the new set.
 
 ## Environment notes
 
