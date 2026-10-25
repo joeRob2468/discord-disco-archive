@@ -710,6 +710,70 @@ describe('RecordingController: carrying on after a restart', () => {
   });
 });
 
+describe('RecordingController: resuming right after a stop', () => {
+  it("lets the stopped session finish first, so it doesn't end the resumed one", async () => {
+    vi.clearAllMocks();
+    const dir = await mkdtemp(path.join(tmpdir(), 'dsr-resume-race-'));
+    let release = (): void => undefined;
+    const leveling = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sessions = new SessionManager({
+      onSessionStart: (session) => {
+        controller.sessionStarted(session);
+      },
+      onTargetChange: (change, session) => {
+        controller.targetChanged(change, session);
+      },
+      onSessionEnd: (session) => {
+        controller.sessionEnded(session);
+      },
+    });
+    const controller = new RecordingController({
+      page: {} as Page,
+      sessions,
+      config: {
+        recordingsDir: dir,
+        pulseSource: 'test',
+        streamVolume: 85,
+        handoverSilenceSeconds: 45,
+        silenceAlertSeconds: 300,
+      },
+      notify: () => undefined,
+      // The first set's leveling is still running when the session is resumed.
+      postProcess: async (record, setId) => {
+        await leveling;
+        await record.completeSet(setId, { master: 'leveled/x.flac' });
+      },
+      logger: quietLogger,
+    });
+    try {
+      const first = sessions.start(info, [DJ]);
+      await controller.idle().catch(() => undefined);
+      sessions.stop();
+      const [folder] = await sessionDirs(dir);
+      sessions.start(
+        {
+          ...info,
+          startedAt: first.ok ? first.session.startedAt : new Date(),
+          resumeDir: folder ?? '',
+        },
+        [DJ],
+      );
+      setTimeout(release, 50);
+      await controller.idle();
+      const session = await readJsonFile(
+        path.join(dir, folder ?? '', 'session.json'),
+        sessionSchema,
+      );
+      expect(session?.endedAt).toBeUndefined();
+      expect(session?.sets.map((set) => set.status)).toEqual(['ready', 'recording']);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('state.json', () => {
   it('keeps when the session was resumed by itself, for the crash-loop check', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dsr-state-'));

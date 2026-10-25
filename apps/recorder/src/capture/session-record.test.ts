@@ -69,6 +69,25 @@ describe('SessionRecord', () => {
     ]);
   });
 
+  it('keeps changes made through another copy when starting a set or finishing', async () => {
+    const record = await SessionRecord.create(dir, info);
+    const { setId } = await record.startSet(dj, new Date(2026, 9, 31, 21), false);
+    await record.endSet(setId, new Date(2026, 9, 31, 22), { partial: false });
+    // A resumed session's copy, opened while the first set was still being leveled.
+    const resumed = await SessionRecord.open(dir, path.basename(record.paths.dir));
+    await record.completeSet(setId, { master: `leveled/${setId}.flac` });
+    await resumed.startSet(
+      { userId: dj.userId, displayName: 'Next' },
+      new Date(2026, 9, 31, 23),
+      false,
+    );
+    const [first] = (await readSession(record))?.sets ?? [];
+    expect(first).toMatchObject({ status: 'ready', files: { master: `leveled/${setId}.flac` } });
+    await resumed.finish(info, new Date(2026, 10, 1));
+    await record.failSet(setId, 'late');
+    expect((await readSession(record))?.endedAt).toBe(new Date(2026, 10, 1).toISOString());
+  });
+
   it('marks a set failed with its error', async () => {
     const record = await SessionRecord.create(dir, info);
     const { setId } = await record.startSet(dj, new Date(), false);

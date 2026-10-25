@@ -186,6 +186,7 @@ export class SessionRecord {
     nameGiven = false,
   ): Promise<{ setId: string; rawAudioPath: string }> {
     return this.#exclusive(async () => {
+      await this.#reload();
       const setId = setBaseName(startedAt, target.displayName, target.userId);
       const rawAudio = path.posix.join(RAW_DIR, `${setId}.wav`);
       const set: StreamSet = {
@@ -320,6 +321,7 @@ export class SessionRecord {
    */
   finish(info: SessionInfo, endedAt: Date): Promise<void> {
     return this.#exclusive(async () => {
+      await this.#reload();
       this.#session = {
         ...this.#session,
         ...(info.title && { title: info.title }),

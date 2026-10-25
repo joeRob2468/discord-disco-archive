@@ -269,6 +269,8 @@ export class RecordingController {
       this.#record = await SessionRecord.create(this.#config.recordingsDir, session);
       this.#logger.info({ dir: this.#record.paths.dir }, 'session folder created');
     } else {
+      // A session just stopped finishes after its encodes; let it, before reopening it.
+      await Promise.all(this.#finishing);
       this.#record = await SessionRecord.reopen(this.#config.recordingsDir, session.resumeDir);
       this.#logger.info({ dir: this.#record.paths.dir }, 'session folder reopened');
       // Before closing interrupted sets, which would then count as unfinished too.
