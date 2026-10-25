@@ -51,8 +51,14 @@
     @apply pb-28;
   }
   #player[data-state='playing'] .player-play,
-  #player[data-state='paused'] .player-pause {
+  #player[data-state='paused'] .player-pause,
+  #player:not([data-loading]) .player-loading,
+  #player[data-loading] :is(.player-play, .player-pause) {
     @apply hidden;
+  }
+  /* Loading or buffering (player.ts): a spinner on the play button, a pulsing seek bar. */
+  #player[data-loading] #player-seek {
+    @apply animate-pulse;
   }
   /* The set that's playing, wherever it's listed. */
   .is-playing .playing-title {

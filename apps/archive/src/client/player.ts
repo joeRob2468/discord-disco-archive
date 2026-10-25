@@ -3,11 +3,15 @@
  * start position (`data-index`); "Add to queue" buttons carry tracks to append
  * (`data-enqueue`). Clicks are handled by delegation, so buttons in pages swapped in by
  * htmx work too. The queue panel lists what's queued, to jump to or remove. The bar itself is `hx-preserve`d, so playback carries on
- * while browsing. A set counts as played once it starts playing.
+ * while browsing. A set counts as played once it starts playing. While a set loads or
+ * buffers, the bar shows a spinner (`data-loading`).
  *
  * Built by esbuild into dist/player.js (`pnpm --filter @dsr/archive build:js`).
  */
 import type { Track } from './track.ts';
+
+/** Show the loading spinner only if loading takes longer than this, so it doesn't flash. */
+const LOADING_DELAY_MS = 200;
 
 /** The element with `id`, checked to be a `type`. The bar's markup is in layout.tsx. */
 function byId<T extends HTMLElement>(id: string, type: new () => T): T {
@@ -314,6 +318,31 @@ function init(): void {
     }
   } catch {
     // As above: fall back to full volume.
+  }
+
+  // Loading: from asking to play (or running out of buffer) until sound plays or stops.
+  let loadingTimer: ReturnType<typeof setTimeout> | undefined;
+  function setLoading(loading: boolean): void {
+    clearTimeout(loadingTimer);
+    if (!loading) {
+      bar.removeAttribute('data-loading');
+      toggle.removeAttribute('aria-busy');
+      return;
+    }
+    loadingTimer = setTimeout(() => {
+      bar.setAttribute('data-loading', '');
+      toggle.setAttribute('aria-busy', 'true');
+    }, LOADING_DELAY_MS);
+  }
+  for (const type of ['play', 'waiting']) {
+    audio.addEventListener(type, () => {
+      setLoading(true);
+    });
+  }
+  for (const type of ['playing', 'pause', 'ended', 'error', 'emptied']) {
+    audio.addEventListener(type, () => {
+      setLoading(false);
+    });
   }
 
   audio.addEventListener('play', () => {

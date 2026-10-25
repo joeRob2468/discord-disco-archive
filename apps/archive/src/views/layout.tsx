@@ -371,6 +371,7 @@ function PlayerBar() {
             >
               <ControlIcon name="play" class="player-play size-5" />
               <ControlIcon name="pause" class="player-pause size-5" />
+              <span class="player-loading loading loading-spinner loading-sm" aria-hidden="true" />
             </button>
             <button
               id="player-next"

@@ -110,7 +110,7 @@ recordings/
 Hono, server-rendered `hono/jsx`, daisyUI on Tailwind, htmx (with `hx-boost`, so the player keeps playing across pages) and one client script for the player.
 
 - **Pages:** home (latest sessions, DJs, popular sets), `/search` (every set, filtered live by text, DJ or session), sessions as albums (`/sessions/<uuid>`, with tracklist), set pages under their album, and stats tables at `/sessions` and `/djs`. Set rows expand in place into the set's details.
-- **Player:** a bottom bar with a queue (play an album, a list or a set; add to it, jump within it, remove from it), stop, seek, volume and media keys. Plays the MP3, falling back to the raw WAV until a set is leveled. A play counts when a set starts playing, and that set's play counts on the page update at once.
+- **Player:** a bottom bar with a queue (play an album, a list or a set; add to it, jump within it, remove from it), stop, seek, volume and media keys. Plays the MP3, falling back to the raw WAV until a set is leveled. While a set loads or buffers, the play button shows a spinner and the seek bar pulses. A play counts when a set starts playing, and that set's play counts on the page update at once.
 - **Forms:** submit buttons are disabled while their request is pending.
 - **Assets:** pages link the CSS and scripts with a `?v=` version (file time and size), so they're cached for a year and a new build is fetched at once.
 - **Downloads:** MP3 and FLAC (and the raw WAV while it exists), named `DJ - Title (date).ext`.

@@ -25,7 +25,7 @@ The first real event (Halloween Disco, 2026-10-24, 18:00–01:00 CDT, 7 DJs) is 
 
 1. **Discord popups: built, not yet verified live.** The recorder closes popups (Escape, ticking "Don't show again") before every open and when the stream goes silent, retries a failed open once, saves screenshots of both, and `/record switch` to the current DJ retries their stream. The popup selector (`[role="dialog"]`) is unverified against Discord's markup: on the event the survey was closed with Esc after ticking "Don't show again", so it may not come back to test. Check the screenshots and logs after the next event.
 2. **Long-silence alert: built, not yet verified live.** A live stream silent for `SILENCE_ALERT_SECONDS` (300) gets a ⚠️ in chat and is reopened, with a screenshot; ✅ when audio is back. If the cause turns out not to be a popup, the screenshots should show whether the stream was paused in the page, or its volume or unmute was undone.
-3. **Player: show buffering.** While an MP3 is loading or stalls, the player gives no sign; it needs a loading/buffering state (spinner on the play button and seek bar).
+3. **Player buffering state: built, not yet verified in a browser.** A spinner on the play button and a pulsing seek bar while a set loads or stalls.
 4. **Upload a set by hand** (after the fixes): an admin action to add an audio file as a set in an existing session (DJ, title, position), leveled like a recorded set. First use: Afterglow' own copy of their set.
 5. **Investigate slow downloads** of the FLAC/MP3 files from the archive (where the bottleneck is: the archive's file serving, Traefik, or the upload link).
 6. Open the archive from outside the home network once (logins from outside IPs were seen during the event, so it's likely reachable).
