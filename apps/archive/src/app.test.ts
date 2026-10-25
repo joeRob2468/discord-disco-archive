@@ -558,6 +558,19 @@ describe('archive app', () => {
       }
     });
 
+    it('links versioned scripts, cached for good, and caches unversioned ones briefly', async () => {
+      const app = build(env);
+      const login = await (await app.request('/login')).text();
+      const htmx = /\/assets\/htmx\.min\.js\?v=\w+/.exec(login)?.[0];
+      expect(htmx).toBeDefined();
+      expect((await app.request(htmx ?? '')).headers.get('cache-control')).toBe(
+        'public, max-age=31536000, immutable',
+      );
+      expect((await app.request('/assets/htmx.min.js')).headers.get('cache-control')).toBe(
+        'public, max-age=300',
+      );
+    });
+
     it('refuses open redirects after login', async () => {
       const login = await build(env).request(
         post('/login', { password: VIEWER_PASSWORD, next: '//evil.example' }),

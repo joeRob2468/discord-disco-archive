@@ -1,5 +1,6 @@
 import { raw } from 'hono/html';
 import type { Child } from 'hono/jsx';
+import { assetUrl } from '../assets.ts';
 import type { AuthState } from '../auth/auth.ts';
 
 const SITE_NAME = 'Stream Archive';
@@ -188,14 +189,14 @@ function Document(props: { title: string; preview?: Preview | undefined; childre
           <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
           {preview && <PreviewTags preview={preview} />}
           <script>{raw(PAGE_SCRIPT)}</script>
-          <link rel="stylesheet" href="/assets/app.css" />
+          <link rel="stylesheet" href={assetUrl('/assets/app.css')} />
           {/* Error responses (wrong password, not found) are full pages too: show them. */}
           <meta
             name="htmx-config"
             content='{"responseHandling":[{"code":"204","swap":false},{"code":"...","swap":true}]}'
           />
-          <script src="/assets/htmx.min.js" defer></script>
-          <script type="module" src="/assets/player.js"></script>
+          <script src={assetUrl('/assets/htmx.min.js')} defer></script>
+          <script type="module" src={assetUrl('/assets/player.js')}></script>
         </head>
         <body hx-boost="true" class="min-h-screen">
           <div class="backdrop" aria-hidden="true" />

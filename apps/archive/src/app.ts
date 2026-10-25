@@ -3,13 +3,12 @@
  * call `app.request()` against an in-memory database without opening a port.
  */
 import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
 import type { Logger } from '@dsr/core';
 import { Hono } from 'hono';
 import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
+import { ASSETS } from './assets.ts';
 import { createAuth, type AuthEnv } from './auth/auth.ts';
 import { NotFoundError, type Catalog } from './catalog/catalog.ts';
 import type { ArchiveConfig } from './config.ts';
@@ -39,37 +38,6 @@ const PUBLIC_PATHS = new Set([
   '/favicon.svg',
 ]);
 
-const require = createRequire(import.meta.url);
-/** Static assets: the Tailwind build output and htmx from node_modules. */
-const ASSETS = [
-  [
-    '/assets/app.css',
-    fileURLToPath(new URL('../dist/app.css', import.meta.url)),
-    'text/css; charset=utf-8',
-  ],
-  [
-    '/assets/player.js',
-    fileURLToPath(new URL('../dist/player.js', import.meta.url)),
-    'text/javascript; charset=utf-8',
-  ],
-  [
-    '/assets/htmx.min.js',
-    require.resolve('htmx.org/dist/htmx.min.js'),
-    'text/javascript; charset=utf-8',
-  ],
-  ['/assets/og.png', fileURLToPath(new URL('views/static/og.png', import.meta.url)), 'image/png'],
-  [
-    '/assets/apple-touch-icon.png',
-    fileURLToPath(new URL('views/static/apple-touch-icon.png', import.meta.url)),
-    'image/png',
-  ],
-  [
-    '/favicon.svg',
-    fileURLToPath(new URL('views/static/favicon.svg', import.meta.url)),
-    'image/svg+xml',
-  ],
-] as const;
-
 export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   const auth = createAuth(config.auth);
@@ -79,7 +47,11 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
   for (const [route, file, type] of ASSETS) {
     app.get(route, async (c) => {
       c.header('Content-Type', type);
-      c.header('Cache-Control', 'public, max-age=300');
+      // Versioned links (`assetUrl`) change with the file, so they can be cached for good.
+      c.header(
+        'Cache-Control',
+        c.req.query('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
+      );
       try {
         return c.body(await readFile(file));
       } catch {
