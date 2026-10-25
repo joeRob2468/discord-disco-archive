@@ -270,8 +270,9 @@ async function split(
     const value = interaction.options.getString(option)?.trim();
     return value === '' ? undefined : value;
   };
-  const refusal =
-    splitSet?.({ name: text('name'), previous: text('previous') }) ?? 'Not available.';
+  if (!splitSet) return refuse(interaction, logger, 'Not available.');
+  // Undefined means it's queued; a string is why it can't split now.
+  const refusal = splitSet({ name: text('name'), previous: text('previous') });
   if (refusal) return refuse(interaction, logger, refusal);
   // The split itself is announced in the channel by the controller.
   await replyPrivately(interaction, 'Splitting the set here.');
