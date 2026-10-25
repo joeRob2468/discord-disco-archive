@@ -77,6 +77,7 @@ const controller = new RecordingController({
     pulseSource: config.capture.pulseSource,
     streamVolume: config.browser.streamVolume,
     handoverSilenceSeconds: config.session.handoverSilenceSeconds,
+    silenceAlertSeconds: config.session.silenceAlertSeconds,
     // Next to the browser profile: `APP_DATA_DIR/recorder/screenshots` in Docker.
     screenshotDir: path.join(path.dirname(config.browser.profileDir), 'screenshots'),
   },

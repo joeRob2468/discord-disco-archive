@@ -53,6 +53,8 @@ The recorder watches one stream at a time.
 
 Every switch ends the current set (it's processed) and starts the next. Known gap: if the next DJ starts playing while the current one is still audible, their first moments are missed until a switch.
 
+**Long silence:** when the current DJ's stream is still live but silent for `SILENCE_ALERT_SECONDS` (300), the chat gets a ⚠️ and the recorder reopens the stream in the browser, in case it stopped playing on its side; the set keeps recording. Once per silence, with a ✅ when the audio is back.
+
 ### When things go wrong
 
 - **Recorder logged out or shown a captcha:** checked at startup, every 5 minutes and before `/record start`. Logged once per change; announced in an active session's chat. Login and captchas are never automated: fix it over noVNC ([operations.md](operations.md)).
@@ -134,6 +136,7 @@ All settings are in `.env` (see `.env.example`). The main ones:
 | `BROWSER_CHANNEL`                                        | `firefox`         | `firefox` (stereo), `chrome` or `chromium` (mono).          |
 | `STREAM_VOLUME`                                          | `85`              | Discord's stream volume slider.                             |
 | `HANDOVER_SILENCE_SECONDS`, `RESTART_GRACE_SECONDS`      | `45`, `60`        | Rules 3 and 4 above.                                        |
+| `SILENCE_ALERT_SECONDS`                                  | `300`             | Long silence, above.                                        |
 | `TARGET_LUFS`, `TARGET_TP`, `TARGET_LRA`                 | `-14`, `-1`, `11` | Leveling targets.                                           |
 | `EXPORT_FORMATS`                                         | `mp3`             | `mp3`, `m4a`.                                               |
 | `RAW_RETENTION_HOURS`                                    | (keep)            | `48` on the server.                                         |

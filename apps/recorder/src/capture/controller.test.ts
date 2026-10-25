@@ -84,6 +84,7 @@ describe('RecordingController: recorder dropping out of voice', () => {
         pulseSource: 'test',
         streamVolume: 85,
         handoverSilenceSeconds: 45,
+        silenceAlertSeconds: 300,
       },
       notify: (_channel, content) => notices.push(content),
       postProcess: () => Promise.resolve(),
@@ -173,6 +174,7 @@ describe('RecordingController: restart grace', () => {
         pulseSource: 'test',
         streamVolume: 85,
         handoverSilenceSeconds: 45,
+        silenceAlertSeconds: 300,
       },
       notify: () => undefined,
       postProcess: () => Promise.resolve(),
@@ -266,6 +268,7 @@ describe('RecordingController: opening streams', () => {
         pulseSource: 'test',
         streamVolume: 85,
         handoverSilenceSeconds: 45,
+        silenceAlertSeconds: 300,
       },
       notify: (_channel, content) => notices.push(content),
       postProcess: () => Promise.resolve(),
@@ -313,5 +316,85 @@ describe('RecordingController: opening streams', () => {
     onSilence?.({ type: 'start', at: 45 });
     await controller.idle();
     expect(web.closePopups).toHaveBeenCalledWith(expect.anything(), { escape: false });
+  });
+});
+
+describe('RecordingController: long silence', () => {
+  let dir: string;
+  let notices: string[];
+  let sessions: SessionManager;
+  let controller: RecordingController;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    dir = await mkdtemp(path.join(tmpdir(), 'dsr-silence-'));
+    notices = [];
+    sessions = new SessionManager({
+      onSessionStart: (session) => {
+        controller.sessionStarted(session);
+      },
+      onTargetChange: (change, session) => {
+        controller.targetChanged(change, session);
+      },
+      onSessionEnd: (session) => {
+        controller.sessionEnded(session);
+      },
+    });
+    controller = new RecordingController({
+      page: {} as Page,
+      sessions,
+      config: {
+        recordingsDir: dir,
+        pulseSource: 'test',
+        streamVolume: 85,
+        handoverSilenceSeconds: 45,
+        silenceAlertSeconds: 300,
+      },
+      notify: (_channel, content) => notices.push(content),
+      postProcess: () => Promise.resolve(),
+      logger: quietLogger,
+    });
+    sessions.start(info, [DJ]);
+    await controller.idle();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+  });
+
+  afterEach(async () => {
+    vi.useRealTimers();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const silence = (type: 'start' | 'end') => {
+    const [, onSilence] = vi.mocked(media.captureAudio).mock.calls[0] ?? [];
+    onSilence?.({ type, at: 0 });
+  };
+
+  it('alerts and reopens the stream, keeping the capture, then says when audio is back', async () => {
+    silence('start');
+    // Reported after 45 s of silence; the alert comes at 300 s.
+    await vi.advanceTimersByTimeAsync(254_000);
+    await controller.idle();
+    expect(notices).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await controller.idle();
+    expect(notices).toEqual([
+      expect.stringContaining("**DJ A**'s stream has been silent for 5 min"),
+    ]);
+    expect(web.stopWatching).toHaveBeenCalled();
+    expect(web.watchStream).toHaveBeenCalledTimes(2);
+    expect(media.captureAudio).toHaveBeenCalledTimes(1);
+
+    silence('end');
+    expect(notices.at(-1)).toBe("✅ **DJ A**'s stream is audible again.");
+  });
+
+  it("doesn't alert when the audio comes back in time", async () => {
+    silence('start');
+    await vi.advanceTimersByTimeAsync(60_000);
+    silence('end');
+    await vi.advanceTimersByTimeAsync(600_000);
+    await controller.idle();
+    expect(notices).toEqual([]);
+    expect(web.watchStream).toHaveBeenCalledTimes(1);
   });
 });

@@ -15,6 +15,10 @@
  * opening a stream and when the stream goes silent; a failed open is retried once. Both
  * save a screenshot of the browser, for finding out what happened afterwards.
  *
+ * A live stream that stays silent for `silenceAlertSeconds` may have stopped playing on
+ * our side (the browser stopped feeding the capture), so the controller says so in chat
+ * and reopens it, once per silence. The capture keeps running throughout.
+ *
  * Restart grace: when the session manager holds a set open after its stream dropped, the
  * capture stops but the set doesn't end. If the stream comes back, the next capture goes
  * into a new segment file; when the set ends, its segments are joined into its raw WAV.
@@ -58,6 +62,8 @@ export interface ControllerConfig {
   pulseSource: string;
   streamVolume: number;
   handoverSilenceSeconds: number;
+  /** Alert and reopen the stream after this much silence (at least the handover's). */
+  silenceAlertSeconds: number;
   /** Where to save screenshots of the browser when something goes wrong; none if unset. */
   screenshotDir?: string | undefined;
 }
@@ -97,6 +103,10 @@ interface ActiveCapture {
   ffmpeg: FfmpegProcess;
   stopping: boolean;
   silenceTimer: NodeJS.Timeout | undefined;
+  /** Runs the long-silence alert, while silent. */
+  alertTimer: NodeJS.Timeout | undefined;
+  /** Set once the current silence was alerted, to say when the audio is back. */
+  alerted: boolean;
   /** Set while the set is held open between segments (its stream dropped). */
   heldAt: Date | undefined;
 }
@@ -452,6 +462,8 @@ export class RecordingController {
       }),
       stopping: false,
       silenceTimer: undefined,
+      alertTimer: undefined,
+      alerted: false,
       heldAt: undefined,
     };
     this.#capture = capture;
@@ -604,6 +616,11 @@ export class RecordingController {
     if (event.type === 'end') {
       this.#logger.info({ target: capture.target.displayName }, 'audio resumed');
       this.#clearSilence(capture);
+      const channelId = this.#sessions.active?.channelId;
+      if (capture.alerted && channelId !== undefined) {
+        capture.alerted = false;
+        this.#notify(channelId, `✅ **${capture.target.displayName}**'s stream is audible again.`);
+      }
       return;
     }
     this.#logger.info(
@@ -629,6 +646,13 @@ export class RecordingController {
       return this.#sessions.targetSilent() !== undefined;
     };
     this.#clearSilence(capture);
+    // `silencedetect` reports silence once it has lasted the handover's seconds.
+    const alertDelayMs =
+      Math.max(0, this.#config.silenceAlertSeconds - this.#config.handoverSilenceSeconds) * 1000;
+    capture.alertTimer = setTimeout(() => {
+      capture.alertTimer = undefined;
+      this.#enqueue('silence alert', () => this.#silenceAlert(capture));
+    }, alertDelayMs);
     if (check()) return;
     capture.silenceTimer = setInterval(() => {
       if (check()) this.#clearSilence(capture);
@@ -637,6 +661,38 @@ export class RecordingController {
 
   #clearSilence(capture: ActiveCapture): void {
     if (capture.silenceTimer) clearInterval(capture.silenceTimer);
+    if (capture.alertTimer) clearTimeout(capture.alertTimer);
     capture.silenceTimer = undefined;
+    capture.alertTimer = undefined;
+  }
+
+  /**
+   * The current DJ's stream is still live but has been silent for `silenceAlertSeconds`:
+   * say so, and reopen it in case it stopped playing on our side.
+   */
+  async #silenceAlert(capture: ActiveCapture): Promise<void> {
+    const session = this.#sessions.active;
+    if (this.#capture !== capture || capture.stopping || capture.heldAt || !session) return;
+    if (this.#sessions.status()?.target?.userId !== capture.target.userId) return;
+    const name = capture.target.displayName;
+    const minutes = Math.round(this.#config.silenceAlertSeconds / 60);
+    this.#logger.warn(
+      { target: name, seconds: this.#config.silenceAlertSeconds },
+      'stream silent too long; reopening',
+    );
+    capture.alerted = true;
+    this.#notify(
+      session.channelId,
+      `⚠️ **${name}**'s stream has been silent for ${String(minutes)} min. ` +
+        "Reopening it in case the problem is on the recorder's side.",
+    );
+    const screenshot = await this.#screenshot('silent-long');
+    this.#logger.info({ target: name, screenshot }, 'saved screenshot of silent stream');
+    if (!this.#inVoice) return;
+    await stopWatching(this.#page).catch(() => undefined);
+    // The capture keeps running: it records whatever the browser plays.
+    if (await this.#showStream(capture.target, session)) {
+      this.#logger.info({ target: name }, 'reopened silent stream');
+    }
   }
 }

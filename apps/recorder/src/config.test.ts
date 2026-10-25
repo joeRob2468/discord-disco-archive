@@ -23,6 +23,7 @@ describe('loadConfig', () => {
     expect(config.processing.exportFormats).toEqual(['mp3']);
     expect(config.session.restartGraceMs).toBe(60_000);
     expect(config.session.handoverSilenceSeconds).toBe(45);
+    expect(config.session.silenceAlertSeconds).toBe(300);
   });
 
   it('keeps the stream volume at or below 100%', () => {

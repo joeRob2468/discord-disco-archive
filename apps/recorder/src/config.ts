@@ -107,11 +107,13 @@ const sessionSchema = z
     RECORDINGS_DIR: withDefault(z.string().min(1), './data/recordings'),
     RESTART_GRACE_SECONDS: withDefault(envInteger.min(0), '60'),
     HANDOVER_SILENCE_SECONDS: withDefault(envInteger.min(5), '45'),
+    SILENCE_ALERT_SECONDS: withDefault(envInteger.min(30), '300'),
   })
   .transform((env) => ({
     recordingsDir: env.RECORDINGS_DIR,
     restartGraceMs: env.RESTART_GRACE_SECONDS * 1000,
     handoverSilenceSeconds: env.HANDOVER_SILENCE_SECONDS,
+    silenceAlertSeconds: env.SILENCE_ALERT_SECONDS,
   }));
 
 export type DiscordConfig = z.output<typeof discordSchema>;
