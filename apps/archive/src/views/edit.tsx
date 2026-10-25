@@ -356,9 +356,9 @@ export function EditStreamerDialog({
 }
 
 /**
- * Add a set to a finished session from a file. The page script sends the file as the
- * request body with a progress bar (`data-upload`); the recorder then imports and levels
- * it, so it shows up a few seconds later.
+ * Add a set to a finished session from a file. The page script sends the file in
+ * resumable pieces with a progress bar (`data-upload`); the recorder then imports and
+ * levels it, so it shows up a few seconds later.
  */
 export function AddSetDialog({
   session,

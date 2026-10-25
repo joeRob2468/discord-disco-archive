@@ -2,8 +2,8 @@
  * The admin panel and the admin-only edit endpoints (HTML form posts). Fields missing
  * from a form are left unchanged, so a one-field form (e.g. the quick Hide button) only
  * touches that field. Edit forms may also carry an image (`image` upload, or
- * `removeImage=1`), applied in the same save. Sets uploaded from a file come in as a raw
- * request body instead (see `uploads.ts`), since they can be gigabytes.
+ * `removeImage=1`), applied in the same save. Sets uploaded from a file come in as raw
+ * request bodies in pieces instead (see `uploads.ts`), since they can be gigabytes.
  */
 import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -12,7 +12,15 @@ import { safeNext, type AuthEnv } from '../auth/auth.ts';
 import { SET_SORTS, type Catalog, type ImageEntity } from '../catalog/catalog.ts';
 import { deleteImage, IMAGE_MAX_BYTES, ImageError, saveImage } from '../images.ts';
 import { DeleteError, deleteSessionFolder, deleteSetFiles } from '../recordings.ts';
-import { saveUpload, UploadError, UploadInterruptedError } from '../uploads.ts';
+import {
+  CHUNK_BYTES,
+  receiveChunk,
+  startUpload,
+  UploadError,
+  UploadInterruptedError,
+  UploadOffsetError,
+  uploadProgress,
+} from '../uploads.ts';
 import {
   ActivityPage,
   AdminSetsPage,
@@ -222,44 +230,87 @@ export function adminRoutes(
     return redirectBack(c, body, '/sessions');
   });
 
-  // Add a set from a file: the file is the request body, streamed to disk; its details
-  // are query parameters. Answers in plain text, for the upload dialog to show.
-  app.put('/sessions/:id/uploads', requireAdmin, async (c) => {
-    const session = catalog.getSession(c.req.param('id'), true);
-    if (!session) return c.text('No such session.', 404);
+  // Add a set from a file, in pieces (see `uploads.ts`): start it with its details,
+  // send each piece at its offset, and ask how much has arrived to resume after a drop.
+  // JSON in and out, for the upload dialog's script.
+  const endedSession = (c: Context<AuthEnv>) => {
+    const session = catalog.getSession(c.req.param('id') ?? '', true);
+    if (!session) return { error: c.json({ error: 'No such session.' }, 404) };
     if (session.endedAt === undefined) {
-      return c.text('This session is still recording. Add sets once it has ended.', 409);
+      return {
+        error: c.json(
+          { error: 'This session is still recording. Add sets once it has ended.' },
+          409,
+        ),
+      };
     }
-    const body = c.req.raw.body;
-    if (!body || c.req.header('content-type') !== 'application/octet-stream') {
-      return c.text('Send the file as the request body.', 400);
-    }
-    const length = Number(c.req.header('content-length'));
+    return { session };
+  };
+
+  app.post('/sessions/:id/uploads', requireAdmin, async (c) => {
+    const { session, error } = endedSession(c);
+    if (!session) return error;
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const text = (key: string): string => (typeof body[key] === 'string' ? body[key] : '');
     const upload = {
-      fileName: c.req.query('name') ?? '',
-      bytes: Number.isSafeInteger(length) ? length : undefined,
-      userId: c.req.query('userId') ?? '',
-      displayName: c.req.query('displayName') ?? '',
-      startedAt: new Date(c.req.query('startedAt') ?? ''),
+      fileName: text('name'),
+      size: typeof body['size'] === 'number' ? body['size'] : 0,
+      userId: text('userId'),
+      displayName: text('displayName'),
+      startedAt: new Date(text('startedAt')),
     };
     const context = { sessionId: session.id, dir: session.dir, ...upload };
     try {
-      const id = await saveUpload(recordingsDir, session.dir, body, upload);
-      logger?.info({ ...context, uploadId: id }, 'set uploaded');
-    } catch (error) {
-      if (!(error instanceof UploadError)) throw error;
-      // Nothing is kept from an interrupted upload; the client may not be there to hear it.
-      const interrupted = error instanceof UploadInterruptedError;
-      logger?.warn(
-        { ...context, reason: error.message },
-        interrupted ? 'upload interrupted' : 'upload refused',
-      );
-      return c.text(interrupted ? `Upload interrupted: ${error.message}` : error.message, 400);
+      const id = await startUpload(recordingsDir, session.dir, upload);
+      logger?.info({ ...context, uploadId: id }, 'upload started');
+      return c.json({ id, chunkBytes: CHUNK_BYTES }, 201);
+    } catch (refused) {
+      if (!(refused instanceof UploadError)) throw refused;
+      logger?.warn({ ...context, reason: refused.message }, 'upload refused');
+      return c.json({ error: refused.message }, 400);
     }
-    return c.text(
-      'Uploaded. The set appears in a few seconds and is playable once it has been leveled.',
-      201,
-    );
+  });
+
+  app.get('/sessions/:id/uploads/:upload', requireAdmin, async (c) => {
+    const { session, error } = endedSession(c);
+    if (!session) return error;
+    const progress = await uploadProgress(recordingsDir, session.dir, c.req.param('upload'));
+    return progress ? c.json(progress) : c.json({ error: 'No such upload.' }, 404);
+  });
+
+  app.put('/sessions/:id/uploads/:upload', requireAdmin, async (c) => {
+    const { session, error } = endedSession(c);
+    if (!session) return error;
+    const body = c.req.raw.body;
+    if (!body || c.req.header('content-type') !== 'application/octet-stream') {
+      return c.json({ error: 'Send the piece as the request body.' }, 400);
+    }
+    const id = c.req.param('upload');
+    const length = Number(c.req.header('content-length'));
+    const context = { sessionId: session.id, dir: session.dir, uploadId: id };
+    try {
+      const progress = await receiveChunk(
+        recordingsDir,
+        session.dir,
+        id,
+        Number(c.req.query('offset')),
+        Number.isSafeInteger(length) ? length : undefined,
+        body,
+      );
+      if (progress.done) logger?.info({ ...context, bytes: progress.size }, 'set uploaded');
+      return c.json(progress);
+    } catch (refused) {
+      if (refused instanceof UploadOffsetError) {
+        return c.json({ error: refused.message, received: refused.received }, 409);
+      }
+      if (!(refused instanceof UploadError)) throw refused;
+      // The partial piece is dropped; the client retries it, or may not be there to hear.
+      logger?.warn(
+        { ...context, reason: refused.message },
+        refused instanceof UploadInterruptedError ? 'upload piece interrupted' : 'upload refused',
+      );
+      return c.json({ error: refused.message }, 400);
+    }
   });
 
   // Reorder an album: `move=up|down` with `set=<id>`, or `move=reset`.

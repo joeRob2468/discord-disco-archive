@@ -58,7 +58,7 @@ export interface LayoutProps {
  * handles the theme toggle, admin edit dialogs (`data-dialog`), set rows that expand
  * into an inline set page (`data-expand`, fetched by htmx) and "Copy link" buttons,
  * disables a form's submit buttons while its post is pending, and sends "Add a set"
- * uploads (`data-upload`) as a raw body with a progress bar. Delegated on `document`, so it
+ * uploads (`data-upload`) in resumable pieces with a progress bar. Delegated on `document`, so it
  * survives hx-boost swaps.
  */
 const PAGE_SCRIPT = `
@@ -118,71 +118,121 @@ const PAGE_SCRIPT = `
       for (const button of buttons) button.disabled = false;
     }, { once: true });
   });
-  // "Add a set": the file goes as the request body (it can be gigabytes), the rest in the
-  // query, so the server can stream it to disk.
+  // "Add a set": the file goes up in pieces (uploads.ts). A piece that fails is retried
+  // from wherever the server got to, so a dropped connection doesn't start it over.
   document.addEventListener('submit', (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || !('upload' in form.dataset)) return;
     event.preventDefault();
     const file = form.elements.file.files[0];
-    if (!file) return;
-    const bar = form.querySelector('progress');
-    const status = form.querySelector('[data-upload-status]');
-    const submit = form.querySelector('button[type="submit"]');
-    const params = new URLSearchParams({
-      name: file.name,
-      userId: form.elements.userId.value,
-      displayName: form.elements.displayName.value,
-      // datetime-local is the viewer's local time.
-      startedAt: new Date(form.elements.startedAt.value).toISOString(),
-    });
-    const done = (ok, message) => {
-      status.textContent = message;
-      status.classList.toggle('text-error', !ok);
-      bar.hidden = true;
-      if (!ok) {
-        submit.disabled = false;
-        return;
-      }
-      submit.textContent = 'Close and reload';
-      submit.type = 'button';
-      submit.disabled = false;
-      submit.addEventListener('click', () => location.reload(), { once: true });
-    };
+    if (file) void uploadSet(form, file);
+  });
+  const RETRY_DELAYS_MS = [2000, 5000, 10000, 20000, 30000];
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const jsonOf = async (response) => {
+    try { return await response.json(); } catch { return {}; }
+  };
+  /** Send one piece. Rejects if the connection fails or makes no progress for a minute. */
+  const sendPiece = (url, piece, onProgress) => new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', form.action + '?' + params);
+    xhr.open('PUT', url);
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-    // A dropped connection can hang without an error; give up after a minute with no progress.
-    let stalled = false;
     let stallTimer;
     const watch = () => {
       clearTimeout(stallTimer);
-      stallTimer = setTimeout(() => {
-        stalled = true;
-        xhr.abort();
-      }, 60000);
+      stallTimer = setTimeout(() => xhr.abort(), 60000);
     };
     xhr.upload.addEventListener('progress', (progress) => {
       watch();
-      if (!progress.lengthComputable) return;
-      bar.value = progress.loaded / progress.total;
-      status.textContent = 'Uploading… ' + Math.floor(bar.value * 100) + '%';
+      onProgress(progress.loaded);
     });
     xhr.addEventListener('loadend', () => clearTimeout(stallTimer));
-    xhr.addEventListener('load', () => done(xhr.status < 300, xhr.responseText || 'Upload failed.'));
-    xhr.addEventListener('error', () =>
-      done(false, 'Upload failed: the connection was lost. Try again.'),
-    );
-    xhr.addEventListener('abort', () =>
-      done(false, stalled ? 'Upload stalled for a minute, so it was stopped. Try again.' : 'Upload stopped.'),
-    );
+    xhr.addEventListener('load', () => {
+      let body = {};
+      try { body = JSON.parse(xhr.responseText); } catch {}
+      resolve({ status: xhr.status, body });
+    });
+    xhr.addEventListener('error', () => reject(new Error('connection lost')));
+    xhr.addEventListener('abort', () => reject(new Error('stalled')));
     watch();
+    xhr.send(piece);
+  });
+  async function uploadSet(form, file) {
+    const bar = form.querySelector('progress');
+    const status = form.querySelector('[data-upload-status]');
+    const submit = form.querySelector('button[type="submit"]');
+    const show = (text, error) => {
+      status.textContent = text;
+      status.classList.toggle('text-error', Boolean(error));
+    };
+    const fail = (message) => {
+      show(message, true);
+      bar.hidden = true;
+      submit.disabled = false;
+    };
     submit.disabled = true;
-    status.classList.remove('text-error');
     bar.hidden = false;
     bar.value = 0;
-    xhr.send(file);
-  });
+    show('Starting…');
+    let start;
+    try {
+      start = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          userId: form.elements.userId.value,
+          displayName: form.elements.displayName.value,
+          // datetime-local is the viewer's local time.
+          startedAt: new Date(form.elements.startedAt.value).toISOString(),
+        }),
+      });
+    } catch {
+      return fail('Upload failed: the connection was lost. Try again.');
+    }
+    const started = await jsonOf(start);
+    if (!start.ok) return fail(started.error || 'Upload failed.');
+    const url = form.action + '/' + started.id;
+    let offset = 0;
+    let retries = 0;
+    for (;;) {
+      const piece = file.slice(offset, offset + started.chunkBytes);
+      try {
+        const { status: code, body } = await sendPiece(url + '?offset=' + offset, piece, (sent) => {
+          bar.value = (offset + sent) / file.size;
+          show('Uploading… ' + Math.floor(bar.value * 100) + '%');
+        });
+        if (code === 409 && typeof body.received === 'number') {
+          offset = body.received;
+          continue;
+        }
+        if (code >= 500) throw new Error('server error');
+        if (code >= 300) return fail(body.error || 'Upload failed.');
+        retries = 0;
+        if (body.done) break;
+        offset = body.received;
+      } catch {
+        if (retries >= RETRY_DELAYS_MS.length) {
+          return fail('Upload failed: the connection kept dropping. Try again.');
+        }
+        show('Connection lost; retrying…', true);
+        await sleep(RETRY_DELAYS_MS[retries++]);
+        // Carry on from what the server has: it drops a piece that didn't arrive whole.
+        try {
+          const response = await fetch(url);
+          const progress = await jsonOf(response);
+          if (response.ok) offset = progress.received;
+        } catch {}
+      }
+    }
+    bar.hidden = true;
+    show('Uploaded. The set appears in a few seconds and is playable once it has been leveled.');
+    submit.textContent = 'Close and reload';
+    submit.type = 'button';
+    submit.disabled = false;
+    submit.addEventListener('click', () => location.reload(), { once: true });
+  }
   // A dropdown left open must not survive navigation.
   document.addEventListener('htmx:beforeSwap', () => {
     for (const open of document.querySelectorAll('details.dropdown[open]')) open.removeAttribute('open');

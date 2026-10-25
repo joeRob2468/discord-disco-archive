@@ -488,39 +488,65 @@ describe('archive app', () => {
     });
 
     describe('adding a set from a file', () => {
-      const upload = (cookie: string | undefined, query: Record<string, string>, body = 'audio') =>
-        new Request(
-          `${ORIGIN}/sessions/session-1/uploads?${new URLSearchParams(query).toString()}`,
-          {
-            method: 'PUT',
-            headers: {
-              Origin: ORIGIN,
-              'Content-Type': 'application/octet-stream',
-              ...(cookie && { Cookie: cookie }),
-            },
-            body,
+      const base = `${ORIGIN}/sessions/session-1/uploads`;
+      const start = (cookie: string | undefined, details: Record<string, unknown>) =>
+        new Request(base, {
+          method: 'POST',
+          headers: {
+            Origin: ORIGIN,
+            'Content-Type': 'application/json',
+            ...(cookie && { Cookie: cookie }),
           },
-        );
+          body: JSON.stringify(details),
+        });
+      const piece = (cookie: string, id: string, offset: number, text: string) =>
+        new Request(`${base}/${id}?offset=${String(offset)}`, {
+          method: 'PUT',
+          headers: {
+            Origin: ORIGIN,
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': String(text.length),
+            Cookie: cookie,
+          },
+          body: text,
+        });
       const details = {
         name: 'Afterglow set.mp3',
+        size: 10,
         userId: DJ_A,
         displayName: 'Afterglow',
         startedAt: '2026-11-14T23:00:00.000Z',
       };
       const uploadsDir = () => path.join(recordings.dir, '2026-11-14_halloween-disco', 'uploads');
 
-      it('saves the file and an import request for the recorder', async () => {
+      it('takes the file in pieces, then leaves an import request for the recorder', async () => {
         const app = build(adminEnv);
-        const response = await app.request(upload(await loginAsAdmin(app), details));
-        expect(response.status).toBe(201);
-        const files = (await readdir(uploadsDir())).sort();
-        expect(files).toHaveLength(2);
-        const [request, audio] = files.map((name) => path.join(uploadsDir(), name));
-        expect(audio).toMatch(/\.mp3$/);
-        expect(await readFile(audio ?? '', 'utf8')).toBe('audio');
-        expect(JSON.parse(await readFile(request ?? '', 'utf8'))).toEqual({
+        const cookie = await loginAsAdmin(app);
+        const started = await app.request(start(cookie, details));
+        expect(started.status).toBe(201);
+        const { id } = (await started.json()) as { id: string };
+
+        expect(await (await app.request(piece(cookie, id, 0, '01234'))).json()).toEqual({
+          received: 5,
+          size: 10,
+          done: false,
+        });
+        // Resuming: the client asks where to carry on.
+        const progress = await app.request(`${base}/${id}`, { headers: { Cookie: cookie } });
+        expect(await progress.json()).toMatchObject({ received: 5 });
+        // A repeated piece is refused with where the upload stands.
+        const repeat = await app.request(piece(cookie, id, 0, '01234'));
+        expect(repeat.status).toBe(409);
+        expect(await repeat.json()).toMatchObject({ received: 5 });
+
+        const last = await app.request(piece(cookie, id, 5, '56789'));
+        expect(await last.json()).toMatchObject({ done: true });
+        const visible = (await readdir(uploadsDir())).filter((name) => !name.startsWith('.'));
+        expect(visible.sort()).toEqual([`${id}.json`, `${id}.mp3`]);
+        expect(await readFile(path.join(uploadsDir(), `${id}.mp3`), 'utf8')).toBe('0123456789');
+        expect(JSON.parse(await readFile(path.join(uploadsDir(), `${id}.json`), 'utf8'))).toEqual({
           schemaVersion: 1,
-          file: path.basename(audio ?? ''),
+          file: `${id}.mp3`,
           userId: DJ_A,
           displayName: 'Afterglow',
           startedAt: details.startedAt,
@@ -530,11 +556,10 @@ describe('archive app', () => {
       it('refuses other file types and missing details, writing nothing', async () => {
         const app = build(adminEnv);
         const cookie = await loginAsAdmin(app);
-        const exe = await app.request(upload(cookie, { ...details, name: 'set.exe' }));
+        const exe = await app.request(start(cookie, { ...details, name: 'set.exe' }));
         expect(exe.status).toBe(400);
-        expect(await exe.text()).toContain("Can't use a .exe file");
-        const noDj = await app.request(upload(cookie, { ...details, userId: '' }));
-        expect(noDj.status).toBe(400);
+        expect(((await exe.json()) as { error: string }).error).toContain("Can't use a .exe file");
+        expect((await app.request(start(cookie, { ...details, userId: '' }))).status).toBe(400);
         await expect(readdir(uploadsDir())).rejects.toThrow();
       });
 
@@ -549,13 +574,13 @@ describe('archive app', () => {
         );
         await syncCatalog(db, recordings.dir);
         const app = build(adminEnv);
-        const response = await app.request(upload(await loginAsAdmin(app), details));
+        const response = await app.request(start(await loginAsAdmin(app), details));
         expect(response.status).toBe(409);
       });
 
       it('is admin-only', async () => {
         const app = build(adminEnv);
-        expect((await app.request(upload(undefined, details))).status).toBe(404);
+        expect((await app.request(start(undefined, details))).status).toBe(404);
       });
     });
 

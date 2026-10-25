@@ -1,32 +1,41 @@
-import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { saveUpload, UploadInterruptedError } from './uploads.ts';
+import {
+  receiveChunk,
+  startUpload,
+  UploadInterruptedError,
+  UploadOffsetError,
+  uploadProgress,
+} from './uploads.ts';
 
 const SESSION = '2026-10-24_disco';
 const upload = {
   fileName: 'set.mp3',
-  bytes: undefined as number | undefined,
+  size: 10,
   userId: '400000000000000001',
   displayName: 'Afterglow',
   startedAt: new Date('2026-10-25T01:00:00Z'),
 };
 
-/** A body of `chunks`, then an error if `fail` is given (the client went away). */
-function body(chunks: string[], fail?: Error): ReadableStream<Uint8Array> {
+/** A body of `text`, then an error if `fail` is given (the client went away). */
+function body(text: string, fail?: Error): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
-      for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+      controller.enqueue(new TextEncoder().encode(text));
       if (fail) controller.error(fail);
       else controller.close();
     },
   });
 }
 
-describe('saveUpload', () => {
+describe('chunked uploads', () => {
   let dir: string;
   const uploads = () => path.join(dir, SESSION, 'uploads');
+  const visible = async () => (await readdir(uploads())).filter((name) => !name.startsWith('.'));
+  const send = (id: string, offset: number, text: string, fail?: Error) =>
+    receiveChunk(dir, SESSION, id, offset, text.length, body(text, fail));
 
   beforeEach(async () => {
     dir = await mkdtemp(path.join(tmpdir(), 'dsr-uploads-'));
@@ -36,32 +45,70 @@ describe('saveUpload', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('keeps nothing when the client goes away mid-upload', async () => {
-    await expect(
-      saveUpload(dir, SESSION, body(['part of a set'], new Error('aborted')), upload),
-    ).rejects.toThrow(UploadInterruptedError);
-    expect(await readdir(uploads())).toEqual([]);
+  it('assembles the pieces, then writes the import request', async () => {
+    const id = await startUpload(dir, SESSION, upload);
+    expect(await send(id, 0, '01234')).toEqual({ received: 5, size: 10, done: false });
+    expect(await visible()).toEqual([]);
+    expect(await send(id, 5, '56789')).toEqual({ received: 10, size: 10, done: true });
+    expect((await visible()).sort()).toEqual([`${id}.json`, `${id}.mp3`]);
+    expect(await readFile(path.join(uploads(), `${id}.mp3`), 'utf8')).toBe('0123456789');
+    expect(JSON.parse(await readFile(path.join(uploads(), `${id}.json`), 'utf8'))).toMatchObject({
+      file: `${id}.mp3`,
+      displayName: 'Afterglow',
+    });
+    // Nothing of it left in progress.
+    expect(await readdir(uploads())).toHaveLength(2);
   });
 
-  it('keeps nothing when the body is shorter than announced', async () => {
-    await expect(
-      saveUpload(dir, SESSION, body(['12345']), { ...upload, bytes: 10 }),
-    ).rejects.toThrow('Received 5 of 10 bytes.');
-    expect(await readdir(uploads())).toEqual([]);
+  it('drops a piece cut off midway, so it can be sent again', async () => {
+    const id = await startUpload(dir, SESSION, upload);
+    await send(id, 0, '01234');
+    await expect(send(id, 5, '567', new Error('aborted'))).rejects.toThrow(UploadInterruptedError);
+    expect(await uploadProgress(dir, SESSION, id)).toEqual({ received: 5, size: 10, done: false });
+    expect((await send(id, 5, '56789')).done).toBe(true);
+    expect(await readFile(path.join(uploads(), `${id}.mp3`), 'utf8')).toBe('0123456789');
   });
 
-  it('clears partial files left by an archive that stopped mid-upload', async () => {
+  it('drops a piece shorter than announced', async () => {
+    const id = await startUpload(dir, SESSION, upload);
+    await expect(receiveChunk(dir, SESSION, id, 0, 5, body('012'))).rejects.toThrow(
+      'Received 3 of 5 bytes.',
+    );
+    expect((await uploadProgress(dir, SESSION, id))?.received).toBe(0);
+  });
+
+  it('refuses a piece for the wrong place, saying where it stands', async () => {
+    const id = await startUpload(dir, SESSION, upload);
+    await send(id, 0, '01234');
+    // A retry of a piece that did arrive.
+    const repeat = await send(id, 0, '01234').catch((error: unknown) => error);
+    expect(repeat).toBeInstanceOf(UploadOffsetError);
+    expect((repeat as UploadOffsetError).received).toBe(5);
+  });
+
+  it('refuses unknown uploads and bad details', async () => {
+    await expect(send('00000000-0000-4000-8000-000000000000', 0, 'x')).rejects.toThrow(
+      'No such upload',
+    );
+    await expect(startUpload(dir, SESSION, { ...upload, fileName: 'set.exe' })).rejects.toThrow(
+      "Can't use a .exe file",
+    );
+    await expect(startUpload(dir, SESSION, { ...upload, size: 0 })).rejects.toThrow('empty');
+    await expect(startUpload(dir, SESSION, { ...upload, userId: '' })).rejects.toThrow('Pick a DJ');
+  });
+
+  it('clears unfinished uploads left for a day', async () => {
     await mkdir(uploads(), { recursive: true });
-    const stale = path.join(uploads(), '.old.mp3.part');
-    const fresh = path.join(uploads(), '.current.mp3.part');
-    await writeFile(stale, 'x');
-    await writeFile(fresh, 'x');
+    const stale = ['.old.mp3.part', '.old.pending'];
+    for (const name of [...stale, '.current.mp3.part']) {
+      await writeFile(path.join(uploads(), name), 'x');
+    }
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-    await utimes(stale, twoDaysAgo, twoDaysAgo);
-    await saveUpload(dir, SESSION, body(['audio']), { ...upload, bytes: 5 });
+    for (const name of stale) await utimes(path.join(uploads(), name), twoDaysAgo, twoDaysAgo);
+    await startUpload(dir, SESSION, upload);
     const names = await readdir(uploads());
     expect(names).not.toContain('.old.mp3.part');
+    expect(names).not.toContain('.old.pending');
     expect(names).toContain('.current.mp3.part');
-    expect(names.filter((name) => !name.startsWith('.'))).toHaveLength(2);
   });
 });

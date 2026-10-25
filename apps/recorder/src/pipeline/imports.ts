@@ -38,7 +38,9 @@ export async function findImports(recordingsDir: string): Promise<PendingImport[
     if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name.startsWith('_')) continue;
     const uploads = path.join(recordingsDir, entry.name, UPLOADS_DIR);
     const names = await readdir(uploads).catch(() => []);
-    for (const name of names.filter((n) => n.endsWith('.json')).sort()) {
+    // Hidden files are uploads still arriving.
+    const requests = names.filter((name) => name.endsWith('.json') && !name.startsWith('.'));
+    for (const name of requests.sort()) {
       pending.push({ sessionDir: entry.name, requestFile: path.join(uploads, name) });
     }
   }
