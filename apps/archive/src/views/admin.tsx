@@ -19,6 +19,7 @@ import {
 } from './format.ts';
 import { Icon, Layout } from './layout.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
+import { PlayCount } from './play.tsx';
 import { naturalDir, SortHeader, TablePanel, withQuery } from './tables.tsx';
 
 const TABS = [
@@ -235,7 +236,9 @@ function SetsTable({ list, filters }: { list: Page<SetSummary>; filters: AdminSe
                 {set.status === 'ready' ? 'ready' : ''}
                 <StatusBadges set={set} />
               </td>
-              <td class="text-right tabular-nums">{set.plays}</td>
+              <td class="text-right tabular-nums">
+                <PlayCount set={set} bare />
+              </td>
               <td class="text-right whitespace-nowrap tabular-nums">
                 {formatBytes(totalBytes(set))}
               </td>

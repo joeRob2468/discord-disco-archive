@@ -9,7 +9,7 @@ import { Art, DjAvatar } from './cards.tsx';
 import { formatDate, formatDuration, plural } from './format.ts';
 import { Layout, type Preview } from './layout.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
-import { PlayButton, queueOf } from './play.tsx';
+import { PlayButton, PlayCount, queueOf } from './play.tsx';
 
 export interface Album {
   session: SessionSummary;
@@ -146,7 +146,7 @@ function PopularSets({ sets }: { sets: SetSummary[] }) {
               <div class="relative">
                 <Art seed={set.uuid} image={setArt(set)} class="aspect-[4/3] rounded-2xl" />
                 <span class="badge badge-sm absolute top-2 left-2 border-0 bg-black/50 text-white">
-                  {plural(set.plays, 'play')}
+                  <PlayCount set={set} />
                 </span>
               </div>
               <div class="mt-3 flex items-center gap-2 px-1">

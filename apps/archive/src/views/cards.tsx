@@ -2,9 +2,9 @@
 import type { SetSummary } from '../catalog/catalog.ts';
 import type { Track } from '../client/track.ts';
 import { gradient, imageUrl, initials, setArt } from './art.ts';
-import { formatDate, formatDuration, plural } from './format.ts';
+import { formatDate, formatDuration } from './format.ts';
 import { setUrl } from './links.ts';
-import { PlayButton, QueueButton } from './play.tsx';
+import { PlayButton, PlayCount, QueueButton } from './play.tsx';
 
 /** Artwork: the uploaded image if there is one, else a gradient seeded by `seed`. */
 export function Art({
@@ -161,13 +161,13 @@ export function SetListRow({
               </p>
             ) : (
               <p class="text-base-content/60 truncate text-sm tabular-nums sm:hidden">
-                {formatDuration(set.durationSeconds)} · {plural(set.plays, 'play')}
+                {formatDuration(set.durationSeconds)} · <PlayCount set={set} />
               </p>
             )}
           </div>
         </a>
         <span class="text-base-content/60 hidden text-sm tabular-nums sm:block">
-          {plural(set.plays, 'play')}
+          <PlayCount set={set} />
         </span>
         <span class="hidden w-14 text-right text-sm tabular-nums sm:block">
           {formatDuration(set.durationSeconds)}

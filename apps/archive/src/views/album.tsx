@@ -13,7 +13,7 @@ import { EditButton, EditSessionDialog, EditSetDialog, EditStreamerDialog } from
 import { formatDate, formatDateTime, formatDuration, plural } from './format.ts';
 import { djsOf, totalSeconds, type Album } from './home.tsx';
 import { Layout } from './layout.tsx';
-import { PlayButton, QueueButton, queueOf } from './play.tsx';
+import { PlayButton, PlayCount, QueueButton, queueOf } from './play.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
 
 export function AlbumPage({ album, auth }: { album: Album; auth: AuthState }) {
@@ -284,7 +284,7 @@ export function SetDetailPage(props: {
           </a>
           <p class="text-base-content/60 mt-2 mb-4 text-sm">
             {formatDateTime(set.startedAt)} · {formatDuration(set.durationSeconds)} ·{' '}
-            {plural(set.plays, 'play')}
+            <PlayCount set={set} />
           </p>
           <SetActions set={set} queue={queue}>
             {auth.isAdmin && (
@@ -317,7 +317,7 @@ export function SetInline({ set, albumSets }: { set: SetSummary; albumSets: SetS
     <div class="flex flex-col gap-3 px-3 pt-1 pb-4 sm:pl-14">
       <p class="text-base-content/60 text-sm">
         {formatDateTime(set.startedAt)} · {formatDuration(set.durationSeconds)} ·{' '}
-        {plural(set.plays, 'play')} · Set {albumSets.findIndex((s) => s.id === set.id) + 1} of{' '}
+        <PlayCount set={set} /> · Set {albumSets.findIndex((s) => s.id === set.id) + 1} of{' '}
         {albumSets.length} from <a href={sessionUrl(set.sessionId)}>{set.sessionTitle}</a>
       </p>
       {set.description && <p class="max-w-prose whitespace-pre-line">{set.description}</p>}

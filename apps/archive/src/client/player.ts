@@ -186,9 +186,24 @@ function init(): void {
 
   function countPlay(track: Track): void {
     counted = true;
-    void fetch(`/api/plays/${encodeURIComponent(track.uuid)}`, { method: 'POST' }).catch(
-      () => undefined,
-    );
+    void fetch(`/api/plays/${encodeURIComponent(track.uuid)}`, { method: 'POST' })
+      .then((response) => {
+        if (response.ok) bumpPlayCounts(track.uuid);
+      })
+      .catch(() => undefined);
+  }
+
+  /** Show the new play on the page: every count tagged with the set (see `PlayCount`). */
+  function bumpPlayCounts(uuid: string): void {
+    for (const element of document.querySelectorAll<HTMLElement>('[data-play-count]')) {
+      if (element.dataset['playCount'] !== uuid) continue;
+      const plays = Number(element.dataset['plays'] ?? 0) + 1;
+      element.dataset['plays'] = String(plays);
+      element.textContent =
+        element.dataset['bare'] === undefined
+          ? `${String(plays)} play${plays === 1 ? '' : 's'}`
+          : String(plays);
+    }
   }
 
   document.addEventListener('click', (event) => {
