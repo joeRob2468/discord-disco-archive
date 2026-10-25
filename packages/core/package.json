@@ -2,6 +2,7 @@
   "name": "@dsr/core",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Shared domain model: session/state file schemas, file layout, naming, env parsing, logging.",
   "type": "module",
   "exports": {

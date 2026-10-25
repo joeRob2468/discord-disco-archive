@@ -87,3 +87,7 @@ The recorder only runs in its container (Xvfb, PulseAudio), and only one recorde
 - [docs/development.md](docs/development.md): scripts and local workflow.
 - [docs/conventions.md](docs/conventions.md): code rules.
 - [docs/research.md](docs/research.md): verified facts with sources.
+
+## License
+
+[MIT](LICENSE). It covers this code only: running the recorder still means automating a Discord user account, which Discord's terms forbid (see the ToS note above).

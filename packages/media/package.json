@@ -2,6 +2,7 @@
   "name": "@dsr/media",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "ffmpeg wrappers: loudness measurement and normalisation, export encodes.",
   "type": "module",
   "exports": {

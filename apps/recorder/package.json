@@ -2,6 +2,7 @@
   "name": "@dsr/recorder",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Discord bot + browser-driven Go Live capture. Writes recordings and session.json.",
   "type": "module",
   "scripts": {

@@ -2,6 +2,7 @@
   "name": "discord-stream-recorder",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Record Discord Go Live DJ sets per streamer, level them, and publish a web archive.",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
