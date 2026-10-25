@@ -4,14 +4,17 @@
  * process (docs/design.md, "Approach"). It needs Xvfb and PulseAudio, so it runs in the
  * container.
  */
+import { once } from 'node:events';
 import path from 'node:path';
-import { createLogger } from '@dsr/core';
-import type { Client } from 'discord.js';
+import { createLogger, readJsonFile, sessionPaths, sessionSchema } from '@dsr/core';
+import { Events, type Client } from 'discord.js';
 import { createAnnouncer, createChannelPoster } from './bot/announcer.ts';
 import { startBot } from './bot/bot.ts';
+import * as messages from './bot/messages.ts';
 import { checkBrowser, FIX_HINT, HEALTH_PROBLEMS, HealthMonitor } from './browser/health.ts';
 import { DISCORD_APP_URL, launchBrowser } from './browser/launch.ts';
 import { RecordingController } from './capture/controller.ts';
+import { readActiveSession, writeActiveSession } from './capture/recorder-state.ts';
 import { findSessions } from './capture/session-record.ts';
 import { loadConfig } from './config.ts';
 import { findImports, importSet } from './pipeline/imports.ts';
@@ -147,6 +150,76 @@ const client = await startBot({
 });
 clientRef.current = client;
 
+// After a restart mid-session (crash, deploy, reboot), carry on with that session.
+const RESUME_LOOP_MS = 10 * 60 * 1000;
+const resumeAfterRestart = async (): Promise<void> => {
+  const dir = config.session.recordingsDir;
+  const active = await readActiveSession(dir).catch((error: unknown) => {
+    logger.warn({ err: error }, 'could not read the active session');
+    return undefined;
+  });
+  if (!active) return;
+  const forget = () => writeActiveSession(dir, null).catch(() => undefined);
+  const session = await readJsonFile(
+    sessionPaths(dir, active.dir).sessionFile,
+    sessionSchema,
+  ).catch(() => undefined);
+  if (!session) {
+    logger.warn({ dir: active.dir }, 'the active session is gone; not resuming');
+    return forget();
+  }
+  const say = (content: string) => {
+    post(session.channelId, content);
+  };
+  // Crashing again soon after resuming: don't keep rejoining voice.
+  if (active.resumedAt && Date.now() - Date.parse(active.resumedAt) < RESUME_LOOP_MS) {
+    logger.error({ dir: active.dir }, 'restarted again soon after resuming; not resuming');
+    say(
+      "⚠️ The recorder restarted again soon after resuming, so it isn't resuming by itself. " +
+        'Check its logs, then run `/record resume`.',
+    );
+    return forget();
+  }
+  const browser = await health.poll();
+  if (browser !== 'ok') {
+    say(
+      `⚠️ The recorder restarted mid-session but can't resume: ${HEALTH_PROBLEMS[browser]}. ` +
+        `${FIX_HINT} Then run \`/record resume\`.`,
+    );
+    return forget();
+  }
+  if (!client.isReady()) await once(client, Events.ClientReady);
+  const channel = client.guilds.cache.get(session.guildId)?.channels.cache.get(session.channelId);
+  if (!channel?.isVoiceBased()) {
+    logger.warn({ channelId: session.channelId }, "can't see the session's channel; not resuming");
+    return forget();
+  }
+  const liveNow = channel.members
+    .filter(
+      (member) => member.voice.streaming === true && member.id !== config.discord.recorderUserId,
+    )
+    .map((member) => ({ userId: member.id, displayName: member.displayName }));
+  await writeActiveSession(dir, { ...active, resumedAt: new Date().toISOString() });
+  logger.info({ dir: active.dir }, 'resuming the session after a restart');
+  const result = sessions.start(
+    {
+      guildId: session.guildId,
+      channelId: channel.id,
+      channelName: channel.name,
+      title: session.title,
+      startedAt: new Date(session.startedAt),
+      startedBy: session.startedBy,
+      resumeDir: active.dir,
+      afterRestart: true,
+    },
+    liveNow,
+  );
+  if (result.ok) say(messages.resumedAfterRestart(sessions.status()?.target));
+};
+void resumeAfterRestart().catch((error: unknown) => {
+  logger.error({ err: error }, 'could not resume the session after a restart');
+});
+
 // Raw captures and dropped export formats are cleaned up at startup, then hourly. The
 // sweep runs in the processor's queue, so it never edits a session.json that an import
 // or a reprocess has open.
@@ -208,8 +281,13 @@ const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'shutting down');
   const active = sessions.active;
   if (active) {
-    post(active.channelId, '⏹️ Recording stopped: the recorder is shutting down.');
-    // Finalises the current set (marked partial) and leaves voice, through the controller.
+    post(
+      active.channelId,
+      "⏸️ The recorder is shutting down; it'll carry on with this session when it's back.",
+    );
+    // Finalises the current set (marked partial) and leaves voice, through the controller,
+    // keeping the session as the one to resume (state.json).
+    controller.shuttingDown();
     sessions.stop();
   }
   // Encodes can take minutes, so abort them; their sets stay "processing" for reprocess.ts.

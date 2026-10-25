@@ -65,7 +65,7 @@ Every switch ends the current set (it's processed) and starts the next. Known ga
 - **Recorder drops out of voice** (network, AFK move, kick): the current set ends, the chat is told, the recorder retries the join (0, 10, 30, 60 s) and records the current DJ again as a new set.
 - **Capture stops on its own:** the set is closed as failed and the chat is told.
 - **A set fails processing:** the chat is told; the raw capture is kept for `reprocess.ts`.
-- **Recorder restart mid-session:** not handled; start a new session.
+- **Recorder restart mid-session** (crash, deploy, reboot): `state.json` at the recordings root names the active session (cleared by `/record stop`, kept on shutdown). On startup the recorder reopens it, rejoins voice and carries on ("🔁" in chat): the set that was recording ends there as partial (after a crash, at its file's last write, keeping what reached the disk), and sets it was leveling are leveled again. It doesn't resume by itself if the browser is logged out or shows a captcha, or if it already did so in the last 10 minutes (a crash loop); the chat says to `/record resume` instead.
 
 ### Partial sets
 
@@ -170,6 +170,5 @@ All settings are in `.env` (see `.env.example`). The main ones:
 ## Not built
 
 - **Video** capture (deferred).
-- **Resuming after a recorder restart** (`state.json`; skipped).
 - **A recorder pool** for recording overlapping streams in full (one account and browser per stream).
 - **Login with Discord** for the archive.

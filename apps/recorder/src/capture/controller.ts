@@ -28,6 +28,7 @@
  * into a new segment file; when the set ends, its segments are joined into its raw WAV.
  */
 import { rename, rm, stat } from 'node:fs/promises';
+import path from 'node:path';
 import type { Logger } from '@dsr/core';
 import { captureAudio, concatAudio, type FfmpegProcess, type SilenceEvent } from '@dsr/media';
 import type { Page } from 'playwright';
@@ -44,6 +45,7 @@ import {
   watchStream,
 } from '../browser/discord-web.ts';
 import { saveScreenshot } from '../browser/screenshots.ts';
+import { writeActiveSession } from './recorder-state.ts';
 import type {
   SessionInfo,
   SessionManager,
@@ -155,6 +157,8 @@ export class RecordingController {
   #inVoice = false;
   /** Set while we leave on purpose, so our own leave isn't taken for a drop. */
   #leaving = false;
+  /** Set when shutting down: the session ends but stays the one to resume. */
+  #restarting = false;
   readonly #rejoinDelaysMs: readonly number[];
   readonly #waitForCapture: (file: string) => Promise<void>;
 
@@ -188,6 +192,14 @@ export class RecordingController {
     this.#inVoice = false;
     this.#logger.warn({ channelId }, 'recorder dropped out of voice');
     this.#enqueue('rejoin', () => this.#rejoin(session));
+  }
+
+  /**
+   * The recorder is shutting down: the session that ends next stays in `state.json`, so
+   * it's resumed after the restart.
+   */
+  shuttingDown(): void {
+    this.#restarting = true;
   }
 
   sessionEnded(session: SessionInfo): void {
@@ -259,7 +271,11 @@ export class RecordingController {
     } else {
       this.#record = await SessionRecord.reopen(this.#config.recordingsDir, session.resumeDir);
       this.#logger.info({ dir: this.#record.paths.dir }, 'session folder reopened');
+      // Before closing interrupted sets, which would then count as unfinished too.
+      if (session.afterRestart) this.#reprocess(this.#record);
+      await this.#closeInterrupted(this.#record);
     }
+    await this.#saveState(this.#record);
 
     try {
       await this.#join(session);
@@ -271,6 +287,49 @@ export class RecordingController {
         `⚠️ The recorder couldn't join voice, so nothing is being recorded: ${errorMessage(error)}. ` +
           'Run `/record stop` and try again.',
       );
+    }
+  }
+
+  /** Remember the active session (`state.json`), so a restart can carry on with it. */
+  async #saveState(record: SessionRecord | undefined): Promise<void> {
+    const active = record && {
+      sessionId: record.session.id,
+      dir: path.basename(record.paths.dir),
+    };
+    try {
+      await writeActiveSession(this.#config.recordingsDir, active ?? null);
+    } catch (error) {
+      this.#logger.warn({ err: error }, 'could not save the active session');
+    }
+  }
+
+  /**
+   * Sets a resumed session left `recording`: the recorder stopped without ending them
+   * (a crash). Each ends where its capture file stopped growing, as partial, and is
+   * leveled with whatever audio reached the disk.
+   */
+  async #closeInterrupted(record: SessionRecord): Promise<void> {
+    for (const set of record.session.sets.filter((s) => s.status === 'recording')) {
+      const file = set.files.rawAudio && path.join(record.paths.dir, set.files.rawAudio);
+      const written = file && (await stat(file).catch(() => undefined));
+      if (!written) {
+        await record.endSet(set.id, new Date(), {
+          partial: true,
+          error: 'The recorder stopped while recording, and no audio was saved.',
+        });
+        continue;
+      }
+      await record.endSet(set.id, written.mtime, { partial: true });
+      this.#logger.warn({ setId: set.id }, 'closed a set the recorder stopped during');
+      this.#processing = this.#postProcess(record, set.id);
+    }
+  }
+
+  /** Level again the sets a restart interrupted (left `processing`; nothing else has them). */
+  #reprocess(record: SessionRecord): void {
+    for (const set of record.session.sets.filter((s) => s.status === 'processing')) {
+      this.#logger.info({ setId: set.id }, 'leveling a set the restart interrupted');
+      this.#processing = this.#postProcess(record, set.id);
     }
   }
 
@@ -466,6 +525,8 @@ export class RecordingController {
     const record = this.#record;
     this.#record = undefined;
     if (!record) return;
+    // Shutting down to restart: keep it as the active session, to carry on with after.
+    if (!this.#restarting) await this.#saveState(undefined);
 
     // Finishing may rename the folder, so it waits for the session's encodes. Recording
     // doesn't wait: a new session can start meanwhile.

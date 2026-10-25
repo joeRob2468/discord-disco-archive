@@ -83,6 +83,8 @@ export const recorderStateSchema = z.object({
       sessionId: z.string().min(1),
       /** Session folder name, relative to the recordings root. */
       dir: z.string().min(1),
+      /** When the recorder last resumed it by itself after a restart. */
+      resumedAt: timestampSchema.optional(),
     })
     .nullable(),
 });

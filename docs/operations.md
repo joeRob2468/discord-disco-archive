@@ -24,7 +24,7 @@ docker compose up -d --build        # rebuilds both images, recreates changed co
 docker compose ps                   # archive should be "healthy"
 ```
 
-Recreating `recorder` during an event ends the current set (marked partial) and leaves voice; it has 30 s to finish (`stop_grace_period`). Avoid it mid-event. `archive` can be recreated any time; it migrates its database on start.
+Recreating `recorder` during an event ends the current set (marked partial) and leaves voice; it has 30 s to finish (`stop_grace_period`). When it's back (about a minute) it carries on with the same session by itself, so a DJ loses that minute: prefer quiet moments. `archive` can be recreated any time; it migrates its database on start.
 
 ## Common problems
 

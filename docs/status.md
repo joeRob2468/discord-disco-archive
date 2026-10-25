@@ -17,7 +17,7 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 | Stream restart grace           | ✅ verified live (drop and return joined into one set)                                 |
 | Partial tagging                | ✅ deployed; no set was tagged in the first real event                                 |
 | Video                          | ⏸️ not built (deferred)                                                                |
-| Resume after recorder restart  | ⏭️ skipped                                                                             |
+| Resume after recorder restart  | 🔨 built, not yet verified live                                                        |
 
 ## Next
 
@@ -29,7 +29,7 @@ The first real event (Halloween Disco, 2026-10-24, 18:00–01:00 CDT, 7 DJs) is 
 4. **Upload a set by hand: built, not yet verified live.** Admin **Add set…** on a session page; the recorder imports and levels it. Tested end to end locally (upload through the archive, import and leveling in the recorder image). First use: Afterglow' own copy of their set.
 5. **Slow downloads: capped per client, not yet verified live.** Likely many people downloading at once after the event (the archive itself serves ~600 MB/s locally). Each client IP is now capped at `ARCHIVE_DOWNLOAD_LIMIT_MBPS` (200, a fifth of the 1 Gbit/s upload, leaving room for Plex) so they share the upload link. Not measured: Traefik's own throughput on the server.
 6. Open the archive from outside the home network once (logins from outside IPs were seen during the event, so it's likely reachable).
-7. **`/record resume`: built, not yet verified live.** Reopens an earlier session of the channel (default: the most recent) and adds new sets to it. Next: resume automatically after the recorder restarts mid-session (`state.json`).
+7. **Resuming sessions: built, not yet verified live.** `/record resume` reopens an earlier session of the channel (default: the most recent) and adds new sets to it; after a restart mid-session (crash, deploy, reboot) the recorder carries on with its session by itself (`state.json`).
 8. **`/record split`: built, not yet verified live.** Ends the current set and records the same stream as a new one, optionally naming both. The overlap was checked in the recorder image (0.9 s, no gap). Split and uploaded sets keep their own names in the archive, even after the DJ's name is edited.
 
 ## Environment notes

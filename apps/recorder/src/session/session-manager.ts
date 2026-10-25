@@ -19,6 +19,11 @@ export interface SessionInfo {
   startedBy: { userId: string; displayName: string };
   /** Reopen this session folder and record into it (`/record resume`), not a new one. */
   resumeDir?: string;
+  /**
+   * Resumed by the recorder itself after a restart: sets it was leveling when it stopped
+   * are leveled again.
+   */
+  afterRestart?: boolean;
 }
 
 export type SwitchReason =

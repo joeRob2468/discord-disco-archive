@@ -48,6 +48,15 @@ export function sessionResumed(
   );
 }
 
+export function resumedAfterRestart(firstTarget: Target | undefined): string {
+  return (
+    '🔁 The recorder restarted; carrying on with this session.' +
+    (firstTarget
+      ? ` Recording **${firstTarget.displayName}** as a new set.`
+      : ' Waiting for someone to go live.')
+  );
+}
+
 export function sessionStopped(session: SessionInfo, now: Date): string {
   return `⏹️ Recording session ended after ${formatElapsed(session.startedAt.getTime(), now.getTime())}.`;
 }
