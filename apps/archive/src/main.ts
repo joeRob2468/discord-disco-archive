@@ -25,18 +25,27 @@ await watcher.sync();
 
 const app = createApp({ config, catalog: new Catalog(db), logger });
 
-const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
-  logger.info(
-    {
-      port: info.port,
-      recordingsDir: config.recordingsDir,
-      dataDir: config.dataDir,
-      viewerPassword: config.auth.viewerPassword !== undefined,
-      adminEnabled: config.auth.adminPassword !== undefined,
-    },
-    'archive listening',
-  );
-});
+const server = serve(
+  {
+    fetch: app.fetch,
+    port: config.port,
+    // No limit on a whole request: an uploaded set can take many minutes. Stalled uploads
+    // are dropped by `uploads.ts` instead; headers still have Node's 60 s.
+    serverOptions: { requestTimeout: 0 },
+  },
+  (info) => {
+    logger.info(
+      {
+        port: info.port,
+        recordingsDir: config.recordingsDir,
+        dataDir: config.dataDir,
+        viewerPassword: config.auth.viewerPassword !== undefined,
+        adminEnabled: config.auth.adminPassword !== undefined,
+      },
+      'archive listening',
+    );
+  },
+);
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {

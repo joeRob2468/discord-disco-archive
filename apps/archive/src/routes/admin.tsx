@@ -12,7 +12,7 @@ import { safeNext, type AuthEnv } from '../auth/auth.ts';
 import { SET_SORTS, type Catalog, type ImageEntity } from '../catalog/catalog.ts';
 import { deleteImage, IMAGE_MAX_BYTES, ImageError, saveImage } from '../images.ts';
 import { DeleteError, deleteSessionFolder, deleteSetFiles } from '../recordings.ts';
-import { saveUpload, UploadError } from '../uploads.ts';
+import { saveUpload, UploadError, UploadInterruptedError } from '../uploads.ts';
 import {
   ActivityPage,
   AdminSetsPage,
@@ -234,8 +234,10 @@ export function adminRoutes(
     if (!body || c.req.header('content-type') !== 'application/octet-stream') {
       return c.text('Send the file as the request body.', 400);
     }
+    const length = Number(c.req.header('content-length'));
     const upload = {
       fileName: c.req.query('name') ?? '',
+      bytes: Number.isSafeInteger(length) ? length : undefined,
       userId: c.req.query('userId') ?? '',
       displayName: c.req.query('displayName') ?? '',
       startedAt: new Date(c.req.query('startedAt') ?? ''),
@@ -246,8 +248,13 @@ export function adminRoutes(
       logger?.info({ ...context, uploadId: id }, 'set uploaded');
     } catch (error) {
       if (!(error instanceof UploadError)) throw error;
-      logger?.warn({ ...context, reason: error.message }, 'upload refused');
-      return c.text(error.message, 400);
+      // Nothing is kept from an interrupted upload; the client may not be there to hear it.
+      const interrupted = error instanceof UploadInterruptedError;
+      logger?.warn(
+        { ...context, reason: error.message },
+        interrupted ? 'upload interrupted' : 'upload refused',
+      );
+      return c.text(interrupted ? `Upload interrupted: ${error.message}` : error.message, 400);
     }
     return c.text(
       'Uploaded. The set appears in a few seconds and is playable once it has been leveled.',

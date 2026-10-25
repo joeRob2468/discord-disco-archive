@@ -152,13 +152,31 @@ const PAGE_SCRIPT = `
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', form.action + '?' + params);
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    // A dropped connection can hang without an error; give up after a minute with no progress.
+    let stalled = false;
+    let stallTimer;
+    const watch = () => {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        stalled = true;
+        xhr.abort();
+      }, 60000);
+    };
     xhr.upload.addEventListener('progress', (progress) => {
+      watch();
       if (!progress.lengthComputable) return;
       bar.value = progress.loaded / progress.total;
       status.textContent = 'Uploading… ' + Math.floor(bar.value * 100) + '%';
     });
+    xhr.addEventListener('loadend', () => clearTimeout(stallTimer));
     xhr.addEventListener('load', () => done(xhr.status < 300, xhr.responseText || 'Upload failed.'));
-    xhr.addEventListener('error', () => done(false, 'Upload failed: the connection was lost.'));
+    xhr.addEventListener('error', () =>
+      done(false, 'Upload failed: the connection was lost. Try again.'),
+    );
+    xhr.addEventListener('abort', () =>
+      done(false, stalled ? 'Upload stalled for a minute, so it was stopped. Try again.' : 'Upload stopped.'),
+    );
+    watch();
     submit.disabled = true;
     status.classList.remove('text-error');
     bar.hidden = false;
