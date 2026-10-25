@@ -4,13 +4,13 @@ Running, updating and fixing the stack on the home server. Placeholders: `<serve
 
 ## At a glance
 
-| What               | Where                                                                                                              |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Archive            | `https://archive.<domain>` (Traefik, DNS-only Cloudflare CNAME); `/healthz` for a check                            |
-| Recorder's Discord | noVNC over SSH only: `ssh -L 6080:localhost:6080 <server>`, then `http://localhost:6080/vnc.html` (`VNC_PASSWORD`) |
-| App state          | `APP_DATA_DIR`: `recorder/profile-firefox` (the Discord login), `archive/archive.db`, `archive/images/`            |
-| Recordings         | `RECORDINGS_HOST_DIR`: one folder per session with `session.json`, `raw/`, `leveled/`                              |
-| Logs               | `docker compose logs -f recorder` / `archive` (JSON; pipe through `pnpm dlx pino-pretty`)                          |
+| What               | Where                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Archive            | `https://archive.<domain>` (Traefik, DNS-only Cloudflare CNAME); `/healthz` for a check                                              |
+| Recorder's Discord | noVNC over SSH only: `ssh -L 6080:localhost:6080 <server>`, then `http://localhost:6080/vnc.html` (`VNC_PASSWORD`)                   |
+| App state          | `APP_DATA_DIR`: `recorder/profile-firefox` (the Discord login), `recorder/screenshots/`, `archive/archive.db`, `archive/images/`     |
+| Recordings         | `RECORDINGS_HOST_DIR`: one folder per session with `session.json`, `raw/`, `leveled/`, `uploads/`; `state.json` (the active session) |
+| Logs               | `docker compose logs -f recorder` / `archive` (JSON; pipe through `pnpm dlx pino-pretty`)                                            |
 
 noVNC is bound to `127.0.0.1` on the server on purpose: Docker-published ports bypass ufw, and noVNC is full control of the recorder account. Never publish it on `0.0.0.0` or through Traefik.
 
@@ -43,21 +43,21 @@ That profile folder is equivalent to the account's password: don't copy it anywh
 
 1. `docker compose logs --tail 200 recorder` for the last error.
 2. Look at the browser over noVNC: a Discord dialog, an update banner or a "browser not supported" page can block it. Screenshots from failed opens and silent streams are in `APP_DATA_DIR/recorder/screenshots`.
-3. `docker compose restart recorder`. The current set, if any, is saved as partial; start again with `/record start`.
+3. `docker compose restart recorder`. The current set, if any, is saved as partial, and the recorder carries on with the session by itself (🔁 in chat); if it says it can't, fix what it names and run `/record resume`.
 
 If the bot is offline in Discord, check `DISCORD_BOT_TOKEN` in `.env` and that the container is running (`docker compose ps`).
 
 ### The recorder dropped out of voice
 
-The chat gets "⚠️ The recorder dropped out of voice… Rejoining…", then "✅ Back in voice after N s" once it has rejoined (it tries for about 2 minutes) and is recording the current DJ again as a new set. The set before the drop is kept as a partial set. If it says it couldn't get back in, check noVNC (logged out? captcha?), then `/record stop` and `/record start`. In the log: `recorder dropped out of voice`, `rejoin attempt failed`, `rejoined voice` or `could not rejoin voice`.
+The chat gets "⚠️ The recorder dropped out of voice… Rejoining…", then "✅ Back in voice after N s" once it has rejoined (it tries for about 2 minutes) and is recording the current DJ again as a new set. The set before the drop is kept as a partial set. If it says it couldn't get back in, check noVNC (logged out? captcha?), then `/record stop` and `/record resume`. In the log: `recorder dropped out of voice`, `rejoin attempt failed`, `rejoined voice` or `could not rejoin voice`.
 
 ### A stream won't open
 
-The recorder closes Discord popups and retries once on its own (log: `closed Discord popups`, `could not open stream; retrying`). If that fails too, the chat gets "⚠️ Couldn't open …'s stream": run `/record switch` to that DJ to retry, and look at the newest `open-failed` screenshot in `APP_DATA_DIR/recorder/screenshots`. If it still fails, `/record stop` and `/record start` (leaving and rejoining voice) has cleared it before. When a stream goes silent the recorder also saves a `silent` screenshot and closes any popup (log: `checked silent stream`).
+The recorder closes Discord popups and retries once on its own (log: `closed Discord popups`, `could not open stream; retrying`). If that fails too, the chat gets "⚠️ Couldn't open …'s stream": run `/record switch` to that DJ to retry, and look at the newest `open-failed` screenshot in `APP_DATA_DIR/recorder/screenshots`. If it still fails, `/record stop` and `/record resume` (leaving and rejoining voice, same session) has cleared it before. When a stream goes silent the recorder also saves a `silent` screenshot and closes any popup (log: `checked silent stream`).
 
 ### "🔇 …'s stream has been silent" / "⚠️ … silent for 5 min"
 
-🔇 at 45 s and 3 min: the current DJ is live but nothing has reached the recording. Check whether people in the call can hear them: if they can, the problem is on the recorder's side (watch for the ⚠️); if not, it's the DJ's. ⚠️ at `SILENCE_ALERT_SECONDS` (5 min): the recorder has already reopened the stream (log: `stream silent too long; reopening`, `reopened silent stream`) and saved a `silent-long` screenshot. If people in the call can hear the DJ and no ✅ follows within a minute, check noVNC, then `/record switch` to another live stream and back, or `/record stop` and `/record start`. If the DJ is the one having audio trouble, nothing needs doing.
+🔇 at 45 s and 3 min: the current DJ is live but nothing has reached the recording. Check whether people in the call can hear them: if they can, the problem is on the recorder's side (watch for the ⚠️); if not, it's the DJ's. ⚠️ at `SILENCE_ALERT_SECONDS` (5 min): the recorder has already reopened the stream (log: `stream silent too long; reopening`, `reopened silent stream`) and saved a `silent-long` screenshot. If people in the call can hear the DJ and no ✅ follows within a minute, check noVNC, then `/record switch` to another live stream and back, or `/record stop` and `/record resume`. If the DJ is the one having audio trouble, nothing needs doing.
 
 ### Carrying on a session
 
@@ -77,7 +77,7 @@ The recorder only starts a new set when the stream it records changes, so DJs wh
 
 ### A set is stuck "processing" or "failed"
 
-The archive's Admin → Overview lists these with the failure reason. Sets left `processing` usually mean the recorder stopped mid-encode. Re-run leveling for a finished session:
+The archive's Admin → Overview lists these with the failure reason. Sets left `processing` usually mean the recorder stopped mid-encode; when it resumes the session after a restart it re-levels them by itself, but a session it isn't resuming needs a re-run:
 
 ```sh
 docker compose exec recorder node --import tsx src/reprocess.ts /recordings/<session folder>

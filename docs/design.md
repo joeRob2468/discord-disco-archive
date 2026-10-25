@@ -15,7 +15,7 @@ recorder container ────────────────────�
   controller ──────────────► Firefox on Xvfb (discord.com, muted + deafened)
        │                          │ plays the stream into PulseAudio
        └─ ffmpeg ◄── recorder.monitor ── float32 WAV per set
-  pipeline                 trim, level, FLAC + MP3, cleanup
+  pipeline                 trim, level, FLAC + MP3, cleanup, uploaded-set imports
   noVNC (127.0.0.1)        for logging in and debugging
 archive container ──────────────────────────────────────────────────────
   Hono + SQLite            browse, play, download, admin edits
@@ -41,8 +41,8 @@ Guild slash commands, registered for `DISCORD_GUILD_ID` at startup. Who can use 
 - **Target channel:** the `channel` option, else the voice channel whose chat the command was typed in, else the caller's current voice channel.
 - **Several sessions in a night** are fine: `/record start` always makes a new one, and `/record resume` reopens an earlier one (e.g. after a `/record stop` too soon, or a problem fixed by leaving voice). A resumed session shows as recording in the archive until it's stopped again.
 - **One session at a time.** Before joining, `/record start` checks that the recorder account can see and connect to the channel and that its browser is logged in (no login page or captcha); otherwise it refuses with the reason.
-- **Replies:** start, stop and title replies are public (they double as the recording notice); refusals are private.
-- **Channel notices** (`ANNOUNCE_SETS`): 🔴 now recording, 🔀 switched (with the reason), ⏸️ waiting for the next stream, ⏳/▶️ stream dropped/back, ✂️ split, 🔇 silence (✅ when it ends), plus ⚠️ alerts.
+- **Replies:** start, resume, stop and title replies are public (they double as the recording notice); the rest, and refusals, are private.
+- **Channel notices:** 🔴 now recording, 🔀 switched (with the reason), ⏸️ waiting for the next stream and ⏳/▶️ stream dropped/back, unless `ANNOUNCE_SETS=false`. Always: ✂️ split, 🔇 silence (✅ when it ends), 🔁 resumed after a restart, and ⚠️ problems.
 - **Split:** the new set's capture starts before the old one stops (once it holds 0.25 s of audio), so the two overlap by about a second at the handover instead of losing it. Neither end counts as cut, so a split alone doesn't make either set partial.
 
 ### Whose stream to record
@@ -80,7 +80,7 @@ A set is `partial` only if recording cut off music. `session.json` records which
 
 ## Processing
 
-1. **Capture:** float32 WAV, 48 kHz stereo, from the PulseAudio monitor, so nothing clips before leveling. `silencedetect` runs in the same ffmpeg process for rule 4.
+1. **Capture:** float32 WAV, 48 kHz stereo, from the PulseAudio monitor, so nothing clips before leveling. `silencedetect` runs in the same ffmpeg process, for rule 4 and the silence notices.
 2. **Analyse:** loudness (EBU R128) and leading/trailing silence (−60 dB, 2 s) in one pass.
 3. **Master:** trim the silence (keeping 0.5 s), apply one fixed gain to `TARGET_LUFS` (−14), then a 4× oversampled true-peak limiter just under `TARGET_TP` (−1 dBTP). The DJ's dynamics are kept. Written as 24-bit FLAC.
 4. **Exports** from the master: MP3 320 (`EXPORT_FORMATS=mp3`; `m4a` is optional).
@@ -102,6 +102,7 @@ recordings/
     raw/2026-11-14T21-03-12_dj.wav   float32 capture, until retention
     leveled/2026-11-14T21-03-12_dj.flac, .mp3
     uploads/                         uploaded sets waiting to be imported
+  state.json                         the session being recorded, for resuming after a restart
 ```
 
 | What       | `.env` host path      | Server                                           | Container     |
@@ -109,8 +110,8 @@ recordings/
 | App state  | `APP_DATA_DIR`        | `/mnt/media/docker_data/discord-stream-recorder` | `/config`     |
 | Recordings | `RECORDINGS_HOST_DIR` | `/mnt/media/data/media/discord-sets`             | `/recordings` |
 
-- `recorder/` app state holds the browser profiles (the Discord login: treat it like a password). `archive/` holds `archive.db` and uploaded `images/`.
-- **`session.json`** (one per folder, written atomically by the recorder) records sessions, sets, times, files and recorded names. The archive writes it only to remove a set an admin deletes. Every write re-reads the file first, so writers don't undo each other's changes.
+- `recorder/` app state holds the browser profiles (the Discord login: treat it like a password) and `screenshots/`. `archive/` holds `archive.db` and uploaded `images/`.
+- **`session.json`** (one per folder, written atomically by the recorder) records sessions, sets, times, files and recorded names. The archive writes it only to remove a set an admin deletes; uploads go into `uploads/` for the recorder to add. Every write re-reads the file first, so writers don't undo each other's changes.
 - **`archive.db`** (SQLite) mirrors every `session.json` plus everything the archive adds: edits, images, plays, album order, the activity log and the search index. If it's lost, it rebuilds from `session.json` without the edits. Schema changes are append-only migrations.
 - **Back up both** folders.
 
@@ -119,10 +120,10 @@ recordings/
 Hono, server-rendered `hono/jsx`, daisyUI on Tailwind, htmx (with `hx-boost`, so the player keeps playing across pages) and one client script for the player.
 
 - **Pages:** home (latest sessions, DJs, popular sets), `/search` (every set, filtered live by text, DJ or session), sessions as albums (`/sessions/<uuid>`, with tracklist), set pages under their album, and stats tables at `/sessions` and `/djs`. Set rows expand in place into the set's details.
-- **Player:** a bottom bar with a queue (play an album, a list or a set; add to it, jump within it, remove from it), stop, seek, volume and media keys. Plays the MP3, falling back to the raw WAV until a set is leveled. While a set loads or buffers, the play button shows a spinner and the seek bar pulses. A play counts when a set starts playing, and that set's play counts on the page update at once.
+- **Player:** a bottom bar with a queue (play an album, a list or a set; add to it, jump within it, remove from it), stop, seek, volume and media keys. Plays the MP3, falling back to the raw file until a set is leveled. While a set loads or buffers, the play button shows a spinner and the seek bar pulses. A play counts when a set starts playing, and that set's play counts on the page update at once.
 - **Forms:** submit buttons are disabled while their request is pending.
 - **Assets:** pages link the CSS and scripts with a `?v=` version (file time and size), so they're cached for a year and a new build is fetched at once.
-- **Downloads:** MP3 and FLAC (and the raw WAV while it exists), named `DJ - Title (date).ext`. Each client IP (from Traefik's `X-Forwarded-For`) gets at most `ARCHIVE_DOWNLOAD_LIMIT_MBPS` across all its downloads and playback, after a 1 s burst at full speed (so playback starts and seeks are instant), so one fast downloader can't take the whole upload link.
+- **Downloads:** MP3 and FLAC (and the raw WAV, or an uploaded set's original, while it exists), named `DJ - Title (date).ext`. Each client IP (from Traefik's `X-Forwarded-For`) gets at most `ARCHIVE_DOWNLOAD_LIMIT_MBPS` across all its downloads and playback, after a 1 s burst at full speed (so playback starts and seeks are instant), so one fast downloader can't take the whole upload link.
 - **Link previews:** Open Graph tags and a preview card on the home and login pages.
 - **Access:** public unless `ARCHIVE_PASSWORD` is set (one shared viewer password). `ARCHIVE_ADMIN_PASSWORD` enables admin features. Signed `HttpOnly` cookies, CSRF-checked form posts, constant-time password checks.
 - **Admin:** **Add set…** from a file (see [Uploaded sets](#uploaded-sets)), edit dialogs for sets, sessions and DJs (titles, names, descriptions, tags, links, images; nothing changes until Save), reorder sets within an album, **Archive** (hide; reversible) or **Delete** (permanent: files and the `session.json` entry, or the whole session folder; refused while recording unless forced). `/admin` shows totals, storage use and sets needing attention; `/admin/sets` lists every set; `/admin/activity` lists every change, by the admin or by the recorder.
@@ -145,7 +146,7 @@ All settings are in `.env` (see `.env.example`). The main ones:
 | `BROWSER_CHANNEL`                                        | `firefox`         | `firefox` (stereo), `chrome` or `chromium` (mono).          |
 | `STREAM_VOLUME`                                          | `85`              | Discord's stream volume slider.                             |
 | `HANDOVER_SILENCE_SECONDS`, `RESTART_GRACE_SECONDS`      | `45`, `60`        | Rules 3 and 4 above.                                        |
-| `SILENCE_ALERT_SECONDS`                                  | `300`             | Long silence, above.                                        |
+| `SILENCE_ALERT_SECONDS`                                  | `300`             | Reopen a silent stream; see Silence, above.                 |
 | `TARGET_LUFS`, `TARGET_TP`, `TARGET_LRA`                 | `-14`, `-1`, `11` | Leveling targets.                                           |
 | `EXPORT_FORMATS`                                         | `mp3`             | `mp3`, `m4a`.                                               |
 | `RAW_RETENTION_HOURS`                                    | (keep)            | `48` on the server.                                         |
