@@ -146,7 +146,7 @@ All settings are in `.env` (see `.env.example`). The main ones:
 | `ARCHIVE_PASSWORD`, `ARCHIVE_ADMIN_PASSWORD`             | —                 | Viewer password (optional), admin password (12+ chars).     |
 | `ARCHIVE_SESSION_SECRET`                                 | —                 | Cookie signing (32+ chars), needed if a password is set.    |
 | `ARCHIVE_SYNC_INTERVAL_SECONDS`                          | `60`              | Full rescan of the recordings.                              |
-| `ARCHIVE_DOWNLOAD_LIMIT_MBPS`                            | `50`              | Per-client media bandwidth cap (Mbit/s); `0` = none.        |
+| `ARCHIVE_DOWNLOAD_LIMIT_MBPS`                            | `200`             | Per-client media bandwidth cap (Mbit/s); `0` = none.        |
 | `COMPOSE_FILE`, `DOMAIN`                                 | server only       | `compose.yaml:compose.server.yaml`, and the Traefik domain. |
 
 `RECORD_VIDEO`, `VIDEO_FPS` and `VIDEO_SIZE` exist but video capture isn't built.

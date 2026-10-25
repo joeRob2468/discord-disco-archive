@@ -26,8 +26,8 @@ describe('loadConfig', () => {
     ).toThrow(/differ/);
   });
 
-  it('caps each client at 50 Mbit/s unless set (0 = no cap)', () => {
-    expect(loadConfig({}).downloadLimitBytesPerSecond).toBe(6_250_000);
+  it('caps each client at 200 Mbit/s unless set (0 = no cap)', () => {
+    expect(loadConfig({}).downloadLimitBytesPerSecond).toBe(25_000_000);
     expect(loadConfig({ ARCHIVE_DOWNLOAD_LIMIT_MBPS: '0' }).downloadLimitBytesPerSecond).toBe(0);
   });
 

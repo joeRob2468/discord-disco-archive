@@ -20,7 +20,7 @@ const archiveSchema = z
     /** Fallback full rescan interval; file watching handles most changes. */
     ARCHIVE_SYNC_INTERVAL_SECONDS: withDefault(envInteger.min(10), '60'),
     /** Per-client cap on media bandwidth, in megabits per second; 0 = no cap. */
-    ARCHIVE_DOWNLOAD_LIMIT_MBPS: withDefault(envInteger.min(0), '50'),
+    ARCHIVE_DOWNLOAD_LIMIT_MBPS: withDefault(envInteger.min(0), '200'),
   })
   .refine(
     (env) =>
