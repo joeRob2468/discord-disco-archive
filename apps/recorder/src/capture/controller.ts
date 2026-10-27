@@ -82,7 +82,8 @@ export interface ControllerConfig {
 }
 
 export interface ControllerDeps {
-  page: Page;
+  /** The browser's page; it's open from just before a session starts until after it ends. */
+  page: () => Page;
   sessions: SessionManager;
   config: ControllerConfig;
   /** Post a notice in a channel's chat. */
@@ -144,7 +145,7 @@ const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 export class RecordingController {
-  readonly #page: Page;
+  readonly #page: () => Page;
   readonly #sessions: SessionManager;
   readonly #config: ControllerConfig;
   readonly #notify: (channelId: string, content: string) => void;
@@ -225,7 +226,7 @@ export class RecordingController {
         this.#logger.warn({ to: target.displayName }, 'not in voice; not retrying this stream');
         return;
       }
-      await stopWatching(this.#page);
+      await stopWatching(this.#page());
       await this.#openStream(target, true, session);
     });
     return true;
@@ -340,12 +341,12 @@ export class RecordingController {
   }
 
   async #join(session: SessionInfo): Promise<void> {
-    await openChannel(this.#page, session.guildId, session.channelId);
+    await openChannel(this.#page(), session.guildId, session.channelId);
     // Deafen before joining so voice chat never plays, even briefly.
-    await muteAndDeafen(this.#page);
-    await joinVoice(this.#page, session.channelId);
+    await muteAndDeafen(this.#page());
+    await joinVoice(this.#page(), session.channelId);
     this.#inVoice = true;
-    if (!(await isMutedAndDeafened(this.#page))) {
+    if (!(await isMutedAndDeafened(this.#page()))) {
       throw new Error('not muted and deafened after joining');
     }
     this.#logger.info({ channelId: session.channelId }, 'joined voice, muted and deafened');
@@ -417,9 +418,9 @@ export class RecordingController {
       try {
         // On the retry, press Escape anyway in case a popup isn't marked up as a dialog.
         await this.#closePopups(attempt > 1);
-        await watchStream(this.#page, target);
-        const wasMuted = await unmuteStream(this.#page, target);
-        const volume = await setStreamVolume(this.#page, target, this.#config.streamVolume);
+        await watchStream(this.#page(), target);
+        const wasMuted = await unmuteStream(this.#page(), target);
+        const volume = await setStreamVolume(this.#page(), target, this.#config.streamVolume);
         this.#logger.info({ target: target.displayName, wasMuted, volume }, 'stream opened');
         return true;
       } catch (error) {
@@ -430,7 +431,7 @@ export class RecordingController {
             'could not open stream; retrying',
           );
           // It may have opened partway (watching, but not unmuted or set).
-          await stopWatching(this.#page).catch(() => undefined);
+          await stopWatching(this.#page()).catch(() => undefined);
           continue;
         }
         this.#logger.error(
@@ -450,7 +451,7 @@ export class RecordingController {
   /** Close any Discord popups, logging what was closed. Never throws. */
   async #closePopups(escape = false): Promise<string[]> {
     try {
-      const closed = await closePopups(this.#page, { escape });
+      const closed = await closePopups(this.#page(), { escape });
       if (closed.length > 0) this.#logger.warn({ popups: closed }, 'closed Discord popups');
       return closed;
     } catch (error) {
@@ -464,7 +465,7 @@ export class RecordingController {
     const dir = this.#config.screenshotDir;
     if (dir === undefined) return undefined;
     try {
-      return await saveScreenshot(this.#page, dir, reason, this.#now());
+      return await saveScreenshot(this.#page(), dir, reason, this.#now());
     } catch (error) {
       this.#logger.warn({ err: error, reason }, 'could not save a screenshot');
       return undefined;
@@ -507,7 +508,7 @@ export class RecordingController {
   async #switch(change: TargetChange, session: SessionInfo): Promise<void> {
     if (change.reason === 'stream-dropped') {
       await this.#hold();
-      if (this.#inVoice) await stopWatching(this.#page);
+      if (this.#inVoice) await stopWatching(this.#page());
       return;
     }
     if (change.reason === 'resumed' && change.to) {
@@ -515,7 +516,7 @@ export class RecordingController {
       return;
     }
     await this.#stopCapture(change.reason === 'session-stopped');
-    if (change.from && this.#inVoice) await stopWatching(this.#page);
+    if (change.from && this.#inVoice) await stopWatching(this.#page());
     if (!change.to) return;
     if (!this.#inVoice) {
       this.#logger.warn({ to: change.to.displayName }, 'not in voice; not recording this stream');
@@ -555,8 +556,8 @@ export class RecordingController {
   async #leave(): Promise<void> {
     this.#leaving = true;
     try {
-      await stopWatching(this.#page);
-      await leaveVoice(this.#page);
+      await stopWatching(this.#page());
+      await leaveVoice(this.#page());
     } catch (error) {
       this.#logger.warn({ err: error }, 'could not leave voice cleanly');
     } finally {
@@ -896,7 +897,7 @@ export class RecordingController {
     const screenshot = await this.#screenshot('silent-long');
     this.#logger.info({ target: name, screenshot }, 'saved screenshot of silent stream');
     if (!this.#inVoice) return;
-    await stopWatching(this.#page).catch(() => undefined);
+    await stopWatching(this.#page()).catch(() => undefined);
     // The capture keeps running: it records whatever the browser plays.
     if (await this.#showStream(capture.target, session)) {
       this.#logger.info({ target: name }, 'reopened silent stream');

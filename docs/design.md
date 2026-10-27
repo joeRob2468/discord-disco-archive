@@ -37,11 +37,12 @@ Guild slash commands, registered for `DISCORD_GUILD_ID` at startup. Who can use 
 | `/record split [name] [previous]`    | End the current set here and record the same stream as a new set, named `name` (default: the stream's owner); `previous` renames the set that ends. For DJs sharing one stream. |
 | `/record title <text>`               | Set the session title (the folder is renamed when the session ends).                                                                                                            |
 | `/record status`                     | Who is being recorded, who else is live, elapsed time.                                                                                                                          |
+| `/record check`                      | Start the recorder's browser ahead of an event and report whether it's logged in (it then stays up for `BROWSER_KEEP_ALIVE_MINUTES`).                                           |
 
 - **Target channel:** the `channel` option, else the voice channel whose chat the command was typed in, else the caller's current voice channel.
 - **Several sessions in a night** are fine: `/record start` always makes a new one, and `/record resume` reopens an earlier one (e.g. after a `/record stop` too soon, or a problem fixed by leaving voice). A resumed session shows as recording in the archive until it's stopped again.
 - **One session at a time.** Before joining, `/record start` checks that the recorder account can see and connect to the channel and that its browser is logged in (no login page or captcha); otherwise it refuses with the reason.
-- **Replies:** start, resume, stop and title replies are public (they double as the recording notice); the rest, and refusals, are private.
+- **Replies:** start, resume and check first answer privately with "thinking…" (starting the browser takes longer than Discord's 3 s), then post their reply. Start, resume, stop and title replies are public (they double as the recording notice); the rest, and refusals, are private.
 - **Channel notices:** 🔴 now recording, 🔀 switched (with the reason), ⏸️ waiting for the next stream and ⏳/▶️ stream dropped/back, unless `ANNOUNCE_SETS=false`. Always: ✂️ split, 🔇 silence (✅ when it ends), 🔁 resumed after a restart, and ⚠️ problems.
 - **Split:** the new set's capture starts before the old one stops (once it holds 0.25 s of audio), so the two overlap by about a second at the handover instead of losing it. Neither end counts as cut, so a split alone doesn't make either set partial.
 
@@ -61,7 +62,7 @@ Every switch ends the current set (it's processed) and starts the next. Known ga
 
 ### When things go wrong
 
-- **Recorder logged out or shown a captcha:** checked at startup, every 5 minutes and before `/record start`. Logged once per change; announced in an active session's chat. Login and captchas are never automated: fix it over noVNC ([operations.md](operations.md)).
+- **Recorder logged out or shown a captcha:** checked by `/record check`, before `/record start` and `resume`, and every 5 minutes while the browser runs. Logged once per change; announced in an active session's chat. Login and captchas are never automated: fix it over noVNC ([operations.md](operations.md)).
 - **Recorder drops out of voice** (network, AFK move, kick): the current set ends, the chat is told, the recorder retries the join (0, 10, 30, 60 s) and records the current DJ again as a new set.
 - **Capture stops on its own:** the set is closed as failed and the chat is told.
 - **A set fails processing:** the chat is told; the raw capture is kept for `reprocess.ts`.
@@ -74,6 +75,7 @@ A set is `partial` only if recording cut off music. `session.json` records which
 ### Browser and audio
 
 - **Firefox** (`BROWSER_CHANNEL=firefox`): Chromium-based browsers play Discord's stream audio in mono. Firefox runs in kiosk mode on Xvfb with its own profile (`<PROFILE_DIR>-firefox`), which holds the Discord login.
+- **Only around sessions:** an idle Discord client costs a steady third of a CPU core (it repaints its animations in software), so the browser isn't started with the recorder. `/record check`, `start` and `resume` (and resuming after a restart) start it, which takes a few seconds, and it closes once no session has been active for `BROWSER_KEEP_ALIVE_MINUTES` (120) since its last use or the last session's end. The bot, upload imports and the retention sweep keep running without it.
 - **Voice is kept out** by joining self-muted and self-deafened: deafen silences voice chat but not Go Live audio. **Disable All Notification Sounds** is set in the profile (it's per browser, so set it again after a new login).
 - **Stream volume** is set to `STREAM_VOLUME` (85) on every open (Discord's default is 50%), and the stream is unmuted, since Discord remembers mutes per streamer.
 - **Popups** (Discord's modal dialogs, e.g. the "How'd the stream go?" survey after a watched stream ends) block clicks on the call view. They're closed with Escape (ticking "Don't show again" where offered) before every open and whenever the stream goes silent; a failed open is retried once. Both save a screenshot of the browser to `screenshots/` next to the profile (the newest 50 are kept).
@@ -145,6 +147,7 @@ All settings are in `.env` (see `.env.example`). The main ones:
 | `ANNOUNCE_SETS`                                          | `true`            | Notices in the voice channel's chat.                        |
 | `BROWSER_CHANNEL`                                        | `firefox`         | `firefox` (stereo), `chrome` or `chromium` (mono).          |
 | `STREAM_VOLUME`                                          | `85`              | Discord's stream volume slider.                             |
+| `BROWSER_KEEP_ALIVE_MINUTES`                             | `120`             | Close the idle browser this long after its last use.        |
 | `HANDOVER_SILENCE_SECONDS`, `RESTART_GRACE_SECONDS`      | `45`, `60`        | Rules 3 and 4 above.                                        |
 | `SILENCE_ALERT_SECONDS`                                  | `300`             | Reopen a silent stream; see Silence, above.                 |
 | `TARGET_LUFS`, `TARGET_TP`, `TARGET_LRA`                 | `-14`, `-1`, `11` | Leveling targets.                                           |

@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-25_
+_Last updated: 2026-10-27_
 
 ## Where things stand
 
@@ -22,11 +22,13 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 | Uploaded sets                  | ✅ verified live (Add set…, import and leveling in ~20 s)                                              |
 | Discord popups                 | 🔨 deployed; opens and screenshots verified, but no popup has appeared since to close                  |
 | Download cap (200 Mbit/s each) | 🔨 deployed; not yet seen under load                                                                   |
+| Browser only around sessions   | 🔨 built; `/record check`, start on demand and the 2 h idle close not yet tested live                  |
 
 ## Next
 
-1. **After the next event:** check the recorder's screenshots (`APP_DATA_DIR/recorder/screenshots`) and logs (`closed Discord popups`, `could not open stream`, `stream silent too long`) to see whether the popup handling held, and whether downloads stayed quick for everyone.
-2. **Upload the Afterglow set** once they send it (Add set… on Halloween Disco, filed under Nova, named Afterglow, starting 20:00).
+1. **Test the on-demand browser** on the server: after deploying, the recorder idles near 0% CPU; `/record check` starts the browser and replies privately; `/record start` with the browser closed defers, then posts its public reply; the browser closes 2 h after `/record stop` (log: `browser idle; closing it`).
+2. **After the next event:** check the recorder's screenshots (`APP_DATA_DIR/recorder/screenshots`) and logs (`closed Discord popups`, `could not open stream`, `stream silent too long`) to see whether the popup handling held, and whether downloads stayed quick for everyone.
+3. **Upload the Afterglow set** once they send it (Add set… on Halloween Disco, filed under Nova, named Afterglow, starting 20:00).
 
 ## Environment notes
 

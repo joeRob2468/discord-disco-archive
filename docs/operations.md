@@ -8,6 +8,7 @@ Running, updating and fixing the stack on the home server. Placeholders: `<serve
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Archive            | `https://archive.<domain>` (Traefik, DNS-only Cloudflare CNAME); `/healthz` for a check                                              |
 | Recorder's Discord | noVNC over SSH only: `ssh -L 6080:localhost:6080 <server>`, then `http://localhost:6080/vnc.html` (`VNC_PASSWORD`)                   |
+| Before an event    | `/record check`: starts the recorder's browser and checks its login; it stays up 2 h (`BROWSER_KEEP_ALIVE_MINUTES`)                  |
 | App state          | `APP_DATA_DIR`: `recorder/profile-firefox` (the Discord login), `recorder/screenshots/`, `archive/archive.db`, `archive/images/`     |
 | Recordings         | `RECORDINGS_HOST_DIR`: one folder per session with `session.json`, `raw/`, `leveled/`, `uploads/`; `state.json` (the active session) |
 | Logs               | `docker compose logs -f recorder` / `archive` (JSON; pipe through `pnpm dlx pino-pretty`)                                            |
@@ -30,12 +31,13 @@ Recreating `recorder` during an event ends the current set (marked partial) and 
 
 ### The recorder account is logged out
 
-**Symptoms:** `/record start` refuses with "Can't record: the recorder account is logged out of Discord" (or "…is showing the recorder account a captcha"); during a session the chat gets a ⚠️ notice. The recorder checks its browser at startup and every 5 minutes, and logs `recorder browser problem: …` once when it breaks and `recorder browser is healthy again` once it's fixed (with a ✅ notice in an active session's chat).
+**Symptoms:** `/record check` or `/record start` says "…the recorder account is logged out of Discord" (or "…is showing the recorder account a captcha"); during a session the chat gets a ⚠️ notice. The recorder checks its browser when it starts it and every 5 minutes while it runs, and logs `recorder browser problem: …` once when it breaks and `recorder browser is healthy again` once it's fixed (with a ✅ notice in an active session's chat).
 
-1. Open the tunnel and noVNC (see "At a glance"). You see the Discord web client in Firefox.
-2. Log in as the recorder account by hand, including any captcha or email check. Login is never automated (self-bot ToS risk).
-3. In User Settings → Notifications, turn on **Disable All Notification Sounds** again: Discord keeps it per browser profile, and the sounds would end up in recordings.
-4. Close the SSH tunnel. The login lives in `APP_DATA_DIR/recorder/profile-firefox` and survives restarts. Nothing needs restarting.
+1. If the browser isn't running (noVNC shows a black screen; it only runs around sessions), run `/record check` to start it for 2 h.
+2. Open the tunnel and noVNC (see "At a glance"). You see the Discord web client in Firefox.
+3. Log in as the recorder account by hand, including any captcha or email check. Login is never automated (self-bot ToS risk).
+4. In User Settings → Notifications, turn on **Disable All Notification Sounds** again: Discord keeps it per browser profile, and the sounds would end up in recordings.
+5. Close the SSH tunnel. The login lives in `APP_DATA_DIR/recorder/profile-firefox` and survives restarts. Nothing needs restarting.
 
 That profile folder is equivalent to the account's password: don't copy it anywhere but over SSH, and never commit it.
 

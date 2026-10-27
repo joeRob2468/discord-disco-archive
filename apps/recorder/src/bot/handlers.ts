@@ -21,7 +21,10 @@ export interface HandlerDeps {
   sessions: SessionManager;
   config: DiscordConfig;
   logger: Logger;
+  /** Starts the browser if needed; why the recorder can't record, or undefined if it can. */
   preflight?: (() => Promise<string | undefined>) | undefined;
+  /** `/record check`: start the browser and keep it up for a while; the reply to send. */
+  check?: (() => Promise<string>) | undefined;
   /** Reopen the current target's stream if it isn't being recorded; false if it is. */
   retryTarget?: (() => boolean) | undefined;
   /** `/record split`: why it can't split now, or undefined once the split is queued. */
@@ -34,11 +37,32 @@ type Interaction = ChatInputCommandInteraction<'cached'>;
 
 const NO_PINGS = { allowedMentions: { parse: [] } } satisfies InteractionReplyOptions;
 
+/**
+ * Commands that may start the browser take longer than Discord's 3 s to answer, so they
+ * defer first, privately: refusals then edit that reply, and a public reply is posted as
+ * a follow-up after it.
+ */
+async function deferPrivately(interaction: Interaction): Promise<void> {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+}
+
 async function reply(interaction: Interaction, content: string): Promise<void> {
-  await interaction.reply({ content, ...NO_PINGS });
+  if (!interaction.deferred) {
+    await interaction.reply({ content, ...NO_PINGS });
+    return;
+  }
+  // Edited first: a follow-up to a deferred reply still "thinking" would replace it,
+  // staying private.
+  await interaction.editReply({ content: 'Done.' });
+  await interaction.followUp({ content, ...NO_PINGS });
+  await interaction.deleteReply();
 }
 
 async function replyPrivately(interaction: Interaction, content: string): Promise<void> {
+  if (interaction.deferred) {
+    await interaction.editReply({ content, ...NO_PINGS });
+    return;
+  }
   await interaction.reply({ content, flags: MessageFlags.Ephemeral, ...NO_PINGS });
 }
 
@@ -86,6 +110,8 @@ export async function handleRecordCommand(
       return split(interaction, deps);
     case 'title':
       return title(interaction, deps);
+    case 'check':
+      return check(interaction, deps);
     default:
       await replyPrivately(interaction, `Unknown subcommand \`${subcommand}\`.`);
   }
@@ -139,6 +165,7 @@ async function recordableChannel(
 
 async function start(interaction: Interaction, deps: HandlerDeps): Promise<void> {
   const { sessions, logger } = deps;
+  await deferPrivately(interaction);
   const recordable = await recordableChannel(interaction, deps);
   if (!recordable) return;
   const { channel, liveNow } = recordable;
@@ -173,6 +200,7 @@ async function resume(interaction: Interaction, deps: HandlerDeps): Promise<void
       `Already recording in <#${sessions.active.channelId}>. Run \`/record stop\` first.`,
     );
   }
+  await deferPrivately(interaction);
   const recordable = await recordableChannel(interaction, deps);
   if (!recordable) return;
   const { channel, liveNow } = recordable;
@@ -284,4 +312,14 @@ async function title(interaction: Interaction, { sessions, logger }: HandlerDeps
   if (!session) return refuse(interaction, logger, 'No recording session is active.');
   logger.info({ title: text, userId: interaction.user.id }, 'session title changed');
   await reply(interaction, messages.titleChanged(text));
+}
+
+/** `/record check`: start the recorder's browser ahead of an event and report its login. */
+async function check(
+  interaction: Interaction,
+  { check: checkRecorder, logger }: HandlerDeps,
+): Promise<void> {
+  if (!checkRecorder) return refuse(interaction, logger, 'Not available.');
+  await deferPrivately(interaction);
+  await replyPrivately(interaction, await checkRecorder());
 }

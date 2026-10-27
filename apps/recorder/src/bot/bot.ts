@@ -23,6 +23,8 @@ export interface BotDeps {
   logger: Logger;
   /** Why the recorder can't record right now (e.g. logged out), checked by `/record start`. */
   preflight?: () => Promise<string | undefined>;
+  /** `/record check`: start the browser ahead of an event; the reply to send. */
+  check?: () => Promise<string>;
   /** The recorder account left a voice channel (disconnected, moved or kicked). */
   onRecorderLeftVoice?: (channelId: string) => void;
   /** `/record switch` to the current target: reopen its stream if it isn't being recorded. */
@@ -39,6 +41,7 @@ export async function startBot(deps: BotDeps): Promise<Client> {
     sessions,
     logger,
     preflight,
+    check,
     onRecorderLeftVoice,
     retryTarget,
     split,
@@ -112,6 +115,7 @@ export async function startBot(deps: BotDeps): Promise<Client> {
         sessions,
         logger,
         preflight,
+        check,
         retryTarget,
         split,
         findSessions,

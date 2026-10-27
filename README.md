@@ -41,6 +41,7 @@ docker compose up --build
 | `/record switch <user>`                  | Record someone else who is live now (or retry the current DJ's stream).   |
 | `/record split [name] [previous]`        | DJs sharing one stream: end the set here and start the next DJ's.         |
 | `/record title <text>`, `/record status` | Rename the session; see who's recorded and who's live.                    |
+| `/record check`                          | Before an event: start the recorder and check it's logged in.             |
 
 The recorder posts in the channel's chat as it goes: 🔇 when a stream goes quiet, ⚠️ when something needs a look, 🔁 when it carried on after a restart. What each one means and what to do: [operations.md](docs/operations.md).
 
@@ -62,7 +63,8 @@ docker compose restart recorder            # if it's stuck; it resumes its sessi
 # Re-level a session's stuck or failed sets (add --all to re-level everything)
 docker compose exec recorder node --import tsx src/reprocess.ts /recordings/<session folder>
 
-# Recorder account logged out: open noVNC over a tunnel and log in by hand
+# Recorder account logged out: /record check (starts its browser), then open noVNC
+# over a tunnel and log in by hand
 ssh -L 6080:localhost:6080 <server>        # then http://localhost:6080/vnc.html
 ```
 

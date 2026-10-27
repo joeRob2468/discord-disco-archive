@@ -61,12 +61,15 @@ const browserSchema = z
     VIDEO_SIZE: withDefault(screenSizeSchema, '1920x1080'),
     /** Discord's stream volume slider, in percent. Below 100 leaves headroom; leveling makes up the gain. */
     STREAM_VOLUME: withDefault(envInteger.min(1).max(100), '85'),
+    /** The browser runs only around sessions: it closes this long after its last use. */
+    BROWSER_KEEP_ALIVE_MINUTES: withDefault(envInteger.min(1), '120'),
   })
   .transform((env) => ({
     profileDir: env.PROFILE_DIR,
     channel: env.BROWSER_CHANNEL,
     windowSize: env.VIDEO_SIZE,
     streamVolume: env.STREAM_VOLUME,
+    keepAliveMs: env.BROWSER_KEEP_ALIVE_MINUTES * 60 * 1000,
   }));
 
 const captureSchema = z

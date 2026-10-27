@@ -82,7 +82,7 @@ describe('RecordingController: recorder dropping out of voice', () => {
       },
     });
     controller = new RecordingController({
-      page: {} as Page,
+      page: () => ({}) as Page,
       sessions,
       config: {
         recordingsDir: dir,
@@ -172,7 +172,7 @@ describe('RecordingController: restart grace', () => {
       },
     });
     controller = new RecordingController({
-      page: {} as Page,
+      page: () => ({}) as Page,
       sessions,
       config: {
         recordingsDir: dir,
@@ -266,7 +266,7 @@ describe('RecordingController: opening streams', () => {
       },
     });
     controller = new RecordingController({
-      page: {} as Page,
+      page: () => ({}) as Page,
       sessions,
       config: {
         recordingsDir: dir,
@@ -346,7 +346,7 @@ describe('RecordingController: long silence', () => {
       },
     });
     controller = new RecordingController({
-      page: {} as Page,
+      page: () => ({}) as Page,
       sessions,
       config: {
         recordingsDir: dir,
@@ -467,7 +467,7 @@ describe('RecordingController: /record split', () => {
       },
     });
     controller = new RecordingController({
-      page: {} as Page,
+      page: () => ({}) as Page,
       sessions,
       config: {
         recordingsDir: dir,
@@ -593,7 +593,7 @@ describe('RecordingController: /record resume', () => {
       },
     });
     controller = new RecordingController({
-      page: {} as Page,
+      page: () => ({}) as Page,
       sessions,
       config: {
         recordingsDir: dir,
@@ -653,7 +653,7 @@ describe('RecordingController: carrying on after a restart', () => {
       },
     });
     controller = new RecordingController({
-      page: {} as Page,
+      page: () => ({}) as Page,
       sessions,
       config: {
         recordingsDir: dir,
@@ -769,7 +769,7 @@ describe('RecordingController: resuming right after a stop', () => {
       },
     });
     const controller = new RecordingController({
-      page: {} as Page,
+      page: () => ({}) as Page,
       sessions,
       config: {
         recordingsDir: dir,

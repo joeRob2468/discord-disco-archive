@@ -13,6 +13,7 @@ import { startBot } from './bot/bot.ts';
 import * as messages from './bot/messages.ts';
 import { checkBrowser, FIX_HINT, HEALTH_PROBLEMS, HealthMonitor } from './browser/health.ts';
 import { DISCORD_APP_URL, launchBrowser } from './browser/launch.ts';
+import { OnDemandBrowser, type OpenBrowser } from './browser/on-demand.ts';
 import { RecordingController } from './capture/controller.ts';
 import { readActiveSession, writeActiveSession } from './capture/recorder-state.ts';
 import { findSessions } from './capture/session-record.ts';
@@ -36,13 +37,21 @@ process.on('unhandledRejection', (reason) => {
 });
 const config = loadConfig();
 
-const context = await launchBrowser(config.browser);
-const page = context.pages()[0] ?? (await context.newPage());
-await page.goto(DISCORD_APP_URL);
-// The app redirects to the last channel when logged in, or to the login page.
-await page.waitForURL(/\/(channels|login)/, { timeout: 60_000 }).catch((error: unknown) => {
-  logger.warn({ err: error }, 'Discord did not finish loading');
-});
+const launchDiscord = async (): Promise<OpenBrowser> => {
+  const context = await launchBrowser(config.browser);
+  try {
+    const page = context.pages()[0] ?? (await context.newPage());
+    await page.goto(DISCORD_APP_URL);
+    // The app redirects to the last channel when logged in, or to the login page.
+    await page.waitForURL(/\/(channels|login)/, { timeout: 60_000 }).catch((error: unknown) => {
+      logger.warn({ err: error }, 'Discord did not finish loading');
+    });
+    return { page, close: () => context.close() };
+  } catch (error) {
+    await context.close().catch(() => undefined);
+    throw error;
+  }
+};
 
 // Channel posts need the bot client, which only exists after login.
 const clientRef: { current?: Client } = {};
@@ -69,13 +78,30 @@ const sessions = new SessionManager({
   },
   onSessionEnd: (session) => {
     controller.sessionEnded(session);
+    // In case the event carries on after a stop.
+    browser.keepAlive();
   },
+});
+
+// The browser runs from `/record check`, `start` or `resume` until it has been idle for
+// BROWSER_KEEP_ALIVE_MINUTES with no session active (browser/on-demand.ts).
+const browser = new OnDemandBrowser({
+  launch: launchDiscord,
+  keepAliveMs: config.browser.keepAliveMs,
+  isBusy: () => sessions.active !== undefined,
+  onOpen: () => {
+    health.start(HEALTH_INTERVAL_MS);
+  },
+  onClose: () => {
+    health.stop();
+  },
+  logger: logger.child({ module: 'browser' }),
 });
 
 const processor = new Processor(logger.child({ module: 'processor' }));
 
 const controller = new RecordingController({
-  page,
+  page: () => browser.page,
   sessions,
   config: {
     recordingsDir: config.session.recordingsDir,
@@ -108,7 +134,7 @@ const controller = new RecordingController({
 // Logged out or a captcha: refuse /record start up front, and alert the session's chat.
 const HEALTH_INTERVAL_MS = 5 * 60 * 1000;
 const health = new HealthMonitor({
-  check: () => checkBrowser(page),
+  check: () => checkBrowser(browser.page),
   onChange: (state, previous) => {
     const active = sessions.active;
     if (state === 'ok') {
@@ -127,13 +153,35 @@ const health = new HealthMonitor({
   },
   logger: logger.child({ module: 'health' }),
 });
-health.start(HEALTH_INTERVAL_MS);
-// At startup too: a problem is logged (by onChange) before anyone tries to record.
-if ((await health.poll()) === 'ok') logger.info('Discord web client ready');
+
+/** Start the browser if needed and check its login: what's wrong, or undefined if ready. */
+const browserProblem = async (): Promise<string | undefined> => {
+  try {
+    await browser.open();
+  } catch (error) {
+    logger.error({ err: error }, 'could not start the browser');
+    return "the recorder's browser didn't start; check the recorder logs.";
+  }
+  const state = await health.poll();
+  return state === 'ok' ? undefined : `${HEALTH_PROBLEMS[state]}. ${FIX_HINT}`;
+};
 
 const preflight = async (): Promise<string | undefined> => {
-  const state = await health.poll();
-  return state === 'ok' ? undefined : `Can't record: ${HEALTH_PROBLEMS[state]}. ${FIX_HINT}`;
+  const problem = await browserProblem();
+  return problem && `Can't record: ${problem}`;
+};
+
+const keepAliveText = (): string => {
+  const minutes = Math.round(config.browser.keepAliveMs / 60_000);
+  return minutes % 60 === 0 ? `${String(minutes / 60)} h` : `${String(minutes)} min`;
+};
+
+const check = async (): Promise<string> => {
+  const problem = await browserProblem();
+  const time = keepAliveText();
+  return problem
+    ? `⚠️ The recorder isn't ready: ${problem} Its browser stays up for ${time} for that.`
+    : `✅ The recorder is logged in and ready. It stays ready for ${time}, and for ${time} after each session.`;
 };
 
 const client = await startBot({
@@ -141,6 +189,7 @@ const client = await startBot({
   sessions,
   logger,
   preflight,
+  check,
   onRecorderLeftVoice: (channelId) => {
     controller.recorderLeftVoice(channelId);
   },
@@ -180,11 +229,11 @@ const resumeAfterRestart = async (): Promise<void> => {
     );
     return forget();
   }
-  const browser = await health.poll();
-  if (browser !== 'ok') {
+  const problem = await browserProblem();
+  if (problem) {
     say(
-      `⚠️ The recorder restarted mid-session but can't resume: ${HEALTH_PROBLEMS[browser]}. ` +
-        `${FIX_HINT} Then run \`/record resume\`.`,
+      `⚠️ The recorder restarted mid-session but can't resume: ${problem} ` +
+        'Then run `/record resume`.',
     );
     return forget();
   }
@@ -294,7 +343,7 @@ const shutdown = async (signal: string): Promise<void> => {
   processor.shutdown();
   await controller.idle();
   await client.destroy();
-  await context.close();
+  await browser.close();
   logger.info('stopped');
   process.exit(0);
 };

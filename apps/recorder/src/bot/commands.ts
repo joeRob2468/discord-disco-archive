@@ -56,6 +56,11 @@ export function buildRecordCommand(
     )
     .addSubcommand((sub) => sub.setName('stop').setDescription('Stop recording'))
     .addSubcommand((sub) =>
+      sub
+        .setName('check')
+        .setDescription("Start the recorder ahead of an event and check it's logged in"),
+    )
+    .addSubcommand((sub) =>
       sub.setName('status').setDescription("Show who's live and who is being recorded"),
     )
     .addSubcommand((sub) =>

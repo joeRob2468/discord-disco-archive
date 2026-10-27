@@ -18,6 +18,7 @@ describe('loadConfig', () => {
       channel: 'firefox',
       windowSize: { width: 1920, height: 1080 },
       streamVolume: 85,
+      keepAliveMs: 2 * 60 * 60 * 1000,
     });
     expect(config.processing.targets).toEqual({ integrated: -14, truePeak: -1, range: 11 });
     expect(config.processing.exportFormats).toEqual(['mp3']);
