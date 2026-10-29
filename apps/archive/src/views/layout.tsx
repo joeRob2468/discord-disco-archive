@@ -2,6 +2,7 @@ import { raw } from 'hono/html';
 import type { Child } from 'hono/jsx';
 import { assetUrl } from '../assets.ts';
 import { GRAIN_IMAGE } from './art.ts';
+import { ImagePicker } from './edit.tsx';
 import type { AuthState } from '../auth/auth.ts';
 
 const SITE_NAME = 'Stream Archive';
@@ -290,8 +291,14 @@ function Logo() {
 }
 
 /** `<html>` with the shared head: theme, stylesheet, htmx. */
-function Document(props: { title: string; preview?: Preview | undefined; children?: Child }) {
-  const { title, preview, children } = props;
+function Document(props: {
+  title: string;
+  preview?: Preview | undefined;
+  /** Admins get the image picker and cropper for the edit dialogs. */
+  admin?: boolean;
+  children?: Child;
+}) {
+  const { title, preview, admin = false, children } = props;
   return (
     <>
       {raw('<!doctype html>')}
@@ -315,6 +322,7 @@ function Document(props: { title: string; preview?: Preview | undefined; childre
           />
           <script src={assetUrl('/assets/htmx.min.js')} defer></script>
           <script type="module" src={assetUrl('/assets/player.js')}></script>
+          {admin && <script type="module" src={assetUrl('/assets/crop.js')}></script>}
         </head>
         <body hx-boost="true" class="min-h-screen">
           <div class="backdrop" aria-hidden="true">
@@ -324,6 +332,7 @@ function Document(props: { title: string; preview?: Preview | undefined; childre
             <div class="blob blob-4" />
           </div>
           {children}
+          {admin && <ImagePicker />}
         </body>
       </html>
     </>
@@ -549,7 +558,7 @@ function PlayerBar() {
 
 export function Layout({ title, auth, query, preview, children }: LayoutProps) {
   return (
-    <Document title={title} preview={preview}>
+    <Document title={title} preview={preview} admin={auth.isAdmin}>
       <div class="mx-auto max-w-[1400px] p-3 sm:p-6">
         <div class="min-w-0">
           <header class="mb-6 flex items-center gap-2">

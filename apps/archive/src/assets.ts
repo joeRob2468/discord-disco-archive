@@ -22,6 +22,11 @@ export const ASSETS = [
     'text/javascript; charset=utf-8',
   ],
   [
+    '/assets/crop.js',
+    fileURLToPath(new URL('../dist/crop.js', import.meta.url)),
+    'text/javascript; charset=utf-8',
+  ],
+  [
     '/assets/htmx.min.js',
     require.resolve('htmx.org/dist/htmx.min.js'),
     'text/javascript; charset=utf-8',

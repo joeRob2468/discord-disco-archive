@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build from the repo root: docker build -f apps/archive/Dockerfile .
 
-# Stage 1: build the stylesheet and the player script (Tailwind, daisyUI and esbuild
+# Stage 1: build the stylesheet and the client scripts (Tailwind, daisyUI and esbuild
 # are dev dependencies).
 FROM node:24-bookworm-slim AS assets
 RUN corepack enable

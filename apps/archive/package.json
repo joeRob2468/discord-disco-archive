@@ -7,8 +7,8 @@
   "type": "module",
   "scripts": {
     "build:css": "tailwindcss -i src/views/app.css -o dist/app.css --minify",
-    "build:js": "esbuild src/client/player.ts --bundle --minify --format=esm --target=es2022 --outfile=dist/player.js",
-    "dev": "tailwindcss -i src/views/app.css -o dist/app.css --watch=always & esbuild src/client/player.ts --bundle --format=esm --target=es2022 --outfile=dist/player.js --watch=forever & cd ../.. && TSX_TSCONFIG_PATH=apps/archive/tsconfig.json node --env-file-if-exists=.env --watch --import tsx apps/archive/src/main.ts",
+    "build:js": "esbuild src/client/player.ts src/client/crop.ts --bundle --minify --format=esm --target=es2022 --outdir=dist",
+    "dev": "tailwindcss -i src/views/app.css -o dist/app.css --watch=always & esbuild src/client/player.ts src/client/crop.ts --bundle --format=esm --target=es2022 --outdir=dist --watch=forever & cd ../.. && TSX_TSCONFIG_PATH=apps/archive/tsconfig.json node --env-file-if-exists=.env --watch --import tsx apps/archive/src/main.ts",
     "start": "node --import tsx src/main.ts",
     "typecheck": "tsc -p . && tsc -p src/client"
   },

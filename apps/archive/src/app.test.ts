@@ -344,6 +344,22 @@ describe('archive app', () => {
       }
     });
 
+    it('gives admins the image cropper, and nobody else', async () => {
+      const app = build(adminEnv);
+      const page = setPage('session-1', 'set-1');
+      expect(await (await app.request(page)).text()).not.toContain('/assets/crop.js');
+      const cookie = await loginAsAdmin(app);
+      const html = await (await app.request(page, { headers: { Cookie: cookie } })).text();
+      expect(html).toContain('/assets/crop.js');
+      // One shared picker; each image field opens it, DJ pictures framed round.
+      expect(html.match(/id="image-picker"/g)).toHaveLength(1);
+      expect(html).toContain('data-crop="round"');
+      expect(html).toContain('data-crop="square"');
+      // Remove sets a hidden flag (read like the old checkbox) instead of a checkbox.
+      expect(html).toContain('<input type="hidden" name="removeImage" value=""/>');
+      expect(html).not.toContain('type="checkbox" name="removeImage"');
+    });
+
     it('rejects a wrong password', async () => {
       const response = await build(adminEnv).request(post('/login', { password: 'nope' }));
       expect(response.status).toBe(401);

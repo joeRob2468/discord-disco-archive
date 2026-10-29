@@ -7,8 +7,9 @@
  */
 import type { Child } from 'hono/jsx';
 import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/catalog.ts';
+import { MAX_ZOOM } from '../client/crop-geometry.ts';
 import { UPLOAD_EXTENSIONS } from '../uploads.ts';
-import { imageUrl } from './art.ts';
+import { gradient, imageUrl } from './art.ts';
 import { formatBytes } from './format.ts';
 import { sessionUrl, setUrl } from './links.ts';
 
@@ -191,32 +192,182 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 /** The image field: current image, a file to replace it, and a remove box. */
-function ImageField(props: { label: string; current: string | undefined; hint?: string }) {
-  const { label, current, hint } = props;
+/**
+ * An image upload: a preview, a button that opens the image picker (`ImagePicker`,
+ * `crop.ts`) to choose, drop or paste one and frame it square (round for a DJ's picture),
+ * and Remove, which shows what the item falls back to (`fallback`, else its gradient from
+ * `seed`). Undo goes back to the saved image. Nothing changes until Save: the framed
+ * square goes in the hidden file input, a removal in `removeImage`.
+ */
+function ImageField(props: {
+  label: string;
+  current: string | undefined;
+  /** What shows without an image of its own (an album cover, a Discord avatar). */
+  fallback?: string | undefined;
+  seed: string;
+  hint?: string;
+  round?: boolean;
+}) {
+  const { label, current, fallback, seed, hint, round = false } = props;
+  const shape = `size-14 shrink-0 object-cover ${round ? 'rounded-full' : 'rounded-lg'}`;
   return (
-    <div class="border-base-content/10 flex flex-col gap-2 border-t pt-3 text-sm">
+    <div
+      class="border-base-content/10 flex flex-col gap-2 border-t pt-3 text-sm"
+      data-crop={round ? 'round' : 'square'}
+    >
       <span class="font-semibold">{label}</span>
-      <div class="flex items-center gap-3">
-        {current && (
-          <img class="size-14 shrink-0 rounded-lg object-cover" src={imageUrl(current)} alt="" />
-        )}
-        <input
-          class="file-input file-input-sm w-full"
-          type="file"
-          name="image"
-          accept="image/png,image/jpeg,image/webp"
+      <div class="flex flex-wrap items-center gap-3">
+        <img
+          class={shape}
+          src={current ? imageUrl(current) : undefined}
+          data-current={current ? imageUrl(current) : undefined}
+          hidden={!current}
+          alt=""
+          data-crop-preview
         />
+        {fallback ? (
+          <img
+            class={shape}
+            src={imageUrl(fallback)}
+            hidden={Boolean(current)}
+            alt=""
+            data-crop-fallback
+          />
+        ) : (
+          <div
+            class={shape}
+            style={`background:${gradient(seed)}`}
+            hidden={Boolean(current)}
+            data-crop-fallback
+          />
+        )}
+        <button class="btn btn-soft btn-sm rounded-xl" type="button" data-crop-pick>
+          {current ? 'Change image…' : 'Choose image…'}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm rounded-xl"
+          type="button"
+          hidden={!current}
+          data-crop-remove
+        >
+          Remove
+        </button>
+        <button class="btn btn-ghost btn-sm rounded-xl" type="button" hidden data-crop-undo>
+          Undo
+        </button>
+        <input type="file" name="image" accept="image/png,image/jpeg,image/webp" hidden />
+        <input type="hidden" name="removeImage" value="" />
       </div>
-      {current && (
-        <label class="flex items-center gap-2">
-          <input class="checkbox checkbox-sm" type="checkbox" name="removeImage" value="1" />
-          Remove the current image
-        </label>
-      )}
-      <p class="text-base-content/60 text-xs">
-        PNG, JPEG or WebP, up to 5 MB. Applied when you save.{hint && ` ${hint}`}
-      </p>
+      <p class="text-base-content/60 text-xs" data-crop-status hidden />
+      {hint && <p class="text-base-content/60 text-xs">{hint}</p>}
     </div>
+  );
+}
+
+const svg = (path: string, size = 'size-5') => (
+  <svg
+    class={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d={path} />
+  </svg>
+);
+
+// Lucide's "image" (ISC), as the zoom slider's ends and the upload prompt.
+const IMAGE_ICON =
+  'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM21 15l-3.1-3.1a2 2 0 0 0-2.8 0L6 21';
+
+/**
+ * The image picker, once per admin page, shared by every image field (`crop.ts`): first
+ * choose an image (click, drop or paste), then frame it. The stage shows the whole image,
+ * dimmed outside the frame. Apply hands the framed square back to the field.
+ */
+export function ImagePicker() {
+  return (
+    <dialog id="image-picker" class="modal group" data-picker>
+      <div class="modal-box frosted max-w-lg rounded-3xl">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-xl font-bold" data-picker-title>
+            Choose an image
+          </h2>
+          <form method="dialog" hx-boost="false">
+            <button class="btn btn-ghost btn-sm btn-circle" aria-label="Close">
+              ✕
+            </button>
+          </form>
+        </div>
+        <div data-picker-step="choose">
+          <label
+            class="border-base-content/20 hover:border-primary data-[over]:border-primary flex h-56 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed text-center transition"
+            data-picker-drop
+          >
+            {svg(IMAGE_ICON, 'size-8 opacity-70')}
+            <span class="font-semibold">Upload an image</span>
+            <span class="text-base-content/60 text-sm">
+              Click to choose a file, drop one here, or paste one
+            </span>
+            <input type="file" accept="image/png,image/jpeg,image/webp" hidden data-picker-file />
+          </label>
+          <p class="text-error mt-3 text-sm" data-picker-error hidden />
+        </div>
+        <div data-picker-step="crop" hidden>
+          <div
+            class="bg-base-300 relative aspect-square w-full cursor-grab touch-none overflow-hidden rounded-2xl select-none active:cursor-grabbing"
+            data-crop-stage
+          >
+            <img
+              class="pointer-events-none absolute top-0 left-0 max-w-none origin-top-left"
+              alt=""
+              data-crop-image
+            />
+            {/* The frame: the stage outside it is dimmed by its spread shadow. */}
+            <div
+              class="pointer-events-none absolute inset-[12%] rounded-xl border-2 border-white shadow-[0_0_0_100vmax_rgb(0_0_0/0.55)] group-data-[shape=round]:rounded-full"
+              data-crop-frame
+            />
+          </div>
+          <div class="mt-4 flex items-center justify-center gap-3">
+            {svg(IMAGE_ICON, 'size-4 opacity-70')}
+            <input
+              class="range range-xs range-primary w-56"
+              type="range"
+              min="1"
+              max={String(MAX_ZOOM)}
+              step="0.01"
+              value="1"
+              aria-label="Zoom"
+              data-crop-zoom
+            />
+            {svg(IMAGE_ICON, 'size-6 opacity-70')}
+          </div>
+          <p class="text-base-content/60 mt-2 text-center text-xs">
+            Drag to position; zoom with the slider or scroll.
+          </p>
+          <div class="modal-action justify-between">
+            <button class="btn btn-ghost rounded-xl" type="button" data-picker-reset>
+              Reset
+            </button>
+            <div class="flex gap-2">
+              <button class="btn btn-ghost rounded-xl" type="button" data-picker-cancel>
+                Cancel
+              </button>
+              <button class="btn btn-primary rounded-xl" type="button" data-picker-apply>
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop" hx-boost="false">
+        <button>Close</button>
+      </form>
+    </dialog>
   );
 }
 
@@ -268,6 +419,8 @@ export function EditSetDialog({ set, next }: { set: SetSummary; next: string }) 
         <ImageField
           label="Set art"
           current={set.image}
+          fallback={set.sessionImage}
+          seed={set.uuid}
           hint="Without its own art, a set uses its album cover."
         />
       </Dialog>
@@ -310,7 +463,7 @@ export function EditSessionDialog({ session, next }: { session: SessionSummary; 
             </option>
           </select>
         </Field>
-        <ImageField label="Album cover" current={session.image} />
+        <ImageField label="Album cover" current={session.image} seed={session.id} />
       </Dialog>
     </>
   );
@@ -348,7 +501,14 @@ export function EditStreamerDialog({
           {streamer.links.join('\n')}
         </textarea>
       </Field>
-      <ImageField label="Picture" current={streamer.image} />
+      <ImageField
+        label="Picture"
+        current={streamer.image}
+        fallback={streamer.avatarImage}
+        seed={streamer.userId}
+        hint="Without one, a DJ shows their Discord avatar."
+        round
+      />
     </Dialog>
   );
 }

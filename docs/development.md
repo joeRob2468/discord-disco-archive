@@ -16,13 +16,13 @@
 
 Per app:
 
-| Command                                                          | What it does                                                                                                                                  |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm --filter @dsr/archive dev`                                 | Archive on http://localhost:3000 with `./.env`, watching code, CSS and the player script. Data: `./docker-data/archive`, `./data/recordings`. |
-| `pnpm --filter @dsr/recorder reprocess <session folder> [--all]` | Re-level a session's `processing`/`failed` sets (or all). Needs ffmpeg, so run it in the container (see operations.md).                       |
-| `pnpm --filter @dsr/recorder backfill-avatars`                   | Save DJs' Discord avatar URLs on sets recorded before avatars were (one-time; see operations.md).                                             |
-| `pnpm --filter @dsr/recorder smoke`                              | Open Discord with the recorder's profile and stay up, e.g. to log in. Container only.                                                         |
-| `pnpm --filter @dsr/recorder probe <channel URL> <user ID>`      | Run each browser step against a live channel and save page state, for fixing selectors. Container only.                                       |
+| Command                                                          | What it does                                                                                                                                   |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm --filter @dsr/archive dev`                                 | Archive on http://localhost:3000 with `./.env`, watching code, CSS and the client scripts. Data: `./docker-data/archive`, `./data/recordings`. |
+| `pnpm --filter @dsr/recorder reprocess <session folder> [--all]` | Re-level a session's `processing`/`failed` sets (or all). Needs ffmpeg, so run it in the container (see operations.md).                        |
+| `pnpm --filter @dsr/recorder backfill-avatars`                   | Save DJs' Discord avatar URLs on sets recorded before avatars were (one-time; see operations.md).                                              |
+| `pnpm --filter @dsr/recorder smoke`                              | Open Discord with the recorder's profile and stay up, e.g. to log in. Container only.                                                          |
+| `pnpm --filter @dsr/recorder probe <channel URL> <user ID>`      | Run each browser step against a live channel and save page state, for fixing selectors. Container only.                                        |
 
 ## Docker
 
