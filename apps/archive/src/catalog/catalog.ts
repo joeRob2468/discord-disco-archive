@@ -77,6 +77,8 @@ export interface SetSummary {
   tags: string[];
   /** Times played (see `recordPlay`). */
   plays: number;
+  /** Times downloaded (see `recordDownload`). */
+  downloads: number;
   /** Uploaded image file names: this set's art, its album cover, its DJ's picture. */
   image: string | undefined;
   sessionImage: string | undefined;
@@ -97,8 +99,8 @@ export interface StreamerSummary {
   /** When their first and latest sets started. */
   firstPlayedAt: string | undefined;
   lastPlayedAt: string | undefined;
-  /** Times their sets were played. */
-  plays: number;
+  /** Times their sets were downloaded. */
+  downloads: number;
   /** Uploaded picture file name, if any. */
   image: string | undefined;
 }
@@ -109,7 +111,7 @@ export interface SessionStats {
   sets: number;
   djs: number;
   seconds: number;
-  plays: number;
+  downloads: number;
 }
 
 /** Archive-wide totals for the admin overview. Sizes are bytes per `SetFiles` key. */
@@ -120,6 +122,7 @@ export interface Overview {
   djs: number;
   seconds: number;
   plays: number;
+  downloads: number;
   storage: Partial<Record<keyof SetFiles, number>>;
 }
 
@@ -133,6 +136,7 @@ export const SET_SORTS = {
   session: 'v.session_title COLLATE NOCASE',
   length: 'v.duration_seconds',
   plays: 'v.plays',
+  downloads: 'v.downloads',
   size: '(SELECT COALESCE(sum(value), 0) FROM json_each(v.file_sizes))',
   status: 'v.status',
 } as const;
@@ -144,7 +148,7 @@ export const SESSION_SORTS = {
   sets: 'agg.sets',
   djs: 'agg.djs',
   length: 'agg.seconds',
-  plays: 'agg.plays',
+  downloads: 'agg.downloads',
 } as const;
 export type SessionSort = keyof typeof SESSION_SORTS;
 
@@ -154,7 +158,7 @@ export const STREAMER_SORTS = {
   length: 'total_seconds',
   first: 'first_played_at',
   last: 'last_played_at',
-  plays: 'plays',
+  downloads: 'downloads',
 } as const;
 export type StreamerSort = keyof typeof STREAMER_SORTS;
 
@@ -244,6 +248,7 @@ interface SetRow {
   id: string;
   uuid: string;
   plays: number;
+  downloads: number;
   image: string | null;
   session_image: string | null;
   streamer_image: string | null;
@@ -285,7 +290,7 @@ interface StreamerRow {
   total_seconds: number;
   first_played_at: string | null;
   last_played_at: string | null;
-  plays: number;
+  downloads: number;
   image: string | null;
 }
 
@@ -318,6 +323,7 @@ function toSet(row: SetRow): SetSummary {
     id: row.id,
     uuid: row.uuid,
     plays: row.plays,
+    downloads: row.downloads,
     image: opt(row.image),
     sessionImage: opt(row.session_image),
     streamerImage: opt(row.streamer_image),
@@ -365,7 +371,7 @@ function toStreamer(row: StreamerRow): StreamerSummary {
     totalSeconds: row.total_seconds,
     firstPlayedAt: opt(row.first_played_at),
     lastPlayedAt: opt(row.last_played_at),
-    plays: row.plays,
+    downloads: row.downloads,
     image: opt(row.image),
   };
 }
@@ -414,7 +420,7 @@ const STREAMER_SELECT = `
          COALESCE(sum(v.duration_seconds), 0) AS total_seconds,
          min(v.started_at) AS first_played_at,
          max(v.started_at) AS last_played_at,
-         COALESCE(sum(v.plays), 0) AS plays
+         COALESCE(sum(v.downloads), 0) AS downloads
   FROM streamers st
   LEFT JOIN set_view v ON v.user_id = st.user_id AND (@all OR NOT v.unlisted)`;
 
@@ -494,6 +500,20 @@ export class Catalog {
   }
 
   /**
+   * Count a download of a visible set (by its recorder ID, as media URLs use). Returns
+   * false if there's no such set.
+   */
+  recordDownload(id: string): boolean {
+    const result = this.#db
+      .prepare(
+        `INSERT INTO downloads (set_id, at)
+         SELECT id, @at FROM set_view WHERE id = @id AND NOT unlisted`,
+      )
+      .run({ id, at: now() });
+    return result.changes > 0;
+  }
+
+  /**
    * Most-played sets over the last `days` days; sets never played in that window rank by
    * all-time plays, then newest first, so the list is never empty while sets exist.
    */
@@ -523,10 +543,11 @@ export class Catalog {
   ): SessionStats[] {
     const rows = this.#db
       .prepare(
-        `SELECT se.*, agg.sets, agg.djs, agg.seconds, agg.plays
+        `SELECT se.*, agg.sets, agg.djs, agg.seconds, agg.downloads
          FROM session_view se
          JOIN (SELECT v.session_id, count(*) AS sets, count(DISTINCT v.user_id) AS djs,
-                      COALESCE(sum(v.duration_seconds), 0) AS seconds, sum(v.plays) AS plays
+                      COALESCE(sum(v.duration_seconds), 0) AS seconds,
+                      sum(v.downloads) AS downloads
                FROM set_view v WHERE @all OR NOT v.unlisted GROUP BY v.session_id) agg
            ON agg.session_id = se.id
          WHERE @all OR NOT se.unlisted
@@ -536,14 +557,14 @@ export class Catalog {
       sets: number;
       djs: number;
       seconds: number;
-      plays: number;
+      downloads: number;
     })[];
     return rows.map((row) => ({
       session: toSession(row),
       sets: row.sets,
       djs: row.djs,
       seconds: row.seconds,
-      plays: row.plays,
+      downloads: row.downloads,
     }));
   }
 
@@ -553,7 +574,8 @@ export class Catalog {
       .prepare(
         `SELECT count(DISTINCT session_id) AS sessions, count(*) AS sets,
                 COALESCE(sum(unlisted), 0) AS hidden_sets, count(DISTINCT user_id) AS djs,
-                COALESCE(sum(duration_seconds), 0) AS seconds, COALESCE(sum(plays), 0) AS plays
+                COALESCE(sum(duration_seconds), 0) AS seconds, COALESCE(sum(plays), 0) AS plays,
+                COALESCE(sum(downloads), 0) AS downloads
          FROM set_view WHERE NOT missing`,
       )
       .get() as {
@@ -563,6 +585,7 @@ export class Catalog {
       djs: number;
       seconds: number;
       plays: number;
+      downloads: number;
     };
     const storage = this.#db
       .prepare(
@@ -577,6 +600,7 @@ export class Catalog {
       djs: counts.djs,
       seconds: counts.seconds,
       plays: counts.plays,
+      downloads: counts.downloads,
       storage: Object.fromEntries(storage.map((row) => [row.key, row.bytes])),
     };
   }
@@ -806,7 +830,7 @@ export class Catalog {
   }
 
   /**
-   * Forget a set whose files were deleted (plays and tags go with it). Returns the image
+   * Forget a set whose files were deleted (plays, downloads and tags go with it). Returns the image
    * files that nothing uses any more, for the caller to delete.
    */
   deleteSet(id: string, actor: string): string[] {

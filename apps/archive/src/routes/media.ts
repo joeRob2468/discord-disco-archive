@@ -2,7 +2,7 @@
  * Streams set files from the read-only recordings volume, with Range support so seeking
  * works. Files are looked up through the catalog, so hidden sets stay hidden and request
  * paths never touch the filesystem directly. With a `limiter`, each client's media
- * bandwidth is capped (`ARCHIVE_DOWNLOAD_LIMIT_MBPS`).
+ * bandwidth is capped (`ARCHIVE_DOWNLOAD_LIMIT_MBPS`). Downloads (`?download`) are counted.
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -68,6 +68,19 @@ function contentDisposition(filename: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
+/**
+ * Whether a download request starts a download. Download managers fetch one file in
+ * several ranges, and resumes ask for the rest, so only the piece from byte 0 counts.
+ */
+export function countsAsDownload(
+  method: string,
+  range: string | undefined,
+  status: number,
+): boolean {
+  if (method !== 'GET' || status >= 300) return false;
+  return range === undefined || range.trim().startsWith('bytes=0-');
+}
+
 export function mediaRoutes(
   catalog: Catalog,
   recordingsDir: string,
@@ -105,7 +118,8 @@ export function mediaRoutes(
     if (!file.startsWith(sessionDir + path.sep)) return c.notFound();
 
     const type = fileType(format, relative);
-    if (c.req.query('download') !== undefined) {
+    const download = c.req.query('download') !== undefined;
+    if (download) {
       c.header('Content-Disposition', contentDisposition(downloadName(set, type.ext)));
     }
     c.header('Cache-Control', 'private, max-age=3600');
@@ -113,6 +127,9 @@ export function mediaRoutes(
     const response = await serveStatic<AuthEnv>({ root: '/', path: file })(c, next);
     if (!response) return c.notFound();
     response.headers.set('Content-Type', type.mime);
+    if (download && countsAsDownload(c.req.method, c.req.header('range'), response.status)) {
+      catalog.recordDownload(set.id);
+    }
     if (!limiter || !response.body) return response;
     // Without a proxy (local dev) every request counts as one client.
     const throttled = limiter.throttle(response.body, clientIp(c) ?? 'direct');

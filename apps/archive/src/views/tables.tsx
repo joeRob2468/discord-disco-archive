@@ -104,12 +104,12 @@ export function SessionsPage(props: {
             {header('DJs', 'djs', 'text-right')}
             {header('Sets', 'sets', 'text-right')}
             {header('Length', 'length', 'text-right')}
-            {header('Plays', 'plays', 'text-right')}
+            {header('Downloads', 'downloads', 'text-right')}
             {auth.isAdmin && <th />}
           </tr>
         </thead>
         <tbody>
-          {sessions.map(({ session, sets, djs, seconds, plays }) => (
+          {sessions.map(({ session, sets, djs, seconds, downloads }) => (
             <tr class="hover:bg-base-100">
               <td>
                 <a class="plain flex items-center gap-3" href={sessionUrl(session.id)}>
@@ -126,7 +126,7 @@ export function SessionsPage(props: {
               <td class="text-right tabular-nums">{djs}</td>
               <td class="text-right tabular-nums">{sets}</td>
               <td class="text-right tabular-nums">{formatDuration(seconds)}</td>
-              <td class="text-right tabular-nums">{plays}</td>
+              <td class="text-right tabular-nums">{downloads}</td>
               {auth.isAdmin && (
                 <td class="text-right">
                   <EditButton kind="session" id={session.id} />
@@ -179,7 +179,7 @@ export function DjsPage(props: {
             {header('Time played', 'length', 'text-right')}
             {header('First set', 'first')}
             {header('Latest set', 'last')}
-            {header('Plays', 'plays', 'text-right')}
+            {header('Downloads', 'downloads', 'text-right')}
             {auth.isAdmin && <th />}
           </tr>
         </thead>
@@ -208,7 +208,7 @@ export function DjsPage(props: {
               <td class="whitespace-nowrap">
                 {streamer.lastPlayedAt && formatDate(streamer.lastPlayedAt)}
               </td>
-              <td class="text-right tabular-nums">{streamer.plays}</td>
+              <td class="text-right tabular-nums">{streamer.downloads}</td>
               {auth.isAdmin && (
                 <td class="text-right">
                   <EditButton kind="streamer" id={streamer.userId} />

@@ -1,8 +1,14 @@
 /** Media links shared by the set pages. */
 import type { SetSummary } from '../catalog/catalog.ts';
+import { plural } from './format.ts';
 
 export const mediaUrl = (setId: string, format: string, download = false): string =>
   `/media/${encodeURIComponent(setId)}/${format}${download ? '?download=1' : ''}`;
+
+/** A set's download count ("3 downloads"). */
+export const DownloadCount = ({ set }: { set: SetSummary }) => (
+  <span>{plural(set.downloads, 'download')}</span>
+);
 
 /** The raw file's label: the WAV capture, or an uploaded set's original (`MP3 (original)`). */
 function rawLabel(file: string | undefined): string {

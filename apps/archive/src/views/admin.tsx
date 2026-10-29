@@ -19,7 +19,6 @@ import {
 } from './format.ts';
 import { Icon, Layout } from './layout.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
-import { PlayCount } from './play.tsx';
 import { naturalDir, SortHeader, TablePanel, withQuery } from './tables.tsx';
 
 const TABS = [
@@ -81,7 +80,7 @@ export function OverviewPage(props: {
   const exports = sum(storage.mp3, storage.m4a);
   return (
     <AdminLayout auth={auth} title="Overview" tab="/admin">
-      <section class="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <section class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Stat label="Sessions" value={String(overview.sessions)} />
         <Stat
           label="Sets"
@@ -91,6 +90,7 @@ export function OverviewPage(props: {
         <Stat label="DJs" value={String(overview.djs)} />
         <Stat label="Recorded" value={formatHours(overview.seconds)} />
         <Stat label="Plays" value={String(overview.plays)} />
+        <Stat label="Downloads" value={String(overview.downloads)} />
       </section>
 
       <h2 class="mt-8 mb-3 text-xl font-bold">Storage</h2>
@@ -211,6 +211,7 @@ function SetsTable({ list, filters }: { list: Page<SetSummary>; filters: AdminSe
             {header('Length', 'length', 'text-right')}
             {header('Status', 'status')}
             {header('Plays', 'plays', 'text-right')}
+            {header('Downloads', 'downloads', 'text-right')}
             {header('Size', 'size', 'text-right')}
             <th />
           </tr>
@@ -236,9 +237,8 @@ function SetsTable({ list, filters }: { list: Page<SetSummary>; filters: AdminSe
                 {set.status === 'ready' ? 'ready' : ''}
                 <StatusBadges set={set} />
               </td>
-              <td class="text-right tabular-nums">
-                <PlayCount set={set} bare />
-              </td>
+              <td class="text-right tabular-nums">{set.plays}</td>
+              <td class="text-right tabular-nums">{set.downloads}</td>
               <td class="text-right whitespace-nowrap tabular-nums">
                 {formatBytes(totalBytes(set))}
               </td>

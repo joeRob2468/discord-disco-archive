@@ -25,6 +25,7 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 | Browser only around sessions   | 🔨 built; `/record check`, start on demand and the 2 h idle close not yet tested live                  |
 | Login rate limit, body cap     | 🔨 built; tested locally, not yet deployed                                                             |
 | Upload free-space check        | 🔨 built; tested locally, not yet deployed                                                             |
+| Download counts                | 🔨 built; tested locally, not yet deployed                                                             |
 
 ## Next
 

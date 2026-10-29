@@ -77,7 +77,7 @@ describe('archive app', () => {
       `/search?streamer=${DJ_A}`,
       '/djs',
       '/djs?sort=name&dir=asc',
-      '/sessions?sort=plays&dir=asc',
+      '/sessions?sort=downloads&dir=asc',
       '/sessions?sort=nope',
       '/search?session=00000000-0000-4000-8000-000000000000',
     ])('renders %s', async (path) => {
@@ -160,8 +160,10 @@ describe('archive app', () => {
       expect((await play(setUuid('session-1', 'set-1'))).status).toBe(204);
       expect((await play('00000000-0000-5000-8000-000000000000')).status).toBe(404);
       expect((await play('not-a-uuid')).status).toBe(404);
+      // Kept for ranking popular sets, but not shown.
+      expect(new Catalog(db).getSet('set-1', false)?.plays).toBe(1);
       const page = await (await app.request(setPage('session-1', 'set-1'))).text();
-      expect(page).toContain('1 play');
+      expect(page).not.toContain('1 play');
     });
 
     it('serves sets under their session and redirects older set links there', async () => {
@@ -194,6 +196,24 @@ describe('archive app', () => {
       expect(response.status).toBe(206);
       expect(response.headers.get('content-type')).toBe('audio/mp4');
       expect(await response.text()).toBe('media');
+    });
+
+    it('counts a download once, from its first byte', async () => {
+      const app = build();
+      const get = (path: string, range?: string) =>
+        app.request(path, range === undefined ? {} : { headers: { Range: range } });
+      // A whole download, a download manager's first piece, and one counting nothing:
+      // a later piece (or a resume), playback, and a HEAD.
+      expect((await get('/media/set-2/mp3?download=1')).status).toBe(200);
+      expect((await get('/media/set-2/mp3?download=1', 'bytes=0-2')).status).toBe(206);
+      expect((await get('/media/set-2/mp3?download=1', 'bytes=2-')).status).toBe(206);
+      expect((await get('/media/set-2/mp3')).status).toBe(200);
+      expect((await app.request('/media/set-2/mp3?download=1', { method: 'HEAD' })).status).toBe(
+        200,
+      );
+      expect(new Catalog(db).getSet('set-2', false)?.downloads).toBe(2);
+      const page = await (await app.request(setPage('session-1', 'set-2'))).text();
+      expect(page).toContain('2 downloads');
     });
 
     it('sets a friendly download filename', async () => {

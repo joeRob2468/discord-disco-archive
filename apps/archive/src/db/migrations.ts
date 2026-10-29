@@ -252,4 +252,40 @@ export const migrations: readonly string[] = [
   JOIN sessions se ON se.id = s.session_id
   JOIN streamers st ON st.user_id = s.user_id;
   `,
+  /* 7: download counts */ `
+  -- One row per download (a ?download request from its first byte).
+  CREATE TABLE downloads (
+    set_id              TEXT NOT NULL REFERENCES sets(id) ON DELETE CASCADE,
+    at                  TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX downloads_set_at ON downloads(set_id, at);
+
+  DROP VIEW set_view;
+  CREATE VIEW set_view AS
+  SELECT
+    s.id, s.uuid, s.session_id, s.user_id, s.started_at,
+    -- Album order: the admin's, else the recorder's (start time).
+    COALESCE(s.album_position, s.position) AS position, (s.album_position IS NOT NULL) AS reordered, s.ended_at,
+    s.partial, s.status, s.files, s.title, s.description, s.recorded_name,
+    s.recorded_error AS error, s.file_sizes, (s.missing OR se.missing) AS missing,
+    -- A name given to the set (a split, an upload) beats the DJ's edited name.
+    COALESCE(s.display_name, CASE WHEN s.recorded_name_given THEN s.recorded_name END,
+             st.display_name, s.recorded_name) AS name,
+    s.display_name AS edited_name, s.hidden AS hidden_override,
+    st.avatar_url,
+    s.image, se.image AS session_image, st.image AS streamer_image,
+    COALESCE(s.hidden, s.recorded_hidden) AS hidden,
+    (COALESCE(s.hidden, s.recorded_hidden) OR se.hidden OR s.missing OR se.missing) AS unlisted,
+    COALESCE(se.title, se.recorded_title, se.channel_name) AS session_title,
+    se.started_at AS session_started_at,
+    se.dir AS session_dir,
+    (SELECT group_concat(tag, ',') FROM set_tags t WHERE t.set_id = s.id) AS tags,
+    (SELECT count(*) FROM plays p WHERE p.set_id = s.id) AS plays,
+    (SELECT count(*) FROM downloads d WHERE d.set_id = s.id) AS downloads,
+    CAST(round((julianday(s.ended_at) - julianday(s.started_at)) * 86400) AS INTEGER)
+      AS duration_seconds
+  FROM sets s
+  JOIN sessions se ON se.id = s.session_id
+  JOIN streamers st ON st.user_id = s.user_id;
+  `,
 ];

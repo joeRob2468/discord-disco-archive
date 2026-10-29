@@ -116,7 +116,7 @@ Admin → Activity lists every content change: archive edits and deletes (**admi
 
 ### The archive database is lost or corrupted
 
-Stop the archive, move `archive.db*` aside and start it: it rebuilds the catalog from every `session.json`. Edits (titles, tags, archive state, order, images, plays) are lost unless restored from a backup.
+Stop the archive, move `archive.db*` aside and start it: it rebuilds the catalog from every `session.json`. Edits (titles, tags, archive state, order, images, plays, downloads) are lost unless restored from a backup.
 
 ## Backups
 

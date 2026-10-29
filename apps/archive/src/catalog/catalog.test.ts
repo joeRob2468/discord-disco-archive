@@ -31,7 +31,7 @@ describe('catalog', () => {
     await recordings.cleanup();
   });
 
-  describe('set UUIDs and plays', () => {
+  describe('set UUIDs, plays and downloads', () => {
     it('gives every set a stable UUID it can be found by', () => {
       const set = catalog.getSet('set-1', false);
       expect(set?.uuid).toBe(setUuid('session-1', 'set-1'));
@@ -48,6 +48,15 @@ describe('catalog', () => {
       expect(catalog.popularSets(2, 30, false).map((set) => set.id)).toEqual(['set-3', 'set-1']);
     });
 
+    it('counts downloads of visible sets only', () => {
+      expect(catalog.recordDownload('set-1')).toBe(true);
+      expect(catalog.recordDownload('nope')).toBe(false);
+      catalog.updateSet('set-2', { hidden: true }, 'test');
+      expect(catalog.recordDownload('set-2')).toBe(false);
+      expect(catalog.getSet('set-1', false)?.downloads).toBe(1);
+      expect(catalog.getSet('set-2', true)?.downloads).toBe(0);
+    });
+
     it('filters the set list by session', () => {
       const page = catalog.search({ sessionId: 'session-1' }, false);
       expect(page.items.map((set) => set.id).sort()).toEqual(['set-1', 'set-2']);
@@ -55,10 +64,8 @@ describe('catalog', () => {
   });
 
   describe('stats', () => {
-    const uuid = (id: string) => catalog.getSet(id, false)?.uuid ?? '';
-
     it('totals each DJ and sorts by any column', () => {
-      catalog.recordPlay(uuid('set-2'));
+      catalog.recordDownload('set-2');
       const [owl, cafe] = catalog.listStreamers(false);
       expect(owl).toMatchObject({
         userId: DJ_A,
@@ -66,11 +73,11 @@ describe('catalog', () => {
         totalSeconds: 7200,
         firstPlayedAt: '2026-11-14T21:00:00.000Z',
         lastPlayedAt: '2026-11-21T21:00:00.000Z',
-        plays: 0,
+        downloads: 0,
       });
-      expect(cafe).toMatchObject({ userId: DJ_B, totalSeconds: 5430, plays: 1 });
-      const byPlays = catalog.listStreamers(false, { by: 'plays', dir: 'desc' });
-      expect(byPlays.map((s) => s.userId)).toEqual([DJ_B, DJ_A]);
+      expect(cafe).toMatchObject({ userId: DJ_B, totalSeconds: 5430, downloads: 1 });
+      const byDownloads = catalog.listStreamers(false, { by: 'downloads', dir: 'desc' });
+      expect(byDownloads.map((s) => s.userId)).toEqual([DJ_B, DJ_A]);
     });
 
     it('totals sessions over the sets the viewer can see', () => {

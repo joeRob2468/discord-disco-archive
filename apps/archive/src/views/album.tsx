@@ -8,7 +8,7 @@ import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/cat
 import type { Track } from '../client/track.ts';
 import { setArt } from './art.ts';
 import { Art, DjAvatar, SetListRow, StatusBadges } from './cards.tsx';
-import { Downloads } from './components.tsx';
+import { DownloadCount, Downloads } from './components.tsx';
 import {
   AddSetDialog,
   EditButton,
@@ -19,7 +19,7 @@ import {
 import { formatDate, formatDateTime, formatDuration, plural } from './format.ts';
 import { djsOf, totalSeconds, type Album } from './home.tsx';
 import { Layout } from './layout.tsx';
-import { PlayButton, PlayCount, QueueButton, queueOf } from './play.tsx';
+import { PlayButton, QueueButton, queueOf } from './play.tsx';
 import { searchUrl, sessionUrl, setUrl } from './links.ts';
 
 /** `allDjs`: every DJ, for admins adding a set from a file. */
@@ -312,7 +312,7 @@ export function SetDetailPage(props: {
           </a>
           <p class="text-base-content/60 mt-2 mb-4 text-sm">
             {formatDateTime(set.startedAt)} · {formatDuration(set.durationSeconds)} ·{' '}
-            <PlayCount set={set} />
+            <DownloadCount set={set} />
           </p>
           <SetActions set={set} queue={queue}>
             {auth.isAdmin && (
@@ -345,7 +345,7 @@ export function SetInline({ set, albumSets }: { set: SetSummary; albumSets: SetS
     <div class="flex flex-col gap-3 px-3 pt-1 pb-4 sm:pl-14">
       <p class="text-base-content/60 text-sm">
         {formatDateTime(set.startedAt)} · {formatDuration(set.durationSeconds)} ·{' '}
-        <PlayCount set={set} /> · Set {albumSets.findIndex((s) => s.id === set.id) + 1} of{' '}
+        <DownloadCount set={set} /> · Set {albumSets.findIndex((s) => s.id === set.id) + 1} of{' '}
         {albumSets.length} from <a href={sessionUrl(set.sessionId)}>{set.sessionTitle}</a>
       </p>
       {set.description && <p class="max-w-prose whitespace-pre-line">{set.description}</p>}

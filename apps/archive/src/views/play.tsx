@@ -6,7 +6,6 @@ import type { Track } from '../client/track.ts';
 import type { SetSummary } from '../catalog/catalog.ts';
 import { gradient, imageUrl, setArt } from './art.ts';
 import { mediaUrl } from './components.tsx';
-import { plural } from './format.ts';
 import { setUrl } from './links.ts';
 
 /** MP3 first (it sounds best), then AAC, then the raw capture; undefined if none exists. */
@@ -31,18 +30,6 @@ export function trackOf(set: SetSummary): Track | undefined {
     art: art ? imageUrl(art) : undefined,
     gradient: gradient(set.uuid),
   };
-}
-
-/**
- * A set's play count ("3 plays", or just the number with `bare`). The player bumps every
- * count tagged with the set's UUID once it records a play, so the page needn't reload.
- */
-export function PlayCount({ set, bare = false }: { set: SetSummary; bare?: boolean }) {
-  return (
-    <span data-play-count={set.uuid} data-plays={String(set.plays)} data-bare={bare || undefined}>
-      {bare ? String(set.plays) : plural(set.plays, 'play')}
-    </span>
-  );
 }
 
 /** The playable sets of a list, as a queue. */
