@@ -10,7 +10,8 @@
     "probe": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/probe.ts",
     "reprocess": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/reprocess.ts",
     "smoke": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/smoke.ts",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "backfill-avatars": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/recorder/src/backfill-avatars.ts"
   },
   "dependencies": {
     "@dsr/core": "workspace:*",

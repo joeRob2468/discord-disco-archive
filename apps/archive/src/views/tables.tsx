@@ -194,7 +194,7 @@ export function DjsPage(props: {
                   <DjAvatar
                     userId={streamer.userId}
                     name={streamer.name}
-                    image={streamer.image}
+                    image={streamer.image ?? streamer.avatarImage}
                     size="size-10 text-sm"
                   />
                   <span class="font-semibold">{streamer.name}</span>

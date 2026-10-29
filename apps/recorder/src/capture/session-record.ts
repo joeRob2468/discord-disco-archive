@@ -245,6 +245,11 @@ export class SessionRecord {
     return this.#updateSet(setId, (set) => ({ ...set, displayName, nameGiven: true }));
   }
 
+  /** Record the DJ's avatar URL on a set, for the archive to copy. */
+  setAvatar(setId: string, avatarUrl: string): Promise<void> {
+    return this.#updateSet(setId, (set) => ({ ...set, avatarUrl }));
+  }
+
   /** Close a set. Without `error` it goes on to post-processing, so its status is `processing`. */
   endSet(
     setId: string,

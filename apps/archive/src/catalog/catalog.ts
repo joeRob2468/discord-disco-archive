@@ -103,6 +103,8 @@ export interface StreamerSummary {
   downloads: number;
   /** Uploaded picture file name, if any. */
   image: string | undefined;
+  /** Their Discord avatar, copied into the images folder (see `avatars.ts`). */
+  avatarImage: string | undefined;
 }
 
 /** A session with totals over the sets the viewer can see. */
@@ -292,6 +294,7 @@ interface StreamerRow {
   last_played_at: string | null;
   downloads: number;
   image: string | null;
+  avatar_image: string | null;
 }
 
 const opt = <T>(value: T | null): T | undefined => value ?? undefined;
@@ -373,6 +376,7 @@ function toStreamer(row: StreamerRow): StreamerSummary {
     lastPlayedAt: opt(row.last_played_at),
     downloads: row.downloads,
     image: opt(row.image),
+    avatarImage: opt(row.avatar_image),
   };
 }
 
@@ -414,7 +418,7 @@ export function normalizeLinks(links: readonly string[]): string[] {
 }
 
 const STREAMER_SELECT = `
-  SELECT st.user_id, st.recorded_name, st.display_name, st.avatar_url, st.bio, st.links, st.image,
+  SELECT st.user_id, st.recorded_name, st.display_name, st.avatar_url, st.bio, st.links, st.image, st.avatar_image,
          COALESCE(st.display_name, st.recorded_name) AS name,
          count(v.id) AS set_count,
          COALESCE(sum(v.duration_seconds), 0) AS total_seconds,
@@ -486,6 +490,28 @@ export class Catalog {
       .prepare(`SELECT * FROM set_view WHERE uuid = @uuid AND (@all OR NOT unlisted)`)
       .get({ uuid, all: includeUnlisted ? 1 : 0 }) as SetRow | undefined;
     return row && toSet(row);
+  }
+
+  /** DJs whose avatar URL hasn't been copied, nor tried (see `avatars.ts`). */
+  avatarsToCopy(): { userId: string; url: string }[] {
+    return this.#db
+      .prepare(
+        `SELECT user_id AS userId, avatar_url AS url FROM streamers
+         WHERE avatar_image IS NULL AND avatar_url IS NOT NULL
+           AND avatar_url IS NOT avatar_tried_url`,
+      )
+      .all() as { userId: string; url: string }[];
+  }
+
+  /** Record a try at copying `url`: `image` is the stored file, or undefined if it failed. */
+  setAvatarImage(userId: string, url: string, image: string | undefined): void {
+    this.#db
+      .prepare(
+        `UPDATE streamers SET avatar_tried_url = @url,
+                              avatar_image = COALESCE(avatar_image, @image)
+         WHERE user_id = @userId`,
+      )
+      .run({ userId, url, image: image ?? null });
   }
 
   /** Count a play of a visible set. Returns false if there's no such set. */
@@ -934,7 +960,7 @@ export class Catalog {
     return (
       this.#db
         .prepare(
-          `SELECT EXISTS (SELECT 1 FROM streamers WHERE image = @image)
+          `SELECT EXISTS (SELECT 1 FROM streamers WHERE image = @image OR avatar_image = @image)
                OR EXISTS (SELECT 1 FROM sessions WHERE image = @image)
                OR EXISTS (SELECT 1 FROM sets WHERE image = @image)`,
         )

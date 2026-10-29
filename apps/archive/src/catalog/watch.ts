@@ -21,6 +21,8 @@ export function watchCatalog(
   recordingsDir: string,
   intervalMs: number,
   logger: Logger,
+  /** Run after each successful sync (e.g. copying new avatars). */
+  onSynced?: () => void,
 ): CatalogWatcher {
   let running: Promise<void> | undefined;
   let queued = false;
@@ -44,6 +46,7 @@ export function watchCatalog(
         if (key === last) logger.debug(counts, 'catalog synced');
         else logger.info(counts, 'catalog synced: recordings changed');
         last = key;
+        onSynced?.();
       } catch (error) {
         logger.error({ err: error }, 'catalog sync failed');
       } finally {

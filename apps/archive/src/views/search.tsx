@@ -28,7 +28,7 @@ function DjHeader(props: { streamer: StreamerSummary; auth: AuthState; next: str
       <DjAvatar
         userId={streamer.userId}
         name={streamer.name}
-        image={streamer.image}
+        image={streamer.image ?? streamer.avatarImage}
         size="size-24 text-3xl"
       />
       <div class="min-w-0 flex-1">

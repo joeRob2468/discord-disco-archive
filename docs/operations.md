@@ -77,6 +77,16 @@ If the current DJ's Go Live ends and nobody else is live, the chat gets "⏳ …
 
 The recorder only starts a new set when the stream it records changes, so DJs who take turns on one Go Live stream would end up in one long set. At each handover, run `/record split name:<next DJ>`; add `previous:<DJ who just played>` to name the set that ends (the first set on a shared stream is named after its owner). The chat gets "✂️ Split: …". The two sets overlap by about a second, so nothing is lost; any naming mistakes can be fixed in the archive's set edit. It's refused while nothing is being recorded (e.g. the stream just dropped).
 
+### DJ pictures are missing
+
+New sets get their DJ's Discord avatar when they're leveled, and the archive copies it within a sync (log: archive `avatar copied`, or `could not copy avatar` with the reason; recorder `could not look up the DJ's avatar`). For sets recorded before avatars were saved, run once:
+
+```sh
+docker compose exec recorder node --import tsx src/backfill-avatars.ts
+```
+
+It skips the session being recorded and logs how many sets it filled. To replace a DJ's picture, upload one in their edit dialog.
+
 ### A set is stuck "processing" or "failed"
 
 The archive's Admin → Overview lists these with the failure reason. Sets left `processing` usually mean the recorder stopped mid-encode; when it resumes the session after a restart it re-levels them by itself, but a session it isn't resuming needs a re-run:

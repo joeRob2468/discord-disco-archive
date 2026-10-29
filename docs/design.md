@@ -112,7 +112,7 @@ recordings/
 | App state  | `APP_DATA_DIR`        | `/mnt/media/docker_data/discord-stream-recorder` | `/config`     |
 | Recordings | `RECORDINGS_HOST_DIR` | `/mnt/media/data/media/discord-sets`             | `/recordings` |
 
-- `recorder/` app state holds the browser profiles (the Discord login: treat it like a password) and `screenshots/`. `archive/` holds `archive.db` and uploaded `images/`.
+- `recorder/` app state holds the browser profiles (the Discord login: treat it like a password) and `screenshots/`. `archive/` holds `archive.db` and `images/` (uploaded pictures and copied Discord avatars).
 - **`session.json`** (one per folder, written atomically by the recorder) records sessions, sets, times, files and recorded names. The archive writes it only to remove a set an admin deletes; uploads go into `uploads/` for the recorder to add. Every write re-reads the file first, so writers don't undo each other's changes.
 - **`archive.db`** (SQLite) mirrors every `session.json` plus everything the archive adds: edits, images, plays, downloads, album order, the activity log and the search index. If it's lost, it rebuilds from `session.json` without the edits. Schema changes are append-only migrations.
 - **Back up both** folders.
@@ -129,6 +129,7 @@ Hono, server-rendered `hono/jsx`, daisyUI on Tailwind, htmx (with `hx-boost`, so
 - **Link previews:** Open Graph tags and a preview card on the home and login pages.
 - **Access:** public unless `ARCHIVE_PASSWORD` is set (one shared viewer password). `ARCHIVE_ADMIN_PASSWORD` enables admin features. Signed `HttpOnly` cookies, CSRF-checked form posts, constant-time password checks. Logins are limited to 10 attempts per client IP (IPv6 per /64) in 15 minutes, then refused with a 429 until the oldest expires (a correct login clears the count; the limit resets when the archive restarts), and login bodies over 16 KB are refused unread.
 - **Admin:** **Add set…** from a file (see [Uploaded sets](#uploaded-sets)), edit dialogs for sets, sessions and DJs (titles, names, descriptions, tags, links, images; nothing changes until Save), reorder sets within an album, **Archive** (hide; reversible) or **Delete** (permanent: files and the `session.json` entry, or the whole session folder; refused while recording unless forced). `/admin` shows totals, storage use and sets needing attention; `/admin/sets` lists every set; `/admin/activity` lists every change, by the admin or by the recorder.
+- **DJ pictures:** when a set is leveled (or imported), the recorder saves the DJ's server avatar URL in `session.json` (their account avatar if they've left; none for Discord's default). After each sync the archive copies each DJ's first avatar into `images/` (only from `cdn.discordapp.com`, checked like an upload) and serves it from there; it's never replaced by a later avatar, and a failed copy is retried only for a new URL. An admin's uploaded picture shows ahead of it.
 - **Name precedence:** set edit → name given to the set (`/record split`, an upload; `nameGiven` in `session.json`) → DJ edit → recorded display name. A given name never renames the DJ.
 
 ## Deployment

@@ -9,6 +9,7 @@ import path from 'node:path';
 import { createLogger, readJsonFile, sessionPaths, sessionSchema } from '@dsr/core';
 import { Events, type Client } from 'discord.js';
 import { createAnnouncer, createChannelPoster } from './bot/announcer.ts';
+import { createAvatarLookup, fillAvatar } from './bot/avatars.ts';
 import { startBot } from './bot/bot.ts';
 import * as messages from './bot/messages.ts';
 import { checkBrowser, FIX_HINT, HEALTH_PROBLEMS, HealthMonitor } from './browser/health.ts';
@@ -99,6 +100,9 @@ const browser = new OnDemandBrowser({
 });
 
 const processor = new Processor(logger.child({ module: 'processor' }));
+// Each set gets its DJ's avatar once it's leveled (or imported), for the archive.
+const avatarOf = createAvatarLookup(config.discord.botToken, config.discord.guildId);
+const avatarLogger = logger.child({ module: 'avatars' });
 
 const controller = new RecordingController({
   page: () => browser.page,
@@ -119,6 +123,7 @@ const controller = new RecordingController({
         signal,
         logger: logger.child({ module: 'pipeline' }),
       });
+      await fillAvatar(record, setId, avatarOf, avatarLogger);
       const set = record.set(setId);
       if (set?.status === 'failed') {
         post(
@@ -315,6 +320,7 @@ const scanImports = async (): Promise<void> => {
             signal,
             logger: logger.child({ module: 'pipeline' }),
           });
+          await fillAvatar(imported.record, imported.setId, avatarOf, avatarLogger);
         }
       } finally {
         importing.delete(request.requestFile);

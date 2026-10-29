@@ -80,7 +80,7 @@ function StreamersRow({ streamers }: { streamers: StreamerSummary[] }) {
               <DjAvatar
                 userId={streamer.userId}
                 name={streamer.name}
-                image={streamer.image}
+                image={streamer.image ?? streamer.avatarImage}
                 size="size-16 text-2xl"
               />
             </div>
