@@ -4,11 +4,11 @@
  */
 import { readFile } from 'node:fs/promises';
 import type { Logger } from '@dsr/core';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
-import { ASSETS } from './assets.ts';
+import { ASSETS, publicFile } from './assets.ts';
 import { createAuth, type AuthEnv } from './auth/auth.ts';
 import { BandwidthLimiter } from './bandwidth.ts';
 import { NotFoundError, type Catalog } from './catalog/catalog.ts';
@@ -25,20 +25,13 @@ export interface AppDeps {
   logger?: Logger;
 }
 
-/** Reachable without logging in, even when a viewer password is set. */
-const PUBLIC_PATHS = new Set([
-  '/healthz',
-  '/login',
-  '/logout',
-  '/assets/app.css',
-  '/assets/htmx.min.js',
-  '/assets/player.js',
-  '/assets/satoshi.woff2',
-  // Link previews and icons: chat apps fetch these without logging in.
-  '/assets/og.png',
-  '/assets/apple-touch-icon.png',
-  '/favicon.svg',
-]);
+/**
+ * Reachable without logging in, even when a viewer password is set, along with everything
+ * under /assets/ (the login page's styles and font; link previews and icons, which chat
+ * apps fetch without logging in).
+ */
+const PUBLIC_PATHS = new Set(['/healthz', '/login', '/logout', '/favicon.svg']);
+const isPublic = (path: string): boolean => PUBLIC_PATHS.has(path) || path.startsWith('/assets/');
 
 export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
@@ -46,22 +39,26 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
-  for (const [route, file, type] of ASSETS) {
-    app.get(route, async (c) => {
-      c.header('Content-Type', type);
-      // Versioned links (`assetUrl`) change with the file, so they can be cached for good.
-      c.header(
-        'Cache-Control',
-        c.req.query('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
-      );
-      try {
-        return c.body(await readFile(file));
-      } catch {
-        // dist/ is empty until `build:css` and `build:js` have run (or `dev`).
-        return c.notFound();
-      }
-    });
-  }
+  const serveFile = async (c: Context, file: string, type: string) => {
+    c.header('Content-Type', type);
+    // Versioned links (`assetUrl`, or `?v=` by hand) change with the file: cache them for good.
+    c.header(
+      'Cache-Control',
+      c.req.query('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
+    );
+    try {
+      return c.body(await readFile(file));
+    } catch {
+      // dist/ is empty until `build:css` and `build:js` have run (or `dev`); the font is
+      // copied in by hand (public/fonts).
+      return c.notFound();
+    }
+  };
+  for (const [route, file, type] of ASSETS) app.get(route, (c) => serveFile(c, file, type));
+  app.get('/assets/*', (c) => {
+    const found = publicFile(c.req.path.slice('/assets/'.length));
+    return found ? serveFile(c, found.file, found.type) : c.notFound();
+  });
 
   app.use(secureHeaders({ crossOriginEmbedderPolicy: false }));
   // Form posts must come from our own origin.
@@ -69,7 +66,7 @@ export function createApp({ config, catalog, logger }: AppDeps): Hono<AuthEnv> {
   app.use(auth.middleware);
 
   app.use(async (c, next) => {
-    if (!c.var.auth.canView && !PUBLIC_PATHS.has(c.req.path)) {
+    if (!c.var.auth.canView && !isPublic(c.req.path)) {
       const next_ = encodeURIComponent(c.req.path + (new URL(c.req.url).search || ''));
       return c.redirect(`/login?next=${next_}`, 303);
     }

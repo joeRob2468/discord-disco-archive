@@ -14,5 +14,5 @@ coverage/
 /docker-data/
 /data/
 
-# Fonts whose license forbids redistributing them (see apps/archive/src/views/static/fonts)
-/apps/archive/src/views/static/fonts/*.woff2
+# Fonts whose license forbids redistributing them (see apps/archive/public/fonts)
+/apps/archive/public/fonts/*.woff2

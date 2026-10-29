@@ -372,6 +372,20 @@ describe('archive app', () => {
       expect(response.status).toBe(401);
     });
 
+    it('serves public/ images without a login, and nothing else from it', async () => {
+      // With a viewer password, so the login gate is on.
+      const app = build({ ...adminEnv, ARCHIVE_PASSWORD: 'viewer-pass' });
+      const og = await app.request('/assets/og.png');
+      expect(og.status).toBe(200);
+      expect(og.headers.get('content-type')).toBe('image/png');
+      expect((await app.request('/favicon.svg')).status).toBe(200);
+      for (const path of ['/assets/fonts/README.md', '/assets/fonts/Satoshi-LICENSE.txt']) {
+        expect((await app.request(path)).status, path).toBe(404);
+      }
+      // URL parsing turns this into /package.json, outside /assets/: behind the login.
+      expect((await app.request('/assets/%2e%2e/package.json')).status).toBe(303);
+    });
+
     it('blocks a client after too many logins, even with the right password', async () => {
       const app = build(adminEnv);
       const from = async (ip: string, password: string) => {

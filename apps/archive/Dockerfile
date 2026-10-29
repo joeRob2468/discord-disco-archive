@@ -26,6 +26,8 @@ RUN pnpm install --frozen-lockfile --prod --filter @dsr/archive...
 
 COPY packages/core/src packages/core/src
 COPY apps/archive/src apps/archive/src
+# Icons, the link preview image and the font (copied into the checkout by hand).
+COPY apps/archive/public apps/archive/public
 # tsx needs the archive's tsconfig for hono/jsx; it would otherwise compile JSX for React.
 COPY tsconfig.base.json ./
 COPY apps/archive/tsconfig.json apps/archive/

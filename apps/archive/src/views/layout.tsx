@@ -317,7 +317,7 @@ function Document(props: {
           {/* Fetch the font with the stylesheet, not after it: same URL as app.css's @font-face. */}
           <link
             rel="preload"
-            href="/assets/satoshi.woff2?v=1"
+            href="/assets/fonts/Satoshi-Variable.woff2?v=1"
             as="font"
             type="font/woff2"
             crossorigin="anonymous"

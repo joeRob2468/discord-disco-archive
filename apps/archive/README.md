@@ -24,7 +24,7 @@ Design: [docs/design.md, "Archive" and "Storage"](../../docs/design.md#archive).
 | `src/recordings.ts`                    | Permanent deletes: a set's files and `session.json` entry, or a session folder.                                                                                                                                                   |
 | `src/uploads.ts`                       | Uploaded sets, in resumable pieces, into a session's `uploads/` with an import request for the recorder.                                                                                                                          |
 | `src/bandwidth.ts`, `src/client-ip.ts` | Per-client media bandwidth cap (`ARCHIVE_DOWNLOAD_LIMIT_MBPS`); the client's IP from Traefik.                                                                                                                                     |
-| `src/assets.ts`                        | Static assets and their versioned URLs (`?v=`), cached for good.                                                                                                                                                                  |
+| `src/assets.ts`, `public/`             | Built assets (`dist/`) and htmx, with versioned URLs (`?v=`); the hand-made ones (icons, link preview, font) in `public/`, served under `/assets/` (images and fonts only).                                                       |
 | `src/test/fixtures.ts`                 | Temporary recordings volume with `session.json` and media, for tests.                                                                                                                                                             |
 
 ## Rules

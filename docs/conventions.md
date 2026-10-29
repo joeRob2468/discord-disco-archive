@@ -55,7 +55,7 @@ How code in this repo should look and be organised. Setup and scripts are in [de
 - **Conventional Commits:** `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, `build:`, `ci:`, with an optional scope (`feat(archive):`, `fix(recorder):`, `chore(deps):`). Use the imperative mood, a subject of 72 characters or less, and a body explaining _why_ when it isn't obvious.
 - **One commit per logical change.** A feature together with its tests and docs is one commit; unrelated changes are separate commits.
 - **No AI attribution** in commits or PRs (no `Co-Authored-By` trailers, no "Generated with" footers).
-- `main` is the only branch, pushed to the public GitHub repo the server pulls from. Nothing that mustn't be published goes in it (secrets, install-specific values, the licensed font: see `apps/archive/src/views/static/fonts`).
+- `main` is the only branch, pushed to the public GitHub repo the server pulls from. Nothing that mustn't be published goes in it (secrets, install-specific values, the licensed font: see `apps/archive/public/fonts`).
 
 ## Docs
 

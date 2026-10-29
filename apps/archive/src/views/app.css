@@ -12,7 +12,7 @@
 }
 
 /*
- * Satoshi (Indian Type Foundry, ITF Free Font License: views/static/fonts), one variable
+ * Satoshi (Indian Type Foundry, ITF Free Font License: public/fonts), one variable
  * file for every weight, served as-is (the license forbids subsetting or converting it).
  * `?v=` changes when the file does, so it caches for good; the preload in layout.tsx uses
  * the same URL.
@@ -22,7 +22,7 @@
   font-style: normal;
   font-display: swap;
   font-weight: 300 900;
-  src: url('/assets/satoshi.woff2?v=1') format('woff2-variations');
+  src: url('/assets/fonts/Satoshi-Variable.woff2?v=1') format('woff2-variations');
 }
 /*
  * Satoshi is light and compact for its size, so each weight name is a step heavier than
