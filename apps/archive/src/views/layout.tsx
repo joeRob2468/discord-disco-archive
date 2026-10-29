@@ -55,17 +55,15 @@ export interface LayoutProps {
 }
 
 /**
- * Applies the saved theme before first paint (dark unless the viewer chose light), and
- * handles the theme toggle, admin edit dialogs (`data-dialog`), set rows that expand
- * into an inline set page (`data-expand`, fetched by htmx) and "Copy link" buttons,
- * disables a form's submit buttons while its post is pending, and sends "Add a set"
- * uploads (`data-upload`) in resumable pieces with a progress bar. Delegated on `document`, so it
- * survives hx-boost swaps.
+ * Keeps the background glows in step between pages, and handles admin edit dialogs
+ * (`data-dialog`), set rows that expand into an inline set page (`data-expand`, fetched
+ * by htmx) and "Copy link" buttons, disables a form's submit buttons while its post is
+ * pending, and sends "Add a set" uploads (`data-upload`) in resumable pieces with a
+ * progress bar. Delegated on `document`, so it survives hx-boost swaps.
  */
 const PAGE_SCRIPT = `
 (() => {
   const root = document.documentElement;
-  try { if (localStorage.getItem('theme') === 'light') root.dataset.theme = 'light'; } catch {}
   // The background glows follow the clock (app.css, .blob), so they carry on from page to
   // page instead of starting over. Set again just before a boosted page replaces the body.
   const setClock = () => root.style.setProperty('--clock', String((Date.now() / 1000) % 86400));
@@ -75,12 +73,6 @@ const PAGE_SCRIPT = `
   });
   document.addEventListener('click', (event) => {
     if (!(event.target instanceof Element)) return;
-    if (event.target.closest('[data-theme-toggle]')) {
-      const next = root.dataset.theme === 'light' ? 'dark' : 'light';
-      root.dataset.theme = next;
-      try { localStorage.setItem('theme', next); } catch {}
-      return;
-    }
     // A plain click expands the row; modified clicks still open the link as usual.
     const expand = event.target.closest('[data-expand]');
     if (expand && !(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) {
@@ -254,7 +246,6 @@ const ICONS = {
   sessions: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   djs: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
   admin: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-  theme: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z',
   login: 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   search: 'M21 21l-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z',
@@ -376,11 +367,6 @@ function Menu({ auth }: { auth: AuthState }) {
             </a>
           </li>
         )}
-        <li>
-          <button type="button" data-theme-toggle>
-            <Icon name="theme" class="size-4" /> Light / dark
-          </button>
-        </li>
         {auth.role !== undefined ? (
           <li>
             <form class="p-0" action="/logout" method="post">

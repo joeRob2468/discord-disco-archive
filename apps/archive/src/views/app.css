@@ -1,7 +1,6 @@
 /*
  * The archive's stylesheet: Tailwind CSS 4 + daisyUI 5, built by the Tailwind CLI into
- * dist/app.css (`pnpm --filter @dsr/archive build:css`). Dark by default; the navbar
- * toggle switches to light.
+ * dist/app.css (`pnpm --filter @dsr/archive build:css`). Dark only.
  */
 @import 'tailwindcss';
 
@@ -9,9 +8,7 @@
 @source '../';
 
 @plugin 'daisyui' {
-  themes:
-    dark --default,
-    light;
+  themes: dark --default;
 }
 
 /*
@@ -43,18 +40,11 @@
   }
   /*
    * Accent: the hero's rose instead of daisyUI's purple, dark enough for white button
-   * text. `:root[data-theme]` outranks daisyUI's own `[data-theme]` rules in this layer.
+   * text. `:root[data-theme]` outranks daisyUI's own `[data-theme]` rule in this layer.
    */
   :root[data-theme='dark'] {
     --color-primary: oklch(58% 0.21 15);
     --color-primary-content: oklch(98% 0.01 15);
-  }
-  :root[data-theme='light'] {
-    --color-primary: oklch(51% 0.2 15);
-    --color-primary-content: oklch(98% 0.01 15);
-  }
-  [data-theme='light'] {
-    --root-bg: var(--color-base-300);
   }
 }
 @layer components {
