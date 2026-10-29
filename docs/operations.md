@@ -27,6 +27,8 @@ docker compose ps                   # archive should be "healthy"
 
 Recreating `recorder` during an event ends the current set (marked partial) and leaves voice; it has 30 s to finish (`stop_grace_period`). When it's back (about a minute) it carries on with the same session by itself, so a DJ loses that minute: prefer quiet moments. `archive` can be recreated any time; it migrates its database on start.
 
+The archive's font file isn't in the repository (its license forbids redistributing it), so `git pull` never brings it: the checkout keeps the copy in `apps/archive/src/views/static/fonts/`, which Git ignores. In a fresh checkout, copy `Satoshi-Variable.woff2` there (`scp` it from another copy, or download it from Fontshare) before building; without it the archive falls back to the system font.
+
 ## Common problems
 
 ### The recorder account is logged out
