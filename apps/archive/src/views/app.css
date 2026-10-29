@@ -12,6 +12,46 @@
 }
 
 /*
+ * Satoshi (Indian Type Foundry, ITF Free Font License: views/static/fonts), one variable
+ * file for every weight, served as-is (the license forbids subsetting or converting it).
+ * `?v=` changes when the file does, so it caches for good; the preload in layout.tsx uses
+ * the same URL.
+ */
+@font-face {
+  font-family: 'Satoshi';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 900;
+  src: url('/assets/satoshi.woff2?v=1') format('woff2-variations');
+}
+/*
+ * Satoshi is light and compact for its size, so each weight name is a step heavier than
+ * Tailwind's (a variable font draws the in-between weights exactly), and the text sizes
+ * are Tailwind's usual scale on a larger base. Spacing (margins, gaps, padding and sizes)
+ * is a quarter of that base, so the space between things grows with the text: change
+ * `--text-base` to rescale both.
+ */
+@theme {
+  --font-sans:
+    'Satoshi', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  --font-weight-normal: 550;
+  --font-weight-medium: 650;
+  --font-weight-semibold: 700;
+  --font-weight-bold: 800;
+  --font-weight-extrabold: 900;
+  --text-base: 1rem;
+  --spacing: calc(var(--text-base) / 4);
+  --text-xs: calc(var(--text-base) * 0.75);
+  --text-sm: calc(var(--text-base) * 0.875);
+  --text-lg: calc(var(--text-base) * 1.125);
+  --text-xl: calc(var(--text-base) * 1.25);
+  --text-2xl: calc(var(--text-base) * 1.5);
+  --text-3xl: calc(var(--text-base) * 1.875);
+  --text-4xl: calc(var(--text-base) * 2.25);
+  --text-5xl: calc(var(--text-base) * 3);
+}
+
+/*
  * Reserve the scrollbar's room on every page, so short and long pages are as wide.
  * Unlayered: daisyUI sets scrollbar-gutter on :root (only while scrolling or a modal is
  * open), and that beats any rule inside a layer.
@@ -30,6 +70,16 @@
 
 /* App shell: a dark page with slowly drifting glows, and solid panels on it. */
 @layer base {
+  /* Body text at the heavier "normal" and larger base size (see @theme). */
+  body {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+  }
+  /* Large, heavy headings read airy at the default spacing: draw the letters closer. */
+  h1,
+  h2 {
+    letter-spacing: -0.015em;
+  }
   /*
    * daisyUI paints the root with `--root-bg` (base-100 by default, lighter than the panels
    * in the dark theme), and its `:root` rule beats a plain `html` one, so set the variable.
@@ -232,6 +282,20 @@
   }
   :is(.input, .select, .textarea) {
     background-color: color-mix(in oklab, var(--color-base-100) 65%, transparent);
+  }
+  /* daisyUI's buttons and fields have fixed weights and sizes; put them on the site's scale. */
+  .btn {
+    font-size: var(--fontsize, var(--text-sm));
+    font-weight: var(--font-weight-semibold);
+  }
+  .btn-sm {
+    --fontsize: var(--text-xs);
+  }
+  .btn-xs {
+    --fontsize: calc(var(--text-base) * 0.6875);
+  }
+  :is(.input, .select, .textarea) {
+    --font-size-min: var(--text-sm);
   }
   .btn.panel:not(:hover) {
     --btn-bg: color-mix(in oklab, var(--color-base-200) 65%, transparent);

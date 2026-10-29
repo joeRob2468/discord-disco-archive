@@ -314,6 +314,14 @@ function Document(props: {
           <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
           {preview && <PreviewTags preview={preview} />}
           <script>{raw(PAGE_SCRIPT)}</script>
+          {/* Fetch the font with the stylesheet, not after it: same URL as app.css's @font-face. */}
+          <link
+            rel="preload"
+            href="/assets/satoshi.woff2?v=1"
+            as="font"
+            type="font/woff2"
+            crossorigin="anonymous"
+          />
           <link rel="stylesheet" href={assetUrl('/assets/app.css')} />
           {/* Error responses (wrong password, not found) are full pages too: show them. */}
           <meta

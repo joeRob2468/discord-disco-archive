@@ -92,4 +92,4 @@ The recorder only runs in its container (Xvfb, PulseAudio), and only one recorde
 
 ## License
 
-[MIT](LICENSE). It covers this code only: running the recorder still means automating a Discord user account, which Discord's terms forbid (see the ToS note above).
+[MIT](LICENSE). It covers this code only: running the recorder still means automating a Discord user account, which Discord's terms forbid (see the ToS note above). The archive's font, Satoshi, has its own license and isn't in the repository: see [apps/archive/src/views/static/fonts](apps/archive/src/views/static/fonts/README.md) for where to get it.

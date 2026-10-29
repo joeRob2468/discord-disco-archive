@@ -33,6 +33,7 @@ const PUBLIC_PATHS = new Set([
   '/assets/app.css',
   '/assets/htmx.min.js',
   '/assets/player.js',
+  '/assets/satoshi.woff2',
   // Link previews and icons: chat apps fetch these without logging in.
   '/assets/og.png',
   '/assets/apple-touch-icon.png',

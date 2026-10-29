@@ -13,3 +13,6 @@ coverage/
 # Runtime data (bind-mounted into containers)
 /docker-data/
 /data/
+
+# Fonts whose license forbids redistributing them (see apps/archive/src/views/static/fonts)
+/apps/archive/src/views/static/fonts/*.woff2

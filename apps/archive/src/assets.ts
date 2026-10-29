@@ -1,5 +1,6 @@
 /**
- * Static assets: the Tailwind and esbuild output, htmx from node_modules, and the icons.
+ * Static assets: the Tailwind and esbuild output, htmx from node_modules, the Satoshi
+ * font (variable weight, from Fontshare: see views/static/fonts), and the icons.
  * Pages link the app's own builds through `assetUrl`, which adds a version, so a new
  * build is fetched at once while unchanged files stay cached.
  */
@@ -30,6 +31,11 @@ export const ASSETS = [
     '/assets/htmx.min.js',
     require.resolve('htmx.org/dist/htmx.min.js'),
     'text/javascript; charset=utf-8',
+  ],
+  [
+    '/assets/satoshi.woff2',
+    fileURLToPath(new URL('views/static/fonts/Satoshi-Variable.woff2', import.meta.url)),
+    'font/woff2',
   ],
   ['/assets/og.png', fileURLToPath(new URL('views/static/og.png', import.meta.url)), 'image/png'],
   [
