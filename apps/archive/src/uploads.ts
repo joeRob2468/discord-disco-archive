@@ -8,11 +8,22 @@
  * only costs the piece in flight. While it arrives, an upload is two hidden files: its
  * details (`.<id>.pending`) and the audio so far (`.<id>.<ext>.part`). Once complete, the
  * audio is renamed and the import request written, so the recorder only ever sees whole
- * uploads.
+ * uploads. An upload is refused at the start unless the disk has room for it, for every
+ * other unfinished upload, and a margin.
  */
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, readdir, readFile, rename, rm, stat, truncate, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  statfs,
+  truncate,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -57,6 +68,18 @@ export const CHUNK_BYTES = 8 * 1024 * 1024;
 const IDLE_MS = 60_000;
 /** Remove unfinished uploads this old: abandoned, or left by an archive restart. */
 const STALE_MS = 24 * 60 * 60 * 1000;
+/** Disk space to keep free beyond uploads: room to level them, and for recordings. */
+export const FREE_MARGIN_BYTES = 5 * 1024 ** 3;
+
+/** Bytes available to the archive on the disk holding `dir`. */
+export type FreeSpace = (dir: string) => Promise<number>;
+
+const diskFree: FreeSpace = async (dir) => {
+  const info = await statfs(dir);
+  return info.bavail * info.bsize;
+};
+
+const gigabytes = (bytes: number): string => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 
 /** Audio (and video) formats ffmpeg reads; the upload keeps its extension. */
 export const UPLOAD_EXTENSIONS = [
@@ -120,6 +143,7 @@ export async function startUpload(
   recordingsDir: string,
   sessionDir: string,
   upload: Upload,
+  freeSpace: FreeSpace = diskFree,
 ): Promise<string> {
   const ext = path.extname(upload.fileName).slice(1).toLowerCase();
   if (!(UPLOAD_EXTENSIONS as readonly string[]).includes(ext)) {
@@ -143,6 +167,13 @@ export async function startUpload(
   const dir = uploadsDirOf(recordingsDir, sessionDir);
   await mkdir(dir, { recursive: true });
   await removeStale(dir);
+  const free = await freeSpace(dir);
+  const needed = upload.size + (await outstandingBytes(recordingsDir)) + FREE_MARGIN_BYTES;
+  if (needed > free) {
+    throw new UploadError(
+      `Not enough disk space: this file and other uploads in progress need ${gigabytes(needed - FREE_MARGIN_BYTES)}, keeping ${gigabytes(FREE_MARGIN_BYTES)} spare, and ${gigabytes(free)} is free.`,
+    );
+  }
   await writeFile(partFile(dir, parsed.data), '');
   await writeJsonFileAtomic(pendingFile(dir, id), { request: parsed.data, size: upload.size });
   return id;
@@ -257,6 +288,28 @@ async function append(body: ReadableStream<Uint8Array>, file: string): Promise<n
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Bytes still to arrive for the unfinished uploads in every session (stale ones aside). */
+async function outstandingBytes(recordingsDir: string): Promise<number> {
+  const now = Date.now();
+  let total = 0;
+  for (const entry of await readdir(recordingsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    const dir = sessionPaths(recordingsDir, entry.name).uploadsDir;
+    // No uploads/ folder: nothing uploaded to that session yet.
+    const names = await readdir(dir).catch(() => []);
+    for (const name of names) {
+      const id = /^\.(.+)\.pending$/.exec(name)?.[1];
+      const pending = id === undefined ? undefined : await readPending(dir, id);
+      if (!pending) continue;
+      // The piece may have just completed (renamed away): then nothing is outstanding.
+      const part = await stat(partFile(dir, pending.request)).catch(() => undefined);
+      if (!part || now - part.mtimeMs > STALE_MS) continue;
+      total += Math.max(0, pending.size - part.size);
+    }
+  }
+  return total;
 }
 
 /** Remove unfinished uploads untouched for `STALE_MS`. */

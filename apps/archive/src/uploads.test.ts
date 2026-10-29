@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  FREE_MARGIN_BYTES,
   receiveChunk,
   startUpload,
   UploadInterruptedError,
@@ -110,5 +111,18 @@ describe('chunked uploads', () => {
     expect(names).not.toContain('.old.mp3.part');
     expect(names).not.toContain('.old.pending');
     expect(names).toContain('.current.mp3.part');
+  });
+
+  it('refuses an upload the disk has no room for, counting others in progress', async () => {
+    await mkdir(path.join(dir, '2026-10-25_later'));
+    const free = () => Promise.resolve(FREE_MARGIN_BYTES + 25);
+    // Another session's upload with 5 of its 10 bytes in: 5 still to come.
+    const other = await startUpload(dir, '2026-10-25_later', upload, free);
+    await receiveChunk(dir, '2026-10-25_later', other, 0, 5, body('01234'));
+    expect(await startUpload(dir, SESSION, { ...upload, size: 20 }, free)).toMatch(/^[0-9a-f-]+$/);
+    // Now 5 + 20 are on their way: one more byte doesn't fit.
+    await expect(startUpload(dir, SESSION, { ...upload, size: 1 }, free)).rejects.toThrow(
+      'Not enough disk space',
+    );
   });
 });
