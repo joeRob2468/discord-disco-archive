@@ -310,22 +310,23 @@ export function SetDetailPage(props: {
             />
             <span class="font-semibold">{set.name}</span>
           </a>
-          <p class="text-base-content/60 mt-2 mb-4 text-sm">
+          <p class="text-base-content/60 mt-2 text-sm">
             {formatDateTime(set.startedAt)} · {formatDuration(set.durationSeconds)} ·{' '}
             <DownloadCount set={set} />
           </p>
-          <SetActions set={set} queue={queue}>
-            {auth.isAdmin && (
-              <>
-                <EditButton kind="set" id={set.id} label="Edit set" />
-                {streamer && <EditButton kind="streamer" id={set.userId} label="Edit DJ" />}
-              </>
-            )}
-          </SetActions>
+          {set.description && <p class="mt-3 max-w-prose whitespace-pre-line">{set.description}</p>}
+          <div class="mt-4">
+            <SetActions set={set} queue={queue}>
+              {auth.isAdmin && (
+                <>
+                  <EditButton kind="set" id={set.id} label="Edit set" />
+                  {streamer && <EditButton kind="streamer" id={set.userId} label="Edit DJ" />}
+                </>
+              )}
+            </SetActions>
+          </div>
         </div>
       </section>
-
-      {set.description && <p class="mt-6 max-w-prose whitespace-pre-line">{set.description}</p>}
 
       <SessionCard session={session} sets={albumSets} queue={queue} currentUuid={set.uuid} />
 
