@@ -26,7 +26,7 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 | Login rate limit, body cap     | 🔨 deployed; not yet tested live                                                                       |
 | Upload free-space check        | 🔨 deployed; not yet tested live                                                                       |
 | Download counts                | 🔨 deployed; not yet tested live                                                                       |
-| DJ avatars                     | 🔨 built; tested locally, not yet deployed                                                             |
+| DJ avatars                     | ✅ deployed; backfilled, avatars copied for every DJ with sets                                         |
 
 ## Next
 
