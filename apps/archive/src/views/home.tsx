@@ -4,7 +4,7 @@
  */
 import type { AuthState } from '../auth/auth.ts';
 import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/catalog.ts';
-import { GRAIN, setArt } from './art.ts';
+import { setArt } from './art.ts';
 import { Art, DjAvatar } from './cards.tsx';
 import { formatDate, formatDuration, plural } from './format.ts';
 import { Layout, type Preview } from './layout.tsx';
@@ -33,21 +33,21 @@ export const djsOf = (sets: SetSummary[]): SetSummary[] => [
 
 function Hero({ latest }: { latest: SessionSummary | undefined }) {
   return (
-    <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-500 via-cyan-600 to-lime-300 p-6 text-white shadow-xl sm:p-10">
-      <div class="absolute -top-16 -right-10 size-64 rounded-full bg-white/15 blur-2xl" />
-      <div class="absolute right-32 -bottom-24 size-56 rounded-full bg-fuchsia-500/30 blur-3xl" />
-      <div class="absolute inset-0 mix-blend-overlay" style={`background:${GRAIN}`} />
+    <section class="hero-drift relative overflow-hidden rounded-3xl bg-gradient-to-br from-rose-800 via-pink-900 to-purple-900 p-6 text-white shadow-xl sm:p-10">
+      <div class="hero-float absolute -top-28 -right-20 size-96 rounded-full bg-white/12 blur-[96px]" />
+      <div class="hero-float hero-float-2 absolute right-32 -bottom-24 size-56 rounded-full bg-pink-500/20 blur-3xl" />
+      <div class="grain-layer absolute inset-0 mix-blend-overlay" />
       <div class="relative max-w-lg">
         <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">
           Every set from every disco, in one place.
         </h1>
-        <p class="mt-3 text-white/85">
+        <p class="mt-3 text-rose-100">
           Recordings of our Discord DJ sessions, leveled and ready to play.
         </p>
         <div class="mt-6 flex flex-wrap gap-3">
           {latest && (
             <a
-              class="btn rounded-xl border-0 bg-white/90 text-teal-900 hover:bg-white"
+              class="btn rounded-xl border-0 bg-white/90 text-rose-900 hover:bg-white"
               href={sessionUrl(latest.id)}
             >
               Latest session
@@ -189,12 +189,14 @@ export function HomePage(props: { data: HomeData; auth: AuthState; preview: Prev
       <StreamersRow streamers={data.streamers} />
       {data.albums.length > 0 && (
         <section class="mt-10">
-          <div class="mb-4 flex items-baseline justify-between">
-            <h2 class="text-xl font-bold">Recent sessions</h2>
-            <a class="text-sm" href="/sessions">
-              All sessions →
+          <h2 class="mb-4 text-xl font-bold">
+            <a class="plain group inline-flex items-baseline gap-2" href="/sessions">
+              Recent sessions
+              <span class="text-base-content/50 group-hover:text-base-content text-base transition">
+                →
+              </span>
             </a>
-          </div>
+          </h2>
           <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
             {data.albums.map((album) => (
               <AlbumCard album={album} />

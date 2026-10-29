@@ -31,28 +31,137 @@
   display: none;
 }
 
-/* App shell: a dark page with one faint glow at the top, and solid panels on it. */
+/* App shell: a dark page with slowly drifting glows, and solid panels on it. */
 @layer base {
-  /* On the root, not <body>: the root background paints beneath the fixed backdrop. */
-  html {
-    background-color: oklch(16% 0.01 270);
+  /*
+   * daisyUI paints the root with `--root-bg` (base-100 by default, lighter than the panels
+   * in the dark theme), and its `:root` rule beats a plain `html` one, so set the variable.
+   * On the root, not <body>: the root background paints beneath the backdrop.
+   */
+  :root {
+    --root-bg: oklch(5% 0.008 270);
   }
-  html[data-theme='light'] {
-    background-color: var(--color-base-300);
+  /*
+   * Accent: the hero's rose instead of daisyUI's purple, dark enough for white button
+   * text. `:root[data-theme]` outranks daisyUI's own `[data-theme]` rules in this layer.
+   */
+  :root[data-theme='dark'] {
+    --color-primary: oklch(58% 0.21 15);
+    --color-primary-content: oklch(98% 0.01 15);
+  }
+  :root[data-theme='light'] {
+    --color-primary: oklch(51% 0.2 15);
+    --color-primary-content: oklch(98% 0.01 15);
+  }
+  [data-theme='light'] {
+    --root-bg: var(--color-base-300);
   }
 }
 @layer components {
   .panel {
-    @apply bg-base-200 border-base-content/10 border shadow-lg;
+    @apply border-base-content/10 border shadow-lg;
   }
-  /* Fixed to the viewport, so it stays put however far the page scrolls. */
+  /* Behind the whole page (the body is its containing block), so it scrolls with it. */
+  body {
+    @apply relative;
+  }
   .backdrop {
-    @apply pointer-events-none fixed inset-0 -z-10;
-    background: radial-gradient(
-      120vmax 60vmax at 50% -20%,
-      oklch(45% 0.12 290 / 0.25),
-      transparent 60%
-    );
+    @apply pointer-events-none absolute inset-0 -z-10 overflow-hidden;
+  }
+  /*
+   * Soft colour glows like metaballs: each is three offset lobes in nearby hues (an
+   * irregular shape), blurred so no edge shows and neighbours melt together. Each drifts,
+   * grows and turns on its own long cycle, so the shapes seem to morph.
+   */
+  .blob {
+    @apply absolute;
+    width: 100vmax;
+    height: 100vmax;
+    background:
+      radial-gradient(34% 28% at 36% 40%, oklch(55% 0.16 var(--hue) / var(--alpha)), transparent),
+      radial-gradient(
+        28% 34% at 62% 58%,
+        oklch(55% 0.16 calc(var(--hue) + 25) / calc(var(--alpha) * 0.8)),
+        transparent
+      ),
+      radial-gradient(
+        22% 18% at 52% 28%,
+        oklch(60% 0.14 calc(var(--hue) - 20) / calc(var(--alpha) * 0.6)),
+        transparent
+      );
+    filter: blur(48px);
+    animation: blob-drift var(--duration) ease-in-out infinite alternate;
+    /* Seconds of the day (`--clock`, layout.tsx): the same point of the drift on every page. */
+    animation-delay: calc(var(--clock, 0) * -1s);
+    will-change: transform;
+  }
+  .blob-1 {
+    top: -50vmax;
+    left: -10vmax;
+    --hue: 290;
+    --alpha: 0.3;
+    --duration: 32s;
+    --dx: 10vmax;
+    --dy: 6vmax;
+    --turn: 50deg;
+  }
+  .blob-2 {
+    top: -10vmax;
+    left: calc(100% - 55vmax);
+    --hue: 195;
+    --alpha: 0.2;
+    --duration: 41s;
+    --dx: -12vmax;
+    --dy: 8vmax;
+    --turn: -70deg;
+  }
+  .blob-3 {
+    top: 30vmax;
+    left: 5vmax;
+    --hue: 340;
+    --alpha: 0.18;
+    --duration: 37s;
+    --dx: 14vmax;
+    --dy: -8vmax;
+    --turn: 60deg;
+  }
+  .blob-4 {
+    top: 10vmax;
+    left: -40vmax;
+    --hue: 250;
+    --alpha: 0.2;
+    --duration: 46s;
+    --dx: 8vmax;
+    --dy: -10vmax;
+    --turn: -45deg;
+  }
+  /* Faint grain over the whole page, like the artwork's (`--grain`, from art.ts). */
+  .backdrop::after,
+  .grain-layer {
+    background: var(--grain) 0 0 / 160px 160px;
+  }
+  .backdrop::after {
+    @apply absolute inset-0 opacity-25;
+    content: '';
+  }
+  /* The home hero: its gradient and glows drift slowly. */
+  .hero-drift {
+    background-size: 200% 200%;
+    animation: hero-drift 20s ease-in-out infinite alternate;
+  }
+  .hero-float {
+    animation: hero-float 14s ease-in-out infinite alternate;
+  }
+  .hero-float-2 {
+    animation-duration: 19s;
+    animation-direction: alternate-reverse;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-drift,
+    .hero-float,
+    .blob {
+      animation: none;
+    }
   }
   /* Room for the player bar once something is playing. */
   body.has-player {
@@ -87,12 +196,54 @@
 
 /* Links in page content; `.plain` opts out (cards, rows, table cells that are links). */
 @layer components {
-  /* The primary is too dark to read on the dark page, so links take a lighter tint of it. */
+  /*
+   * Text-coloured with a faint underline, which turns to the accent on hover: accent-
+   * coloured text is hard to read on the page and the glows.
+   */
   main a:not(.btn, .plain, .tab) {
-    @apply link no-underline hover:underline;
-    color: color-mix(in oklch, var(--color-primary) 55%, white);
+    @apply decoration-base-content/25 hover:decoration-primary underline underline-offset-4 transition-colors;
   }
-  [data-theme='light'] main a:not(.btn, .plain, .tab) {
-    color: var(--color-primary);
+}
+
+@keyframes hero-drift {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
+}
+@keyframes hero-float {
+  to {
+    transform: translate(-2.5rem, 1.5rem) scale(1.15);
+  }
+}
+@keyframes blob-drift {
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--turn)) scale(1.15);
+  }
+}
+
+/*
+ * Frosted glass for panels, form fields, menus, dialogs, header buttons and the player: a
+ * translucent fill that darkens what's behind it (the glows) and blurs it, so text reads
+ * as on the opaque fills. Safari still needs the -webkit- prefix; without backdrop-filter
+ * at all, only the fill shows. In the utilities layer itself: daisyUI's components sit in
+ * sub-layers of it, which lose to rules here. Buttons take the fill through daisyUI's
+ * `--btn-bg`, except while hovered, so its hover colour still shows.
+ */
+@layer utilities {
+  :is(.panel, .frosted, .input, .select, .textarea) {
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    backdrop-filter: blur(24px) saturate(1.3);
+  }
+  :is(.panel, .frosted):not(.btn) {
+    background-color: color-mix(in oklab, var(--color-base-200) 65%, transparent);
+  }
+  :is(.input, .select, .textarea) {
+    background-color: color-mix(in oklab, var(--color-base-100) 65%, transparent);
+  }
+  .btn.panel:not(:hover) {
+    --btn-bg: color-mix(in oklab, var(--color-base-200) 65%, transparent);
   }
 }

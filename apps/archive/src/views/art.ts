@@ -22,14 +22,17 @@ function hash(seed: string): number {
 
 /**
  * Film grain: tiled fractal noise in grey with some transparency, overlay-blended onto the
- * gradient (`.art` and `.grain` in app.css) so it reads less flat and digital.
+ * gradients (`.art` and `.grain` in app.css) so they read less flat and digital. The page
+ * gets it as `--grain` (layout.tsx) for the backdrop and the hero.
  */
-export const GRAIN = `url("data:image/svg+xml,${encodeURIComponent(
+export const GRAIN_IMAGE = `url("data:image/svg+xml,${encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>" +
     "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/>" +
-    "<feColorMatrix values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 .45'/></filter>" +
+    "<feColorMatrix values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 .3'/></filter>" +
     "<rect width='100%' height='100%' filter='url(#n)'/></svg>",
-)}") 0 0 / 160px 160px`;
+)}")`;
+
+const GRAIN = `${GRAIN_IMAGE} 0 0 / 160px 160px`;
 
 /** CSS `background` value for `seed`: its gradient under a layer of grain. */
 export function gradient(seed: string): string {

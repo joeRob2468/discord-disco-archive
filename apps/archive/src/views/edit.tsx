@@ -36,7 +36,7 @@ export function EditButton({
 function Modal(props: { id: string; title: string; children?: Child }) {
   return (
     <dialog id={props.id} class="modal">
-      <div class="modal-box bg-base-200 max-w-xl rounded-3xl">
+      <div class="modal-box frosted max-w-xl rounded-3xl">
         <div class="mb-4 flex items-center justify-between gap-3">
           <h2 class="text-xl font-bold">{props.title}</h2>
           <form method="dialog" hx-boost="false">

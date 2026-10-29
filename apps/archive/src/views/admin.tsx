@@ -218,7 +218,7 @@ function SetsTable({ list, filters }: { list: Page<SetSummary>; filters: AdminSe
         </thead>
         <tbody>
           {list.items.map((set) => (
-            <tr class="hover:bg-base-100">
+            <tr class="hover:bg-base-100/60">
               <td>
                 <a class="plain flex items-center gap-3" href={setUrl(set)}>
                   <Art seed={set.uuid} image={setArt(set)} class="size-10 shrink-0 rounded-lg" />

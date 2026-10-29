@@ -1,6 +1,7 @@
 import { raw } from 'hono/html';
 import type { Child } from 'hono/jsx';
 import { assetUrl } from '../assets.ts';
+import { GRAIN_IMAGE } from './art.ts';
 import type { AuthState } from '../auth/auth.ts';
 
 const SITE_NAME = 'Stream Archive';
@@ -65,6 +66,13 @@ const PAGE_SCRIPT = `
 (() => {
   const root = document.documentElement;
   try { if (localStorage.getItem('theme') === 'light') root.dataset.theme = 'light'; } catch {}
+  // The background glows follow the clock (app.css, .blob), so they carry on from page to
+  // page instead of starting over. Set again just before a boosted page replaces the body.
+  const setClock = () => root.style.setProperty('--clock', String((Date.now() / 1000) % 86400));
+  setClock();
+  document.addEventListener('htmx:beforeSwap', (event) => {
+    if (event.detail.target === document.body) setClock();
+  });
   document.addEventListener('click', (event) => {
     if (!(event.target instanceof Element)) return;
     if (event.target.closest('[data-theme-toggle]')) {
@@ -293,14 +301,14 @@ function Document(props: { title: string; preview?: Preview | undefined; childre
   return (
     <>
       {raw('<!doctype html>')}
-      <html lang="en" data-theme="dark">
+      <html lang="en" data-theme="dark" style={`--grain:${GRAIN_IMAGE}`}>
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>{`${title} · ${SITE_NAME}`}</title>
           <meta name="description" content={SITE_DESCRIPTION} />
-          {/* The hero's teal: also the accent colour Discord gives link embeds. */}
-          <meta name="theme-color" content="#14b8a6" />
+          {/* The hero's rose: also the accent colour Discord gives link embeds. */}
+          <meta name="theme-color" content="#9f1239" />
           <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
           <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
           {preview && <PreviewTags preview={preview} />}
@@ -315,7 +323,12 @@ function Document(props: { title: string; preview?: Preview | undefined; childre
           <script type="module" src={assetUrl('/assets/player.js')}></script>
         </head>
         <body hx-boost="true" class="min-h-screen">
-          <div class="backdrop" aria-hidden="true" />
+          <div class="backdrop" aria-hidden="true">
+            <div class="blob blob-1" />
+            <div class="blob blob-2" />
+            <div class="blob blob-3" />
+            <div class="blob blob-4" />
+          </div>
           {children}
         </body>
       </html>
@@ -331,7 +344,7 @@ function Menu({ auth }: { auth: AuthState }) {
       <summary class="btn btn-ghost panel btn-square size-12 rounded-2xl" aria-label="Menu">
         <Icon name="menu" />
       </summary>
-      <ul class="menu dropdown-content bg-base-200 border-base-content/10 rounded-box z-50 mt-2 w-56 border p-2 shadow-2xl">
+      <ul class="menu dropdown-content frosted border-base-content/10 rounded-box z-50 mt-2 w-56 border p-2 shadow-2xl">
         <li>
           <a href="/">
             <Icon name="home" class="size-4" /> Home
@@ -429,7 +442,7 @@ function PlayerBar() {
       hx-preserve="true"
       hidden
       data-state="paused"
-      class="bg-base-200 border-base-content/10 fixed inset-x-0 bottom-0 z-40 border-t px-3 py-3 shadow-2xl sm:px-6"
+      class="frosted border-base-content/10 fixed inset-x-0 bottom-0 z-40 border-t px-3 py-3 shadow-2xl sm:px-6"
       aria-label="Player"
     >
       <audio id="player-audio" preload="metadata" />

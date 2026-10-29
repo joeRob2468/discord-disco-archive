@@ -110,7 +110,7 @@ export function SessionsPage(props: {
         </thead>
         <tbody>
           {sessions.map(({ session, sets, djs, seconds, downloads }) => (
-            <tr class="hover:bg-base-100">
+            <tr class="hover:bg-base-100/60">
               <td>
                 <a class="plain flex items-center gap-3" href={sessionUrl(session.id)}>
                   <Art
@@ -185,7 +185,7 @@ export function DjsPage(props: {
         </thead>
         <tbody>
           {streamers.map((streamer) => (
-            <tr class="hover:bg-base-100">
+            <tr class="hover:bg-base-100/60">
               <td>
                 <a
                   class="plain flex items-center gap-3"

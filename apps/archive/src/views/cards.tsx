@@ -126,7 +126,7 @@ export function SetListRow({
       data-track-uuid={set.uuid}
       data-set-row
     >
-      <div class="group hover:bg-base-100 flex items-center gap-2 rounded-2xl p-2 transition sm:gap-3 sm:pr-4">
+      <div class="group hover:bg-base-100/60 flex items-center gap-2 rounded-2xl p-2 transition sm:gap-3 sm:pr-4">
         <div class="grid w-8 shrink-0 place-items-center">
           {number !== undefined && (
             <span class="text-base-content/50 pointer-coarse:hidden text-sm tabular-nums group-hover:hidden">
