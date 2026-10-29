@@ -23,6 +23,7 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 | Discord popups                 | 🔨 deployed; opens and screenshots verified, but no popup has appeared since to close                  |
 | Download cap (200 Mbit/s each) | 🔨 deployed; not yet seen under load                                                                   |
 | Browser only around sessions   | 🔨 built; `/record check`, start on demand and the 2 h idle close not yet tested live                  |
+| Login rate limit, body cap     | 🔨 built; tested locally, not yet deployed                                                             |
 
 ## Next
 

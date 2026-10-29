@@ -316,6 +316,31 @@ describe('archive app', () => {
       expect(response.status).toBe(401);
     });
 
+    it('blocks a client after too many logins, even with the right password', async () => {
+      const app = build(adminEnv);
+      const from = async (ip: string, password: string) => {
+        const request = post('/login', { password });
+        request.headers.set('X-Forwarded-For', ip);
+        return await app.request(request);
+      };
+      const failed = await Promise.all(
+        Array.from({ length: 10 }, () => from('203.0.113.7', 'nope')),
+      );
+      expect(failed.map((response) => response.status)).toEqual(Array(10).fill(401));
+      const blocked = await from('203.0.113.7', ADMIN_PASSWORD);
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get('retry-after')).toMatch(/^\d+$/);
+      expect(blocked.headers.get('set-cookie')).toBeNull();
+      expect((await from('198.51.100.1', ADMIN_PASSWORD)).status).toBe(303);
+    });
+
+    it('refuses an oversized login body', async () => {
+      const response = await build(adminEnv).request(
+        post('/login', { password: 'x'.repeat(32 * 1024) }),
+      );
+      expect(response.status).toBe(413);
+    });
+
     it('edits and hides a set, and logs it', async () => {
       const app = build(adminEnv);
       const cookie = await loginAsAdmin(app);

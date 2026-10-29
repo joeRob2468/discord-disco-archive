@@ -47,7 +47,7 @@ How code in this repo should look and be organised. Setup and scripts are in [de
 
 - **Secrets** live only in `.env` (git-ignored). Never commit them, log them or print them. When inspecting containers, print env var _names_, never values.
 - **Ports:** never publish on `0.0.0.0`; compose binds to `127.0.0.1`. On the server, the archive is reached through Traefik and noVNC through an SSH tunnel.
-- **Archive:** admin routes 404 for non-admins, form posts are CSRF-checked, cookies are signed and `HttpOnly`, password comparison is constant-time, and redirects pass through `safeNext`. User-supplied links must be http(s).
+- **Archive:** admin routes 404 for non-admins, form posts are CSRF-checked, cookies are signed and `HttpOnly`, password comparison is constant-time, logins are rate limited per client, and redirects pass through `safeNext`. User-supplied links must be http(s).
 - **The recorder account is a self-bot (ToS risk).** Keep automation minimal and never automate login or captchas.
 
 ## Git
