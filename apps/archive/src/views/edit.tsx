@@ -180,6 +180,7 @@ export function DeleteSessionDialog({ session, next }: { session: SessionSummary
   );
 }
 
+/** A labelled input. What a blank input falls back to goes in its placeholder, not `hint`. */
 function Field({ label, hint, children }: { label: string; hint?: string; children?: Child }) {
   return (
     <label class="flex flex-col gap-1 text-sm">
@@ -191,7 +192,6 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-/** The image field: current image, a file to replace it, and a remove box. */
 /**
  * An image upload: a preview, a button that opens the image picker (`ImagePicker`,
  * `crop.ts`) to choose, drop or paste one and frame it square (round for a DJ's picture),
@@ -260,6 +260,41 @@ function ImageField(props: {
       </div>
       <p class="text-base-content/60 text-xs" data-crop-status hidden />
       {hint && <p class="text-base-content/60 text-xs">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * A set's tags as chips with a remove button; typing and pressing comma or Enter adds one
+ * (`tags.ts`). "partial" stands for the recorder's flag, so removing it clears that. The
+ * chips are written into the hidden `tags` input, comma-separated, as the server reads it.
+ */
+function TagField({ tags }: { tags: string[] }) {
+  return (
+    <div class="flex flex-col gap-1 text-sm" data-tags>
+      <span class="font-semibold">Tags</span>
+      <div class="input flex h-auto min-h-10 w-full flex-wrap items-center gap-1.5 py-1.5">
+        {tags.map((tag) => (
+          <span class="badge badge-soft gap-1 pr-1" data-tag={tag}>
+            {tag}
+            <button
+              class="btn btn-ghost btn-xs btn-circle size-4 min-h-0"
+              type="button"
+              aria-label={`Remove ${tag}`}
+              data-tag-remove
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          class="min-w-24 flex-1 bg-transparent outline-none"
+          aria-label="Add a tag"
+          placeholder={tags.length === 0 ? 'Add a tag, then comma or Enter' : 'Add a tag'}
+          data-tag-entry
+        />
+      </div>
+      <input type="hidden" name="tags" value={tags.join(', ')} data-tag-value />
     </div>
   );
 }
@@ -385,13 +420,20 @@ export function EditSetDialog({ set, next }: { set: SetSummary; next: string }) 
       >
         <input type="hidden" name="next" value={next} />
         <Field label="Set title">
-          <input class="input w-full" name="title" value={set.title ?? ''} maxlength={120} />
+          <input
+            class="input w-full"
+            name="title"
+            value={set.title ?? ''}
+            placeholder={set.name}
+            maxlength={120}
+          />
         </Field>
-        <Field label="DJ name for this set" hint={`blank = ${set.recordedName}`}>
+        <Field label="DJ name for this set">
           <input
             class="input w-full"
             name="displayName"
             value={set.editedName ?? ''}
+            placeholder={set.recordedName}
             maxlength={80}
           />
         </Field>
@@ -400,9 +442,7 @@ export function EditSetDialog({ set, next }: { set: SetSummary; next: string }) 
             {set.description ?? ''}
           </textarea>
         </Field>
-        <Field label="Tags" hint="comma-separated">
-          <input class="input w-full" name="tags" value={set.tags.join(', ')} />
-        </Field>
+        <TagField tags={[...(set.partial ? ['partial'] : []), ...set.tags]} />
         <Field label="Visibility">
           <select class="select w-full" name="hidden">
             <option value="default" selected={set.hiddenOverride === undefined}>
@@ -440,11 +480,12 @@ export function EditSessionDialog({ session, next }: { session: SessionSummary; 
         action={`/sessions/${encodeURIComponent(session.id)}/edit`}
       >
         <input type="hidden" name="next" value={next} />
-        <Field label="Title" hint={`blank = ${session.recordedTitle ?? session.channelName}`}>
+        <Field label="Title">
           <input
             class="input w-full"
             name="title"
             value={session.editedTitle ?? ''}
+            placeholder={session.recordedTitle ?? session.channelName}
             maxlength={120}
           />
         </Field>
@@ -483,11 +524,12 @@ export function EditStreamerDialog({
       action={`/streamers/${encodeURIComponent(streamer.userId)}/edit`}
     >
       <input type="hidden" name="next" value={next} />
-      <Field label="Name" hint={`blank = ${streamer.recordedName}`}>
+      <Field label="Name">
         <input
           class="input w-full"
           name="displayName"
           value={streamer.editedName ?? ''}
+          placeholder={streamer.recordedName}
           maxlength={80}
         />
       </Field>

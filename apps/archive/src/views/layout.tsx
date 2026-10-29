@@ -294,7 +294,7 @@ function Logo() {
 function Document(props: {
   title: string;
   preview?: Preview | undefined;
-  /** Admins get the image picker and cropper for the edit dialogs. */
+  /** Admins get the edit dialogs' scripts (`admin.js`) and the image picker. */
   admin?: boolean;
   children?: Child;
 }) {
@@ -322,7 +322,7 @@ function Document(props: {
           />
           <script src={assetUrl('/assets/htmx.min.js')} defer></script>
           <script type="module" src={assetUrl('/assets/player.js')}></script>
-          {admin && <script type="module" src={assetUrl('/assets/crop.js')}></script>}
+          {admin && <script type="module" src={assetUrl('/assets/admin.js')}></script>}
         </head>
         <body hx-boost="true" class="min-h-screen">
           <div class="backdrop" aria-hidden="true">

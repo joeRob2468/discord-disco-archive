@@ -63,7 +63,9 @@ export interface SetSummary {
   startedAt: string;
   endedAt: string | undefined;
   durationSeconds: number | undefined;
+  /** The recorder's flag unless an admin overrode it (`recordedPartial`: the recorder's). */
   partial: boolean;
+  recordedPartial: boolean;
   status: SetStatus;
   /** Why processing failed, from the recorder. */
   error: string | undefined;
@@ -209,6 +211,8 @@ export interface SetPatch {
   description?: string | null;
   /** `null` reverts to the recorder's value. */
   hidden?: boolean | null;
+  /** Whether the set is partial; the recorder's value clears the override. */
+  partial?: boolean;
   tags?: string[];
 }
 
@@ -270,6 +274,7 @@ interface SetRow {
   started_at: string;
   ended_at: string | null;
   partial: number;
+  recorded_partial: number;
   status: SetStatus;
   error: string | null;
   files: string;
@@ -350,6 +355,7 @@ function toSet(row: SetRow): SetSummary {
         ? undefined
         : Math.round((Date.parse(endedAt) - Date.parse(row.started_at)) / 1000),
     partial: row.partial === 1,
+    recordedPartial: row.recorded_partial === 1,
     status: row.status,
     error: opt(row.error),
     files: setFilesSchema.parse(JSON.parse(row.files)),
@@ -780,13 +786,18 @@ export class Catalog {
 
   updateSet(id: string, patch: SetPatch, actor: string): void {
     const current = this.#db
-      .prepare(`SELECT title, display_name, description, hidden FROM sets WHERE id = ?`)
+      .prepare(
+        `SELECT title, display_name, description, hidden, partial, partial_override
+         FROM sets WHERE id = ?`,
+      )
       .get(id) as
       | {
           title: string | null;
           display_name: string | null;
           description: string | null;
           hidden: number | null;
+          partial: number;
+          partial_override: number | null;
         }
       | undefined;
     if (!current) throw new NotFoundError('set', id);
@@ -795,6 +806,7 @@ export class Catalog {
       .pluck()
       .all(id) as string[];
 
+    const { partial: recordedPartial, ...edits } = current;
     const next = {
       title: patch.title === undefined ? current.title : cleanText(patch.title, 120),
       display_name:
@@ -809,6 +821,12 @@ export class Catalog {
             : patch.hidden
               ? 1
               : 0,
+      partial_override:
+        patch.partial === undefined
+          ? current.partial_override
+          : Number(patch.partial) === recordedPartial
+            ? null
+            : Number(patch.partial),
     };
     const nextTags = patch.tags === undefined ? currentTags : normalizeTags(patch.tags);
 
@@ -816,14 +834,15 @@ export class Catalog {
       this.#db
         .prepare(
           `UPDATE sets SET title = @title, display_name = @display_name,
-           description = @description, hidden = @hidden, updated_at = @at WHERE id = @id`,
+           description = @description, hidden = @hidden, partial_override = @partial_override,
+           updated_at = @at WHERE id = @id`,
         )
         .run({ ...next, at: now(), id });
       this.#db.prepare(`DELETE FROM set_tags WHERE set_id = ?`).run(id);
       const insertTag = this.#db.prepare(`INSERT INTO set_tags (set_id, tag) VALUES (?, ?)`);
       for (const tag of nextTags) insertTag.run(id, tag);
 
-      this.#audit(actor, 'set', id, { ...current, tags: currentTags }, { ...next, tags: nextTags });
+      this.#audit(actor, 'set', id, { ...edits, tags: currentTags }, { ...next, tags: nextTags });
       reindexSets(this.#db, [id]);
     })();
   }

@@ -10,6 +10,7 @@ import { openMemoryDatabase, type Db } from './db/database.ts';
 import {
   createRecordings,
   DJ_A,
+  DJ_B,
   PNG,
   makeSession,
   makeSet,
@@ -120,6 +121,12 @@ describe('archive app', () => {
       const html = await (await build().request(`/search?streamer=${DJ_A}`)).text();
       expect(html).toContain('Spins at night.');
       expect(html).toContain('href="https://example.com/owl"');
+    });
+
+    it("links a session's DJs to their sets", async () => {
+      const html = await (await build().request('/sessions/session-1')).text();
+      expect(html).toMatch(new RegExp(`<a href="/search\\?streamer=${DJ_A}">Night Owl</a>`));
+      expect(html).toMatch(new RegExp(`<a href="/search\\?streamer=${DJ_B}">Café Sunrise</a>`));
     });
 
     it('shows the session on a set page, and expands sets inline', async () => {
@@ -347,10 +354,10 @@ describe('archive app', () => {
     it('gives admins the image cropper, and nobody else', async () => {
       const app = build(adminEnv);
       const page = setPage('session-1', 'set-1');
-      expect(await (await app.request(page)).text()).not.toContain('/assets/crop.js');
+      expect(await (await app.request(page)).text()).not.toContain('/assets/admin.js');
       const cookie = await loginAsAdmin(app);
       const html = await (await app.request(page, { headers: { Cookie: cookie } })).text();
-      expect(html).toContain('/assets/crop.js');
+      expect(html).toContain('/assets/admin.js');
       // One shared picker; each image field opens it, DJ pictures framed round.
       expect(html.match(/id="image-picker"/g)).toHaveLength(1);
       expect(html).toContain('data-crop="round"');
@@ -416,6 +423,29 @@ describe('archive app', () => {
         await app.request('/admin/activity', { headers: { Cookie: cookie } })
       ).text();
       expect(activity).toContain('Spooky Mix');
+    });
+
+    it('edits tags as chips, with "partial" standing for the recorder\'s flag', async () => {
+      const app = build(adminEnv);
+      const cookie = await loginAsAdmin(app);
+      const page = setPage('session-1', 'set-1');
+      const edit = (tags: string) => app.request(post('/sets/set-1/edit', { tags }, cookie));
+
+      // Adding "partial" marks the set partial; other tags are kept, and shown as badges.
+      expect((await edit('Deep House, partial')).status).toBe(303);
+      expect(new Catalog(db).getSet('set-1', false)).toMatchObject({
+        partial: true,
+        tags: ['deep house'],
+      });
+      const html = await (await app.request(page, { headers: { Cookie: cookie } })).text();
+      expect(html).toContain('>deep house</span>');
+      // The dialog lists both as chips.
+      expect(html).toContain('data-tag="partial"');
+      expect(html).toContain('data-tag="deep house"');
+
+      // Leaving it out clears it again.
+      await edit('deep house');
+      expect(new Catalog(db).getSet('set-1', false)?.partial).toBe(false);
     });
 
     it('shows totals, storage use and sets that need attention', async () => {

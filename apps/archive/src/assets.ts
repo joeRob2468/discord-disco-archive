@@ -22,8 +22,8 @@ export const ASSETS = [
     'text/javascript; charset=utf-8',
   ],
   [
-    '/assets/crop.js',
-    fileURLToPath(new URL('../dist/crop.js', import.meta.url)),
+    '/assets/admin.js',
+    fileURLToPath(new URL('../dist/admin.js', import.meta.url)),
     'text/javascript; charset=utf-8',
   ],
   [

@@ -33,6 +33,8 @@ import { formField, pageParam, sortParam, splitList, textParam } from './params.
 import { searchUrl, sessionUrl, setUrl } from '../views/links.ts';
 
 const ACTOR = 'admin';
+/** The tag standing for a set's partial flag in its tag field. */
+const PARTIAL_TAG = 'partial';
 
 const visibility = (value: string | undefined): boolean | null | undefined => {
   if (value === 'hidden') return true;
@@ -338,7 +340,9 @@ export function adminRoutes(
           const value = formField(body, name);
           return value === undefined ? {} : { [name]: value };
         };
-        const tags = formField(body, 'tags');
+        // The tag field also carries "partial", the recorder's flag, which can be removed.
+        const tagField = formField(body, 'tags');
+        const tags = tagField === undefined ? undefined : splitList(tagField, /,/);
         const hidden = visibility(formField(body, 'hidden'));
         catalog.updateSet(
           id,
@@ -346,7 +350,10 @@ export function adminRoutes(
             ...text('title'),
             ...text('displayName'),
             ...text('description'),
-            ...(tags !== undefined && { tags: splitList(tags, /,/) }),
+            ...(tags !== undefined && {
+              tags: tags.filter((tag) => tag.toLowerCase() !== PARTIAL_TAG),
+              partial: tags.some((tag) => tag.toLowerCase() === PARTIAL_TAG),
+            }),
             ...(hidden !== undefined && { hidden }),
           },
           ACTOR,

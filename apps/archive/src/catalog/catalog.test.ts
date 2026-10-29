@@ -270,6 +270,35 @@ describe('catalog', () => {
       expect(catalog.getSet('set-3', false)).toBeUndefined();
     });
 
+    it("overrides the recorder's partial flag, and drops the override when it agrees", async () => {
+      await recordings.write(
+        '2026-11-14_halloween-disco',
+        makeSession({
+          id: 'session-1',
+          sets: [makeSet({ id: 'set-1', userId: DJ_A, partial: true })],
+        }),
+      );
+      await syncCatalog(db, recordings.dir);
+      expect(catalog.getSet('set-1', false)).toMatchObject({
+        partial: true,
+        recordedPartial: true,
+      });
+
+      catalog.updateSet('set-1', { partial: false }, 'test');
+      expect(catalog.getSet('set-1', false)).toMatchObject({
+        partial: false,
+        recordedPartial: true,
+      });
+      // The recorder writing the file again doesn't undo it.
+      await syncCatalog(db, recordings.dir);
+      expect(catalog.getSet('set-1', false)?.partial).toBe(false);
+
+      // Back to the recorder's value: no override left.
+      catalog.updateSet('set-1', { partial: true }, 'test');
+      const row = db.prepare(`SELECT partial_override FROM sets WHERE id = 'set-1'`).get();
+      expect(row).toEqual({ partial_override: null });
+    });
+
     it('preserves archive edits when the recorder rewrites session.json', async () => {
       catalog.updateSet('set-1', { title: 'Spooky Mix' }, 'test');
       await recordings.write(

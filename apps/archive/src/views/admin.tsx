@@ -347,12 +347,16 @@ const ENTITY_LABELS: Record<string, string> = { session: 'Session', set: 'Set', 
 const FIELD_LABELS: Record<string, string> = {
   display_name: 'name',
   hidden: 'archived',
+  partial_override: 'partial',
   recorded: 'recorded',
   files: 'files',
 };
 
 /** A changed value, readably: lists joined, empty as a dash, archive state in words. */
 function formatValue(field: string, value: unknown): string {
+  if (field === 'partial_override') {
+    return value === 1 ? 'yes' : value === 0 ? 'no' : 'as recorded';
+  }
   if (value === null || value === undefined || value === '') return '—';
   if (field === 'hidden') return value === 1 || value === true ? 'archived' : 'visible';
   if (Array.isArray(value)) return value.length === 0 ? '—' : value.join(', ');

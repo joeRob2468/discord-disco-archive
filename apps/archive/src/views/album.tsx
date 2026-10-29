@@ -56,17 +56,30 @@ export function AlbumPage({
           <div class="mt-3 flex flex-wrap items-center gap-3">
             <div class="flex -space-x-2">
               {djs.slice(0, 6).map((set) => (
-                <div class="ring-base-200 rounded-full ring-2">
+                <a
+                  class="plain ring-base-200 rounded-full ring-2"
+                  href={searchUrl({ userId: set.userId })}
+                  tabindex={-1}
+                  aria-hidden="true"
+                >
                   <DjAvatar
                     userId={set.userId}
                     name={set.name}
                     image={set.streamerImage}
                     size="size-8 text-xs"
                   />
-                </div>
+                </a>
               ))}
             </div>
-            <p class="text-base-content/70 text-sm">{djs.map((set) => set.name).join(', ')}</p>
+            {/* Each DJ's name links to their sets (the avatars too, skipped by the keyboard). */}
+            <p class="text-base-content/70 text-sm">
+              {djs.map((set, index) => (
+                <>
+                  {index > 0 && ', '}
+                  <a href={searchUrl({ userId: set.userId })}>{set.name}</a>
+                </>
+              ))}
+            </p>
           </div>
           <p class="text-base-content/60 mt-2 text-sm">
             {formatDate(session.startedAt)} · {plural(sets.length, 'set')} ·{' '}

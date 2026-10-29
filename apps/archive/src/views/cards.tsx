@@ -67,6 +67,9 @@ export function StatusBadges({ set }: { set: SetSummary }) {
         <span class="badge badge-warning badge-sm ml-2">{set.status}</span>
       )}
       {set.partial && <span class="badge badge-ghost badge-sm ml-2">partial</span>}
+      {set.tags.map((tag) => (
+        <span class="badge badge-ghost badge-sm ml-2">{tag}</span>
+      ))}
       {set.unlisted && <span class="badge badge-error badge-sm ml-2">archived</span>}
     </>
   );
