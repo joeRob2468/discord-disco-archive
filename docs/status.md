@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-27_
+_Last updated: 2026-10-29_
 
 ## Where things stand
 
@@ -31,11 +31,9 @@ Deployed on the home server and working end to end: `/record` captures each DJ's
 
 1. **Test the on-demand browser** on the server: after deploying, the recorder idles near 0% CPU; `/record check` starts the browser and replies privately; `/record start` with the browser closed defers, then posts its public reply; the browser closes 2 h after `/record stop` (log: `browser idle; closing it`).
 2. **After the next event:** check the recorder's screenshots (`APP_DATA_DIR/recorder/screenshots`) and logs (`closed Discord popups`, `could not open stream`, `stream silent too long`) to see whether the popup handling held, and whether downloads stayed quick for everyone.
-3. **Upload the Afterglow set** once they send it (Add set… on Halloween Disco, filed under Nova, named Afterglow, starting 20:00).
 
 ## Environment notes
 
 - **Server:** `~/.services/discord-stream-recorder`, read-only deploy key (`github-dsr` host alias). Update with `git pull` + `docker compose up -d --build`. The local recorder must stay stopped: it's the same Discord account.
 - **Dev machine (WSL2):** the archive runs with `pnpm --filter @dsr/archive dev` against `data/recordings` and `docker-data/archive`. WSL2's clock drifts and drops ~6% of captured audio; `wsl --shutdown` resets it (the server isn't affected).
-- **Discord:** bot "Recorder Bot"; recorder account "Recorder Account" (logged in in the Firefox profile, notification sounds off); test channel "Test Room"; test streamers Val Mason and 🎃.
 - `.env` holds secrets; never print it.
