@@ -86,6 +86,17 @@ describe('archive app', () => {
       expect(response.headers.get('content-type')).toMatch(/text\/html/);
     });
 
+    it("links each home section's heading to its full list", async () => {
+      const home = await (await build().request('/')).text();
+      for (const [href, title] of [
+        ['/djs', 'DJs'],
+        ['/sessions', 'Recent sessions'],
+        ['/search', 'Popular sets'],
+      ]) {
+        expect(home).toMatch(new RegExp(`<h2[^>]*><a[^>]*href="${href}">${title}`));
+      }
+    });
+
     it('shows session and DJ stats, sorted by any column', async () => {
       const app = build();
       const djs = await (await app.request('/djs?sort=name&dir=asc')).text();

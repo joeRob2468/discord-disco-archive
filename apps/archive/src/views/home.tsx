@@ -65,11 +65,25 @@ function Hero({ latest }: { latest: SessionSummary | undefined }) {
   );
 }
 
+/** A section heading that links to the full list (all DJs, sessions or sets). */
+function SectionHeading({ href, title }: { href: string; title: string }) {
+  return (
+    <h2 class="mb-4 text-xl font-bold">
+      <a class="plain group inline-flex items-baseline gap-2" href={href}>
+        {title}
+        <span class="text-base-content/50 group-hover:text-base-content text-base transition">
+          →
+        </span>
+      </a>
+    </h2>
+  );
+}
+
 function StreamersRow({ streamers }: { streamers: StreamerSummary[] }) {
   if (streamers.length === 0) return null;
   return (
     <section class="mt-10">
-      <h2 class="mb-4 text-xl font-bold">DJs</h2>
+      <SectionHeading href="/djs" title="DJs" />
       <div class="flex gap-5 overflow-x-auto pb-2">
         {streamers.map((streamer) => (
           <a
@@ -136,7 +150,7 @@ function PopularSets({ sets }: { sets: SetSummary[] }) {
   const queue = queueOf(sets);
   return (
     <section class="mt-10">
-      <h2 class="mb-4 text-xl font-bold">Popular sets</h2>
+      <SectionHeading href="/search" title="Popular sets" />
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         {sets.map((set) => (
           // The play button sits beside the card's link, not in it (no buttons inside links).
@@ -189,14 +203,7 @@ export function HomePage(props: { data: HomeData; auth: AuthState; preview: Prev
       <StreamersRow streamers={data.streamers} />
       {data.albums.length > 0 && (
         <section class="mt-10">
-          <h2 class="mb-4 text-xl font-bold">
-            <a class="plain group inline-flex items-baseline gap-2" href="/sessions">
-              Recent sessions
-              <span class="text-base-content/50 group-hover:text-base-content text-base transition">
-                →
-              </span>
-            </a>
-          </h2>
+          <SectionHeading href="/sessions" title="Recent sessions" />
           <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
             {data.albums.map((album) => (
               <AlbumCard album={album} />
