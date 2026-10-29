@@ -82,7 +82,12 @@
 
 /* Links in page content; `.plain` opts out (cards, rows, table cells that are links). */
 @layer components {
+  /* The primary is too dark to read on the dark page, so links take a lighter tint of it. */
   main a:not(.btn, .plain, .tab) {
-    @apply link link-primary no-underline hover:underline;
+    @apply link no-underline hover:underline;
+    color: color-mix(in oklch, var(--color-primary) 55%, white);
+  }
+  [data-theme='light'] main a:not(.btn, .plain, .tab) {
+    color: var(--color-primary);
   }
 }
