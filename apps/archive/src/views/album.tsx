@@ -37,13 +37,13 @@ export function AlbumPage({
   const queue = queueOf(sets);
   return (
     <Layout title={session.title} auth={auth}>
-      <section class="panel flex flex-col gap-6 rounded-3xl p-5 sm:flex-row sm:items-end sm:p-6">
+      <section class="panel flex flex-col gap-6 rounded-3xl p-5 sm:flex-row sm:items-start sm:p-6">
         <Art
           seed={session.id}
           image={session.image}
-          class="aspect-square w-full shrink-0 rounded-2xl shadow-2xl sm:w-56"
+          class="aspect-square w-full shrink-0 rounded-2xl shadow-2xl sm:w-64"
         />
-        <div class="min-w-0">
+        <div class="min-w-0 sm:self-end">
           <p class="text-base-content/60 text-xs font-semibold tracking-widest uppercase">
             Session
           </p>
@@ -230,15 +230,12 @@ function SetActions(props: { set: SetSummary; queue: Track[]; children?: Child }
         ) : (
           <p class="text-base-content/60 text-sm">Nothing to play yet.</p>
         )}
-        <button class="btn btn-ghost btn-sm" type="button" data-copy={setUrl(set)}>
-          Copy link
-        </button>
+        {/* One row with the buttons above (wrapping on narrow screens), so the header's text
+            stays about as tall as its art. */}
+        <Downloads set={set} />
         {props.children}
       </div>
       {raw && <p class="text-base-content/60 mt-2 text-xs">Raw capture, not leveled yet.</p>}
-      <div class="mt-3">
-        <Downloads set={set} />
-      </div>
     </>
   );
 }
@@ -258,11 +255,11 @@ export function SetDetailPage(props: {
   const queue = queueOf(albumSets);
   return (
     <Layout title={`${set.title ?? set.name} · ${set.sessionTitle}`} auth={auth}>
-      <section class="panel flex flex-col gap-6 rounded-3xl p-5 sm:flex-row sm:items-end sm:p-6">
+      <section class="panel flex flex-col gap-6 rounded-3xl p-5 sm:flex-row sm:items-start sm:p-6">
         <Art
           seed={set.uuid}
           image={setArt(set)}
-          class="aspect-square w-full shrink-0 rounded-2xl shadow-2xl sm:w-56"
+          class="aspect-square w-full shrink-0 rounded-2xl shadow-2xl sm:w-64"
         />
         <div class="min-w-0 flex-1">
           <div class="flex items-center justify-between gap-2">
@@ -314,13 +311,30 @@ export function SetDetailPage(props: {
             {formatDateTime(set.startedAt)} · {formatDuration(set.durationSeconds)} ·{' '}
             <DownloadCount set={set} />
           </p>
-          {set.description && <p class="mt-3 max-w-prose whitespace-pre-line">{set.description}</p>}
+          {/* Capped, so long notes don't push the text far below the art; all of it on hover. */}
+          {set.description && (
+            <p class="mt-3 line-clamp-3 max-w-prose whitespace-pre-line" title={set.description}>
+              {set.description}
+            </p>
+          )}
           <div class="mt-4">
             <SetActions set={set} queue={queue}>
               {auth.isAdmin && (
                 <>
-                  <EditButton kind="set" id={set.id} label="Edit set" />
-                  {streamer && <EditButton kind="streamer" id={set.userId} label="Edit DJ" />}
+                  <EditButton
+                    kind="set"
+                    id={set.id}
+                    label="Edit set"
+                    class="btn btn-ghost rounded-xl"
+                  />
+                  {streamer && (
+                    <EditButton
+                      kind="streamer"
+                      id={set.userId}
+                      label="Edit DJ"
+                      class="btn btn-ghost rounded-xl"
+                    />
+                  )}
                 </>
               )}
             </SetActions>
@@ -351,11 +365,7 @@ export function SetInline({ set, albumSets }: { set: SetSummary; albumSets: SetS
       </p>
       {set.description && <p class="max-w-prose whitespace-pre-line">{set.description}</p>}
       <div>
-        <SetActions set={set} queue={queue}>
-          <a class="btn btn-ghost btn-sm" href={setUrl(set)}>
-            Open set page →
-          </a>
-        </SetActions>
+        <SetActions set={set} queue={queue} />
       </div>
     </div>
   );

@@ -128,12 +128,14 @@ describe('archive app', () => {
       expect(page).toContain('From the session');
       expect(page).toContain('Set 2 of 2');
       expect(page).toContain(`href="${setPage('session-1', 'set-1')}"`);
+      // Row titles link to each set's page; the chevron expands the row.
+      expect(page).toMatch(/<a class="plain hover:underline" href="[^"]+">/);
+      expect(page).toContain('aria-expanded="false"');
 
       const inline = await app.request(`${setPage('session-1', 'set-2')}/inline`);
       expect(inline.status).toBe(200);
       const html = await inline.text();
       expect(html).not.toContain('<html');
-      expect(html).toContain('Open set page');
       expect(html).toContain('data-enqueue=');
       expect((await app.request(`${setPage('session-2', 'set-2')}/inline`)).status).toBe(404);
     });

@@ -114,7 +114,7 @@ export function AlbumCard({ album }: { album: Album }) {
       href={sessionUrl(session.id)}
     >
       <div class="relative">
-        <Art seed={session.id} image={session.image} class="aspect-[16/9] rounded-2xl" />
+        <Art seed={session.id} image={session.image} class="aspect-square rounded-2xl" />
         <span class="badge badge-sm absolute top-3 left-3 border-0 bg-black/40 text-white backdrop-blur">
           {formatDate(session.startedAt)}
         </span>
@@ -160,7 +160,7 @@ function PopularSets({ sets }: { sets: SetSummary[] }) {
           >
             <a class="plain block" href={setUrl(set)}>
               <div class="relative">
-                <Art seed={set.uuid} image={setArt(set)} class="aspect-[4/3] rounded-2xl" />
+                <Art seed={set.uuid} image={setArt(set)} class="aspect-square rounded-2xl" />
                 <span class="badge badge-sm absolute top-2 left-2 border-0 bg-black/50 text-white">
                   <DownloadCount set={set} />
                 </span>
@@ -204,7 +204,7 @@ export function HomePage(props: { data: HomeData; auth: AuthState; preview: Prev
       {data.albums.length > 0 && (
         <section class="mt-10">
           <SectionHeading href="/sessions" title="Recent sessions" />
-          <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+          <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
             {data.albums.map((album) => (
               <AlbumCard album={album} />
             ))}

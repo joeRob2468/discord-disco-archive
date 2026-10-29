@@ -5,7 +5,8 @@ import { gradient, imageUrl, initials, setArt } from './art.ts';
 import { formatDate, formatDuration } from './format.ts';
 import { setUrl } from './links.ts';
 import { DownloadCount } from './components.tsx';
-import { PlayButton, QueueButton } from './play.tsx';
+import { Icon } from './layout.tsx';
+import { PlayButton } from './play.tsx';
 
 /** Artwork: the uploaded image if there is one, else a gradient seeded by `seed`. */
 export function Art({
@@ -98,9 +99,10 @@ function MoveButtons(props: { set: SetSummary; first: boolean; last: boolean; ne
 }
 
 /**
- * One set as a list row: a play button (playing `queue` from this set), the set's title,
- * which expands the row into an inline set page (a real link, so it also opens in a new
- * tab), and an "Add to queue" button. In an album the row shows its track number, which
+ * One set as a list row: a play button (playing `queue` from this set), its art and title
+ * (with the DJ when the set has its own name), which link to its page, and its downloads,
+ * length and a chevron. A click anywhere else on the row expands it into an inline set
+ * page ("Add to queue" and the downloads). In an album the row shows its track number, which
  * turns into the play button on hover (touchscreens always show the button), and leaves out
  * the session it belongs to.
  */
@@ -119,7 +121,6 @@ export function SetListRow({
   /** Admins on the album page: move buttons, disabled at the ends. */
   reorder?: { first: boolean; last: boolean; next: string } | undefined;
 }) {
-  const track = queue.find((t) => t.uuid === set.uuid);
   return (
     <div
       class={`panel rounded-2xl ${current ? 'ring-primary/50 ring-1' : ''}`}
@@ -140,18 +141,20 @@ export function SetListRow({
             class={`btn btn-circle btn-primary btn-sm ${number !== undefined ? 'pointer-coarse:inline-flex hidden group-hover:inline-flex' : ''}`}
           />
         </div>
-        <a
-          class="plain flex min-w-0 flex-1 items-center gap-3"
-          href={setUrl(set)}
-          hx-boost="false"
+        <div
+          class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
           data-expand={`${setUrl(set)}/inline`}
-          aria-expanded="false"
         >
-          <Art seed={set.uuid} image={setArt(set)} class="size-10 shrink-0 rounded-xl sm:size-12" />
+          {/* The same link as the title, so left out of the tab order and screen readers. */}
+          <a class="plain shrink-0" href={setUrl(set)} tabindex={-1} aria-hidden="true">
+            <Art seed={set.uuid} image={setArt(set)} class="size-10 rounded-xl sm:size-12" />
+          </a>
           <div class="min-w-0 flex-1">
             <p class="playing-title truncate font-semibold">
-              {set.title ?? set.name}
-              {set.title && <span class="text-base-content/60 font-normal"> · {set.name}</span>}
+              <a class="plain hover:underline" href={setUrl(set)}>
+                {set.title ?? set.name}
+                {set.title && <span class="text-base-content/60 font-normal"> · {set.name}</span>}
+              </a>
               <StatusBadges set={set} />
             </p>
             {/* On phones the length moves here, leaving the title the row's width. */}
@@ -166,14 +169,26 @@ export function SetListRow({
               </p>
             )}
           </div>
-        </a>
-        <span class="text-base-content/60 hidden text-sm tabular-nums sm:block">
-          <DownloadCount set={set} />
-        </span>
-        <span class="hidden w-14 text-right text-sm tabular-nums sm:block">
-          {formatDuration(set.durationSeconds)}
-        </span>
-        {track && <QueueButton tracks={[track]} />}
+        </div>
+        <div
+          class="flex cursor-pointer items-center gap-2 sm:gap-3"
+          data-expand={`${setUrl(set)}/inline`}
+        >
+          <span class="text-base-content/60 hidden text-sm tabular-nums sm:block">
+            <DownloadCount set={set} />
+          </span>
+          <span class="hidden w-14 text-right text-sm tabular-nums sm:block">
+            {formatDuration(set.durationSeconds)}
+          </span>
+          <button
+            class="btn btn-ghost btn-circle btn-sm aria-expanded:[&>svg]:rotate-180"
+            type="button"
+            aria-expanded="false"
+            aria-label={`Details of ${set.title ?? set.name}`}
+          >
+            <Icon name="chevron" class="size-4 transition-transform" />
+          </button>
+        </div>
         {reorder && <MoveButtons set={set} {...reorder} />}
       </div>
       <div data-set-inline hidden />

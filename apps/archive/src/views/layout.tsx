@@ -73,15 +73,17 @@ const PAGE_SCRIPT = `
   });
   document.addEventListener('click', (event) => {
     if (!(event.target instanceof Element)) return;
-    // A plain click expands the row; modified clicks still open the link as usual.
+    // A click on a set row expands it, except on its links (art and title: the set page).
     const expand = event.target.closest('[data-expand]');
-    if (expand && !(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) {
-      const box = expand.closest('[data-set-row]')?.querySelector('[data-set-inline]');
+    if (expand && !event.target.closest('a')) {
+      const row = expand.closest('[data-set-row]');
+      const box = row?.querySelector('[data-set-inline]');
       if (box) {
-        event.preventDefault();
         const open = box.hidden;
         box.hidden = !open;
-        expand.setAttribute('aria-expanded', String(open));
+        for (const toggle of row.querySelectorAll('[aria-expanded]')) {
+          toggle.setAttribute('aria-expanded', String(open));
+        }
         if (open) htmx.ajax('GET', expand.dataset.expand, { target: box, swap: 'innerHTML' });
         else box.replaceChildren();
         return;
@@ -249,6 +251,7 @@ const ICONS = {
   login: 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   search: 'M21 21l-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z',
+  chevron: 'm6 9 6 6 6-6',
 } as const;
 
 export function Icon({
