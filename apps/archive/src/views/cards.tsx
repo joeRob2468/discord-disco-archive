@@ -50,7 +50,7 @@ export function DjAvatar({
   }
   return (
     <div
-      class={`${size} grid shrink-0 place-items-center rounded-full font-bold text-white/90 shadow`}
+      class={`${size} grain grid shrink-0 place-items-center rounded-full font-bold text-white/90 shadow`}
       style={`background:${gradient(userId)}`}
       title={name}
     >

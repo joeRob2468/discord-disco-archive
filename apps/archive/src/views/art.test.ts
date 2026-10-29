@@ -5,7 +5,9 @@ describe('gradient', () => {
   it('is stable per seed and differs between seeds', () => {
     expect(gradient('session-1')).toBe(gradient('session-1'));
     expect(gradient('session-1')).not.toBe(gradient('session-2'));
-    expect(gradient('x')).toMatch(/^linear-gradient\(\d+deg, hsl\(/);
+    expect(gradient('x')).toMatch(
+      /^url\("data:image\/svg\+xml,.+"\) 0 0 \/ 160px 160px, linear-gradient\(\d+deg, hsl\(/,
+    );
   });
 });
 

@@ -4,7 +4,7 @@
  */
 import type { AuthState } from '../auth/auth.ts';
 import type { SessionSummary, SetSummary, StreamerSummary } from '../catalog/catalog.ts';
-import { setArt } from './art.ts';
+import { GRAIN, setArt } from './art.ts';
 import { Art, DjAvatar } from './cards.tsx';
 import { formatDate, formatDuration, plural } from './format.ts';
 import { Layout, type Preview } from './layout.tsx';
@@ -36,6 +36,7 @@ function Hero({ latest }: { latest: SessionSummary | undefined }) {
     <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-500 via-cyan-600 to-lime-300 p-6 text-white shadow-xl sm:p-10">
       <div class="absolute -top-16 -right-10 size-64 rounded-full bg-white/15 blur-2xl" />
       <div class="absolute right-32 -bottom-24 size-56 rounded-full bg-fuchsia-500/30 blur-3xl" />
+      <div class="absolute inset-0 mix-blend-overlay" style={`background:${GRAIN}`} />
       <div class="relative max-w-lg">
         <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">
           Every set from every disco, in one place.

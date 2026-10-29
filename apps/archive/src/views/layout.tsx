@@ -449,7 +449,7 @@ function PlayerBar() {
       </div>
       <div class="mx-auto grid max-w-[1400px] grid-cols-[1fr_auto] items-center gap-x-3 gap-y-3 sm:grid-cols-[1fr_2fr_1fr]">
         <div class="flex min-w-0 items-center gap-3">
-          <div id="player-art" class="size-12 shrink-0 rounded-lg shadow" />
+          <div id="player-art" class="grain size-12 shrink-0 rounded-lg shadow" />
           <div class="min-w-0">
             <a
               id="player-title"

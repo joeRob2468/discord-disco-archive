@@ -78,6 +78,11 @@
   .art {
     @apply bg-base-300 relative overflow-hidden;
   }
+  /* Gradients carry a grain layer on top (`gradient()` in art.ts); blend it into them. */
+  .art,
+  .grain {
+    background-blend-mode: overlay, normal;
+  }
 }
 
 /* Links in page content; `.plain` opts out (cards, rows, table cells that are links). */
